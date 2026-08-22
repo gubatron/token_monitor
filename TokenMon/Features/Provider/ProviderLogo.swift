@@ -12,6 +12,7 @@ enum ProviderLogo {
         case .cursor: return cursor
         case .claude: return claude
         case .chatgpt: return chatgpt
+        case .openrouter: return openRouter
         }
     }
 
@@ -49,6 +50,15 @@ enum ProviderLogo {
     /// OpenAI mark from the asset catalog (template for menu-bar tinting).
     static let chatgpt: NSImage = {
         let image = (NSImage(named: "OpenAILogo")?.copy() as? NSImage)
+            ?? NSImage(size: NSSize(width: 16, height: 16))
+        image.isTemplate = true
+        return image
+    }()
+
+    /// OpenRouter mark; falls back to a network glyph until a brand asset lands.
+    static let openRouter: NSImage = {
+        let image = (NSImage(named: "OpenRouterLogo")?.copy() as? NSImage)
+            ?? NSImage(systemSymbolName: "network", accessibilityDescription: "OpenRouter")
             ?? NSImage(size: NSSize(width: 16, height: 16))
         image.isTemplate = true
         return image
