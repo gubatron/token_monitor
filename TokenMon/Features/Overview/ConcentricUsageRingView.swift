@@ -17,6 +17,7 @@ struct ConcentricUsageRingView: View {
     static let claudeSRGB = SRGB(red: 0.85, green: 0.47, blue: 0.34)
     static let claudeColor = claudeSRGB.color.opacity(0.85)
     static let chatgptColor = SRGB(red: 0.16, green: 0.52, blue: 0.46).color.opacity(0.85)
+    static let openRouterColor = SRGB(red: 0.45, green: 0.36, blue: 0.90).color.opacity(0.85)
 
     private let size: CGFloat = 112
     private let lineWidth: CGFloat = 8

@@ -7,11 +7,12 @@ enum MonitorProvider: String, Codable, CaseIterable, Identifiable, Sendable {
     case opencode
     case claude
     case chatgpt
+    case openrouter
 
     var id: String { rawValue }
 
     /// Concrete usage providers in dropdown / menu-bar order (Overview excluded).
-    static var usageProviders: [MonitorProvider] { [.grok, .cursor, .opencode, .claude, .chatgpt] }
+    static var usageProviders: [MonitorProvider] { [.grok, .cursor, .opencode, .claude, .chatgpt, .openrouter] }
 
     var displayName: String {
         switch self {
@@ -21,6 +22,7 @@ enum MonitorProvider: String, Codable, CaseIterable, Identifiable, Sendable {
         case .cursor: return "Cursor"
         case .claude: return "Claude"
         case .chatgpt: return "ChatGPT"
+        case .openrouter: return "OpenRouter"
         }
     }
 
@@ -28,7 +30,7 @@ enum MonitorProvider: String, Codable, CaseIterable, Identifiable, Sendable {
     var switcherLabel: String {
         switch self {
         case .overview: return "All"
-        case .grok, .cursor, .opencode, .claude, .chatgpt: return displayName
+        case .grok, .cursor, .opencode, .claude, .chatgpt, .openrouter: return displayName
         }
     }
 
@@ -57,6 +59,11 @@ enum MonitorProvider: String, Codable, CaseIterable, Identifiable, Sendable {
         self == .chatgpt || self == .overview
     }
 
+    /// Whether this mode should refresh OpenRouter usage.
+    var pollsOpenRouter: Bool {
+        self == .openrouter || self == .overview
+    }
+
     /// Public dashboard / console URL for “Visit website”.
     var websiteURL: URL? {
         switch self {
@@ -72,6 +79,8 @@ enum MonitorProvider: String, Codable, CaseIterable, Identifiable, Sendable {
             return URL(string: "https://claude.ai/settings/usage")
         case .chatgpt:
             return URL(string: "https://chatgpt.com/codex")
+        case .openrouter:
+            return URL(string: "https://openrouter.ai/credits")
         }
     }
 }

@@ -12,6 +12,8 @@ struct MenuBarPanelView: View {
     @ObservedObject var claudePoller: ClaudeUsagePoller
     @ObservedObject var chatGPTAuth: ChatGPTAuthSession
     @ObservedObject var chatGPTPoller: ChatGPTUsagePoller
+    @ObservedObject var openRouterAuth: OpenRouterAuthSession
+    @ObservedObject var openRouterPoller: OpenRouterUsagePoller
     @ObservedObject var settings: AppSettings
     @ObservedObject var history: HistoryStore
     @ObservedObject var grokHourly: HourlyDeltaActivityStore
@@ -23,6 +25,7 @@ struct MenuBarPanelView: View {
     let openCursorSignIn: () -> Void
     let openClaudeSignIn: () -> Void
     let openChatGPTSignIn: () -> Void
+    let selectOpenRouter: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -46,6 +49,8 @@ struct MenuBarPanelView: View {
                 claudeContent
             case .chatgpt:
                 chatGPTContent
+            case .openrouter:
+                openRouterContent
             }
 
             Divider().padding(.vertical, 6)
@@ -63,6 +68,7 @@ struct MenuBarPanelView: View {
             cursorPoller.menuIsOpen = true
             claudePoller.menuIsOpen = true
             chatGPTPoller.menuIsOpen = true
+            openRouterPoller.menuIsOpen = true
             Task { await refreshActivePoller() }
         }
         .onDisappear {
@@ -71,6 +77,7 @@ struct MenuBarPanelView: View {
             cursorPoller.menuIsOpen = false
             claudePoller.menuIsOpen = false
             chatGPTPoller.menuIsOpen = false
+            openRouterPoller.menuIsOpen = false
         }
         .onChange(of: settings.selectedProvider) { _, _ in
             Task { await refreshActivePoller() }
@@ -114,7 +121,12 @@ struct MenuBarPanelView: View {
                 await chatGPTPoller.refreshNow()
             }
         }()
-        _ = await (grok, openCode, cursor, claude, chatGPT)
+        async let openRouter: Void = {
+            if settings.needsOpenRouterPolling {
+                await openRouterPoller.refreshNow()
+            }
+        }()
+        _ = await (grok, openCode, cursor, claude, chatGPT, openRouter)
     }
 
     private var grokContent: some View {
@@ -162,6 +174,13 @@ struct MenuBarPanelView: View {
         )
     }
 
+    private var openRouterContent: some View {
+        OpenRouterPanelView(
+            poller: openRouterPoller,
+            auth: openRouterAuth
+        )
+    }
+
     private var overviewContent: some View {
         OverviewPanelView(
             grokPoller: poller,
@@ -169,6 +188,7 @@ struct MenuBarPanelView: View {
             cursorPoller: cursorPoller,
             claudePoller: claudePoller,
             chatGPTPoller: chatGPTPoller,
+            openRouterPoller: openRouterPoller,
             settings: settings,
             grokHourly: grokHourly,
             claudeHourly: claudeHourly,
@@ -177,11 +197,13 @@ struct MenuBarPanelView: View {
             cursorAuth: cursorAuth,
             claudeAuth: claudeAuth,
             chatGPTAuth: chatGPTAuth,
+            openRouterAuth: openRouterAuth,
             openGrokSignIn: openSignIn,
             openOpenCodeSignIn: openOpenCodeSignIn,
             openCursorSignIn: openCursorSignIn,
             openClaudeSignIn: openClaudeSignIn,
-            openChatGPTSignIn: openChatGPTSignIn
+            openChatGPTSignIn: openChatGPTSignIn,
+            selectOpenRouter: selectOpenRouter
         )
     }
 
@@ -234,6 +256,8 @@ struct MenuBarPanelView: View {
                 .font(PanelTypography.body)
             case .chatgpt:
                 EmptyView()
+            case .openrouter:
+                EmptyView()
             case .overview:
                 EmptyView()
             }
@@ -255,6 +279,7 @@ struct MenuBarPanelView: View {
                     case .opencode: return "Open Opencode.com"
                     case .claude: return "Open Claude.ai"
                     case .chatgpt: return "Open ChatGPT.com"
+                    case .openrouter: return "Open OpenRouter.ai"
                     case .overview: return "Visit website"
                     }
                 }()

@@ -7,6 +7,7 @@ struct OverviewPanelView: View {
     @ObservedObject var cursorPoller: CursorUsagePoller
     @ObservedObject var claudePoller: ClaudeUsagePoller
     @ObservedObject var chatGPTPoller: ChatGPTUsagePoller
+    @ObservedObject var openRouterPoller: OpenRouterUsagePoller
     @ObservedObject var settings: AppSettings
     @ObservedObject var grokHourly: HourlyDeltaActivityStore
     @ObservedObject var claudeHourly: HourlyDeltaActivityStore
@@ -15,12 +16,14 @@ struct OverviewPanelView: View {
     @ObservedObject var cursorAuth: CursorAuthSession
     @ObservedObject var claudeAuth: ClaudeAuthSession
     @ObservedObject var chatGPTAuth: ChatGPTAuthSession
+    @ObservedObject var openRouterAuth: OpenRouterAuthSession
 
     var openGrokSignIn: () -> Void
     var openOpenCodeSignIn: () -> Void
     var openCursorSignIn: () -> Void
     var openClaudeSignIn: () -> Void
     var openChatGPTSignIn: () -> Void
+    var selectOpenRouter: () -> Void
 
     private var appVersion: String {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0.0"
@@ -60,6 +63,9 @@ struct OverviewPanelView: View {
             }
             if settings.enabledProviderIDs.contains(.chatgpt) {
                 chatGPTUsageCard
+            }
+            if settings.enabledProviderIDs.contains(.openrouter) {
+                openRouterUsageCard
             }
 
             PanelCard {
@@ -428,6 +434,63 @@ struct OverviewPanelView: View {
                 ProviderSignOutButton(provider: .chatgpt) {
                     chatGPTAuth.signOut()
                     chatGPTPoller.clearSnapshot()
+                }
+            }
+        }
+    }
+
+    private var openRouterUsageCard: some View {
+        let percent = openRouterPoller.snapshot?.usedPercent ?? 0
+        let remaining = openRouterPoller.snapshot?.remainingUSD
+        return PanelCard {
+            HStack(alignment: .center, spacing: 8) {
+                Image(nsImage: ProviderLogo.image(for: .openrouter))
+                    .resizable()
+                    .interpolation(.high)
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 14, height: 14)
+                Text("OpenRouter")
+                    .font(PanelTypography.title)
+                    .foregroundStyle(.primary)
+                Text("— Credits")
+                    .font(PanelTypography.micro)
+                    .fontWeight(.semibold)
+                    .tracking(1.6)
+                    .textCase(.uppercase)
+                    .foregroundStyle(.tertiary)
+                Spacer()
+                PanelPill(text: openRouterPoller.snapshot?.usedPercent == nil && openRouterPoller.snapshot != nil
+                    ? Format.usd(openRouterPoller.snapshot?.keyUsageUSD ?? 0)
+                    : "\(Int(percent.rounded()))% used")
+            }
+            GeometryReader { geo in
+                let fillWidth = max(0, geo.size.width * CGFloat(Percent.clamp(percent) / 100))
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.primary.opacity(0.12))
+                    Capsule().fill(ConcentricUsageRingView.openRouterColor).frame(width: fillWidth)
+                }
+            }
+            .frame(height: 8)
+            if openRouterPoller.snapshot?.budgetSource == nil, let snapshot = openRouterPoller.snapshot {
+                Text("No credit limit — \(Format.usd(snapshot.keyUsageUSD)) spent on this key")
+                    .font(PanelTypography.caption)
+                    .foregroundStyle(.tertiary)
+            } else if let remaining {
+                Text("\(Format.usd(remaining)) of credits left")
+                    .font(PanelTypography.caption)
+                    .foregroundStyle(.tertiary)
+            } else if openRouterPoller.snapshot == nil {
+                Text("No OpenRouter data yet")
+                    .font(PanelTypography.caption)
+                    .foregroundStyle(.tertiary)
+            }
+            if openRouterAuth.needsSignIn && openRouterPoller.snapshot == nil {
+                ProviderSignInButton(provider: .openrouter, font: PanelTypography.caption, action: selectOpenRouter)
+            }
+            if !openRouterAuth.needsSignIn {
+                ProviderSignOutButton(provider: .openrouter) {
+                    openRouterAuth.signOut()
+                    openRouterPoller.clearSnapshot()
                 }
             }
         }

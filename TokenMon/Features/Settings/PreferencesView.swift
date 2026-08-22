@@ -8,6 +8,7 @@ struct PreferencesView: View {
     @ObservedObject var cursorAuth: CursorAuthSession
     @ObservedObject var claudeAuth: ClaudeAuthSession
     @ObservedObject var chatGPTAuth: ChatGPTAuthSession
+    @ObservedObject var openRouterAuth: OpenRouterAuthSession
     @ObservedObject var settings: AppSettings
     @ObservedObject var history: HistoryStore
     @ObservedObject var poller: UsagePoller
@@ -15,12 +16,14 @@ struct PreferencesView: View {
     @ObservedObject var cursorPoller: CursorUsagePoller
     @ObservedObject var claudePoller: ClaudeUsagePoller
     @ObservedObject var chatGPTPoller: ChatGPTUsagePoller
+    @ObservedObject var openRouterPoller: OpenRouterUsagePoller
     let openSignIn: () -> Void
     let openOpenCodeSignIn: () -> Void
     let openCursorSignIn: () -> Void
     let openClaudeSignIn: () -> Void
     let openChatGPTSignIn: () -> Void
     @State private var exportError: String?
+    @State private var openRouterKeyDraft = ""
 
     var body: some View {
         Form {
@@ -121,6 +124,28 @@ struct PreferencesView: View {
                 }
                 if let err = chatGPTAuth.lastAuthError {
                     Text(err).foregroundStyle(.red).font(.caption)
+                }
+            }
+
+            Section("OpenRouter Account") {
+                if openRouterAuth.isSignedIn {
+                    LabeledContent("Connected with") {
+                        Text("OpenRouter API key")
+                    }
+                    Button("Sign Out", role: .destructive) {
+                        openRouterAuth.signOut()
+                        openRouterPoller.clearSnapshot()
+                        openRouterKeyDraft = ""
+                    }
+                } else {
+                    Text("Not connected")
+                        .foregroundStyle(.secondary)
+                    SecureField("sk-or-v1-…", text: $openRouterKeyDraft)
+                    Button("Save API Key") { saveOpenRouterKey() }
+                        .disabled(openRouterKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    if let err = openRouterAuth.lastAuthError {
+                        Text(err).foregroundStyle(.red).font(.caption)
+                    }
                 }
             }
 
@@ -260,6 +285,16 @@ struct PreferencesView: View {
                     .foregroundStyle(.red)
                     .font(.caption)
             }
+        case .openrouter:
+            if let last = openRouterPoller.lastRefreshedAt {
+                Text("Last refresh: \(last.formatted(date: .abbreviated, time: .shortened))")
+                    .foregroundStyle(.secondary)
+            }
+            if let error = openRouterPoller.lastError {
+                Text(error)
+                    .foregroundStyle(.red)
+                    .font(.caption)
+            }
         case .overview:
             if let last = openCodePoller.lastRefreshedAt {
                 Text("OpenCode: \(last.formatted(date: .abbreviated, time: .shortened))")
@@ -277,6 +312,10 @@ struct PreferencesView: View {
                 Text("ChatGPT: \(last.formatted(date: .abbreviated, time: .shortened))")
                     .foregroundStyle(.secondary)
             }
+            if let last = openRouterPoller.lastRefreshedAt {
+                Text("OpenRouter: \(last.formatted(date: .abbreviated, time: .shortened))")
+                    .foregroundStyle(.secondary)
+            }
             if let last = poller.lastRefreshedAt {
                 Text("Grok: \(last.formatted(date: .abbreviated, time: .shortened))")
                     .foregroundStyle(.secondary)
@@ -291,6 +330,13 @@ struct PreferencesView: View {
                     .foregroundStyle(.red)
                     .font(.caption)
             }
+        }
+    }
+
+    private func saveOpenRouterKey() {
+        if openRouterAuth.saveAPIKey(openRouterKeyDraft) {
+            openRouterKeyDraft = ""
+            Task { await openRouterPoller.refreshNow() }
         }
     }
 

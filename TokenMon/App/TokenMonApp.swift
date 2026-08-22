@@ -101,6 +101,7 @@ final class AppModel: ObservableObject {
     let cursorAuth: CursorAuthSession
     let claudeAuth: ClaudeAuthSession
     let chatGPTAuth: ChatGPTAuthSession
+    let openRouterAuth: OpenRouterAuthSession
     let settings = AppSettings()
     let history = HistoryStore(inMemory: AppModel.isRunningTests)
     let notifier = ThresholdNotifier()
@@ -112,6 +113,7 @@ final class AppModel: ObservableObject {
     let cursorPoller: CursorUsagePoller
     let claudePoller: ClaudeUsagePoller
     let chatGPTPoller: ChatGPTUsagePoller
+    let openRouterPoller: OpenRouterUsagePoller
     let providers: ProviderRegistry
 
     private var cancellables = Set<AnyCancellable>()
@@ -129,11 +131,13 @@ final class AppModel: ObservableObject {
         let cursorAuth = CursorAuthSession()
         let claudeAuth = ClaudeAuthSession()
         let chatGPTAuth = ChatGPTAuthSession()
+        let openRouterAuth = OpenRouterAuthSession()
         self.auth = auth
         self.openCodeAuth = openCodeAuth
         self.cursorAuth = cursorAuth
         self.claudeAuth = claudeAuth
         self.chatGPTAuth = chatGPTAuth
+        self.openRouterAuth = openRouterAuth
         poller = UsagePoller(
             auth: auth,
             history: history,
@@ -145,12 +149,14 @@ final class AppModel: ObservableObject {
         cursorPoller = CursorUsagePoller(settings: settings, auth: cursorAuth)
         claudePoller = ClaudeUsagePoller(settings: settings, auth: claudeAuth, hourly: claudeHourly, daily: claudeDaily)
         chatGPTPoller = ChatGPTUsagePoller(settings: settings, auth: chatGPTAuth)
+        openRouterPoller = OpenRouterUsagePoller(settings: settings, auth: openRouterAuth)
         providers = ProviderRegistry(
             grok: poller,
             openCode: openCodePoller,
             cursor: cursorPoller,
             claude: claudePoller,
-            chatGPT: chatGPTPoller
+            chatGPT: chatGPTPoller,
+            openRouter: openRouterPoller
         )
         forwardChanges(from: settings)
         forwardChanges(from: history)
@@ -165,6 +171,7 @@ final class AppModel: ObservableObject {
         forwardChanges(from: cursorAuth)
         forwardChanges(from: claudeAuth)
         forwardChanges(from: chatGPTAuth)
+        forwardChanges(from: openRouterAuth)
         guard !Self.isRunningTests else { return }
         notifier.requestAuthorizationIfNeeded()
         providers.startAll()
@@ -211,6 +218,8 @@ struct MenuBarRoot: View {
             claudePoller: model.claudePoller,
             chatGPTAuth: model.chatGPTAuth,
             chatGPTPoller: model.chatGPTPoller,
+            openRouterAuth: model.openRouterAuth,
+            openRouterPoller: model.openRouterPoller,
             settings: model.settings,
             history: model.history,
             grokHourly: model.grokHourly,
@@ -220,7 +229,8 @@ struct MenuBarRoot: View {
             openOpenCodeSignIn: { model.openWindow(.openCodeSignIn, openWindow: openWindow) },
             openCursorSignIn: { model.openWindow(.cursorSignIn, openWindow: openWindow) },
             openClaudeSignIn: { model.openWindow(.claudeSignIn, openWindow: openWindow) },
-            openChatGPTSignIn: { model.openWindow(.chatGPTSignIn, openWindow: openWindow) }
+            openChatGPTSignIn: { model.openWindow(.chatGPTSignIn, openWindow: openWindow) },
+            selectOpenRouter: { model.settings.selectedProvider = .openrouter }
         )
     }
 }
@@ -236,6 +246,7 @@ private struct PreferencesRoot: View {
             cursorAuth: model.cursorAuth,
             claudeAuth: model.claudeAuth,
             chatGPTAuth: model.chatGPTAuth,
+            openRouterAuth: model.openRouterAuth,
             settings: model.settings,
             history: model.history,
             poller: model.poller,
@@ -243,6 +254,7 @@ private struct PreferencesRoot: View {
             cursorPoller: model.cursorPoller,
             claudePoller: model.claudePoller,
             chatGPTPoller: model.chatGPTPoller,
+            openRouterPoller: model.openRouterPoller,
             openSignIn: { model.openWindow(.grokSignIn, openWindow: openWindow) },
             openOpenCodeSignIn: { model.openWindow(.openCodeSignIn, openWindow: openWindow) },
             openCursorSignIn: { model.openWindow(.cursorSignIn, openWindow: openWindow) },

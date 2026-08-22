@@ -222,7 +222,7 @@ enum MenuBarStatusRenderer {
                     iconInset: 0
                 ))
                 width += segmentGap + iconSize + gap + size.width + gap + barWidth
-            case .grok, .overview, .chatgpt:
+            case .grok, .overview, .chatgpt, .openrouter:
                 continue
             }
         }

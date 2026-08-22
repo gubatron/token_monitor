@@ -1,0 +1,89 @@
+import Combine
+import Foundation
+import os
+
+@MainActor
+final class OpenRouterUsagePoller: ObservableObject, ProviderUsagePoller {
+    @Published private(set) var snapshot: OpenRouterSnapshot?
+    @Published private(set) var isRefreshing = false
+    @Published private(set) var lastError: String?
+    @Published private(set) var lastRefreshedAt: Date?
+    @Published var menuIsOpen = false
+
+    private let settings: AppSettings
+    private let auth: OpenRouterAuthSession
+    private let logger = Logger(category: "OpenRouter")
+
+    private lazy var loop = PollingLoop(
+        interval: { [weak self] in self?.currentInterval() },
+        refresh: { [weak self] in await self?.refreshNow() }
+    )
+
+    init(settings: AppSettings, auth: OpenRouterAuthSession) {
+        self.settings = settings
+        self.auth = auth
+    }
+
+    func start() {
+        loop.start()
+    }
+
+    func stop() {
+        loop.stop()
+    }
+
+    func clearSnapshot() {
+        snapshot = nil
+        lastError = nil
+    }
+
+    func refreshNow() async {
+        guard settings.needsOpenRouterPolling else { return }
+        guard !isRefreshing else { return }
+        isRefreshing = true
+        defer { isRefreshing = false }
+
+        guard let apiKey = auth.apiKey(), !apiKey.isEmpty else {
+            auth.needsSignIn = true
+            if snapshot == nil {
+                lastError = "Add an OpenRouter API key to load usage."
+            }
+            return
+        }
+
+        let client = OpenRouterUsageClient(apiKey: apiKey)
+        do {
+            let snap = try await client.fetchSnapshot()
+            guard !Task.isCancelled, auth.isSignedIn, !auth.needsSignIn else { return }
+            snapshot = snap
+            lastError = nil
+            lastRefreshedAt = Date()
+            auth.needsSignIn = false
+            if let percent = snap.usedPercent {
+                logger.info("OpenRouter refresh: \(Int(percent.rounded()))% of credits used (\(Format.usd(snap.remainingUSD ?? 0), privacy: .public) left)")
+            } else {
+                logger.info("OpenRouter refresh: \(Format.usd(snap.usedUSD), privacy: .public) spent (no credit limit)")
+            }
+        } catch let error as OpenRouterUsageError {
+            switch error.usageError {
+            case .unauthorized, .notSignedIn:
+                auth.markSessionInvalid(reason: error.localizedDescription)
+            default:
+                break
+            }
+            if snapshot == nil {
+                lastError = error.localizedDescription
+            }
+            logger.error("OpenRouter refresh failed: \(error.localizedDescription, privacy: .public)")
+        } catch {
+            if snapshot == nil {
+                lastError = error.localizedDescription
+            }
+            logger.error("OpenRouter refresh failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private func currentInterval() -> TimeInterval {
+        PollInterval.seconds(menuIsOpen: menuIsOpen, settings: settings)
+    }
+}

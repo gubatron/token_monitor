@@ -130,6 +130,11 @@ final class AppSettings: ObservableObject {
         selectedProvider.pollsChatGPT
     }
 
+    /// Whether OpenRouter should be polled (panel tab).
+    var needsOpenRouterPolling: Bool {
+        selectedProvider.pollsOpenRouter
+    }
+
     /// Guards against recursive `didSet` when registration fails and we revert.
     private var isRevertingLaunchAtLogin = false
 
