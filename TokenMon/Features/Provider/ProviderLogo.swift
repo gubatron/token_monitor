@@ -97,7 +97,7 @@ struct ProviderHeaderLabel: View {
             Image(nsImage: ProviderLogo.image(for: provider))
                 .resizable()
                 .interpolation(.high)
-                .aspectRatio(contentMode: .fit)
+                .scaledToFit()
         }
     }
 }
