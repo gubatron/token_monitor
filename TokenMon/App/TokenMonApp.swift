@@ -270,10 +270,13 @@ struct MenuBarLabelContainer: View {
 
     var body: some View {
         MenuBarLabelView(
+            selectedProvider: model.settings.selectedProvider,
             snapshot: model.poller.snapshot,
             openCodeSnapshot: model.openCodePoller.snapshot,
             cursorSnapshot: model.cursorPoller.snapshot,
             claudeSnapshot: model.claudePoller.snapshot,
+            chatGPTSnapshot: model.chatGPTPoller.snapshot,
+            openRouterSnapshot: model.openRouterPoller.snapshot,
             isGrokSignedIn: model.auth.isSignedIn && !model.auth.needsSignIn,
             showGrokBar: model.settings.showGrokBarInMenuBar,
             showGrokCategories: model.settings.showCategoriesInMenuBar,

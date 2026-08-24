@@ -73,7 +73,7 @@ struct ProviderSwitcherView: View {
                     Image(nsImage: ProviderLogo.image(for: provider))
                         .resizable()
                         .interpolation(.high)
-                        .aspectRatio(contentMode: .fit)
+                        .scaledToFit()
                         .frame(width: 12, height: 12)
                 }
                 Text(provider.switcherLabel)
