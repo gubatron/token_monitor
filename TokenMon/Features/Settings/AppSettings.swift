@@ -45,6 +45,15 @@ final class AppSettings: ObservableObject {
         }
     }
 
+    /// When on, the menu bar shows only the selected provider (icon + % + bar)
+    /// instead of the pinned graph composite.
+    @Published var showSelectedProviderInMenuBar: Bool {
+        didSet {
+            guard showSelectedProviderInMenuBar != oldValue else { return }
+            defaults.set(showSelectedProviderInMenuBar, forKey: Keys.showSelectedProvider)
+        }
+    }
+
     @Published var activePollSeconds: Int {
         didSet {
             let clamped = Self.clampActivePoll(activePollSeconds)
@@ -145,6 +154,7 @@ final class AppSettings: ObservableObject {
         showOpenCodeBarInMenuBar = defaults.object(forKey: Keys.showOpenCodeBar) as? Bool ?? false
         showCursorBarInMenuBar = defaults.object(forKey: Keys.showCursorBar) as? Bool ?? false
         showClaudeBarInMenuBar = defaults.object(forKey: Keys.showClaudeBar) as? Bool ?? false
+        showSelectedProviderInMenuBar = defaults.object(forKey: Keys.showSelectedProvider) as? Bool ?? false
         // Clamp on load — didSet does not run during init.
         activePollSeconds = Self.clampActivePoll(defaults.object(forKey: Keys.activePoll) as? Int ?? 60)
         idlePollSeconds = Self.clampIdlePoll(defaults.object(forKey: Keys.idlePoll) as? Int ?? 300)
@@ -192,6 +202,7 @@ final class AppSettings: ObservableObject {
         static let showOpenCodeBar = "showOpenCodeBarInMenuBar"
         static let showCursorBar = "showCursorBarInMenuBar"
         static let showClaudeBar = "showClaudeBarInMenuBar"
+        static let showSelectedProvider = "showSelectedProviderInMenuBar"
         static let activePoll = "activePollSeconds"
         static let idlePoll = "idlePollSeconds"
         static let thresholdEnabled = "thresholdEnabled"

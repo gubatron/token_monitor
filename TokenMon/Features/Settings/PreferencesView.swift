@@ -149,12 +149,17 @@ struct PreferencesView: View {
                 }
             }
 
-            Section("Menu Bar") {
+            Section {
+                Toggle("Show selected provider", isOn: $settings.showSelectedProviderInMenuBar)
                 Toggle("Grok categories", isOn: $settings.showCategoriesInMenuBar)
                 Toggle("Grok bar graph", isOn: $settings.showGrokBarInMenuBar)
                 Toggle("OpenCode bar graph", isOn: $settings.showOpenCodeBarInMenuBar)
                 Toggle("Cursor bar graph", isOn: $settings.showCursorBarInMenuBar)
                 Toggle("Claude bar graph", isOn: $settings.showClaudeBarInMenuBar)
+            } header: {
+                Text("Menu Bar")
+            } footer: {
+                Text("Show selected provider replaces the pinned graphs with just the active provider's icon, percentage, and usage bar.")
             }
 
             Section("Refresh") {
