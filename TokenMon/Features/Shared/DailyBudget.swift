@@ -144,4 +144,33 @@ enum DailyBudget {
         }
         return days
     }
+
+    /// Bars for the full weekly window: `weekStartWeekday` (Calendar
+    /// convention, 1 = Sunday … 7 = Saturday) through the six days after it.
+    ///
+    /// Claude's weekly pool resets on Saturday, so passing `7` makes the first
+    /// bar that Saturday. Always emits 7 bars; days after today carry 0 spent
+    /// and the chart view dims them as future days.
+    static func buildWeeklyWindowDays(
+        limitUSD: Double,
+        daysInPeriod: Int,
+        weekStartWeekday: Int,
+        spentByDay: [Date: Double],
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> [DailyBudgetDay] {
+        let perDay = budgetPerDay(limitUSD: limitUSD, daysInPeriod: daysInPeriod)
+        let today = calendar.startOfDay(for: now)
+        let weekday = calendar.component(.weekday, from: today)
+        let back = (weekday - weekStartWeekday + 7) % 7
+        let weekStart = calendar.date(byAdding: .day, value: -back, to: today) ?? today
+        var days: [DailyBudgetDay] = []
+        for offset in 0..<7 {
+            // week-start day … week-start + 6 (future days included, empty)
+            let day = calendar.date(byAdding: .day, value: offset, to: weekStart) ?? weekStart
+            let key = calendar.startOfDay(for: day)
+            days.append(DailyBudgetDay(date: key, spentUSD: spentByDay[key] ?? 0, budgetUSD: perDay))
+        }
+        return days
+    }
 }

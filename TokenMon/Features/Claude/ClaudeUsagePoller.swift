@@ -8,7 +8,8 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
     @Published private(set) var isRefreshing = false
     @Published private(set) var lastError: String?
     @Published private(set) var lastRefreshedAt: Date?
-    /// 7 rolling daily bars: % of the weekly pool burned per calendar day.
+    /// Daily bars for the current weekly window (Saturday → Friday): % of the
+    /// weekly pool burned per calendar day.
     @Published private(set) var dailyBudgetDays: [DailyBudgetDay]?
     @Published var menuIsOpen = false
 
@@ -103,12 +104,15 @@ final class ClaudeUsagePoller: ObservableObject, ProviderUsagePoller {
         PollInterval.seconds(menuIsOpen: menuIsOpen, settings: settings)
     }
 
-    /// 7 rolling daily bars ending today. The weekly window's 100% pool is
-    /// split evenly across its 7 days, so each day's budget is 1/7th of it.
+    /// Daily bars for the current weekly window: always 7 bars anchored at
+    /// Saturday (the weekly pool's reset day); days after today stay empty and
+    /// render dimmed. The weekly window's 100% pool is split evenly across its
+    /// 7 days, so each day's budget is 1/7th of it.
     static func buildDailyBudgetDays(spentByDay: [Date: Double], now: Date = Date()) -> [DailyBudgetDay] {
-        DailyBudget.buildRolling7Days(
+        DailyBudget.buildWeeklyWindowDays(
             limitUSD: 100,
             daysInPeriod: 7,
+            weekStartWeekday: 7,
             spentByDay: spentByDay,
             now: now
         )

@@ -87,6 +87,7 @@ struct CursorUsageClient: Sendable {
             dailyBudgetDays = Self.dailyBudgetDays(
                 events: events,
                 planLimitUSD: snap.planLimitUSD,
+                usedPercent: snap.usedPercent,
                 billingCycleStart: snap.billingCycleStart,
                 billingCycleEnd: snap.billingCycleEnd,
                 now: now,
@@ -567,13 +568,20 @@ struct CursorUsageClient: Sendable {
     // MARK: - Daily budget aggregation
 
     /// USD spend per calendar day (startOfDay → cents/100).
+    ///
+    /// When `cycleStart`/`cycleEnd` are set, events outside that half-open
+    /// window are dropped so a reset day's bar does not inherit the previous cycle.
     static func dailySpendByDay(
         events: [[String: Any]],
+        cycleStart: Date? = nil,
+        cycleEnd: Date? = nil,
         calendar: Calendar = .current
     ) -> [Date: Double] {
         var byDay: [Date: Double] = [:]
         for event in events {
             guard let date = eventTimestamp(event) else { continue }
+            if let cycleStart, date < cycleStart { continue }
+            if let cycleEnd, date >= cycleEnd { continue }
             let cents = chargedCents(event)
             guard cents > 0 else { continue }
             let dayKey = calendar.startOfDay(for: date)
@@ -582,36 +590,65 @@ struct CursorUsageClient: Sendable {
         return byDay
     }
 
+    /// Map list-price USD weights onto Cursor's usage-quota percent.
+    ///
+    /// Event `chargedCents` is token list price, not plan consumption — `$15` of
+    /// charged cost can be `4%` of the included pool. Days are scaled so the
+    /// cycle total equals `usedPercent` (the Usage bar), using relative USD
+    /// only to split that quota across calendar days.
+    static func quotaPercentsByDay(
+        usdSpends: [Date: Double],
+        usedPercent: Double
+    ) -> [Date: Double] {
+        let cycleUSD = usdSpends.values.reduce(0, +)
+        guard cycleUSD > 0, usedPercent > 0 else { return [:] }
+        let scale = usedPercent / cycleUSD
+        return usdSpends.mapValues { $0 * scale }
+    }
+
     /// Builds 7-bar daily budget days for the current billing cycle or calendar month.
-    /// Budgets are usage-based: daily = 100% / daysInPeriod. Spends are percent of
-    /// the monthly allocation (charged USD / planLimit * 100).
+    /// Daily cap = `100% / daysInPeriod`. Each bar is that day's share of
+    /// `usedPercent`, not `chargedUSD / planLimit`.
     static func dailyBudgetDays(
         events: [[String: Any]],
         planLimitUSD: Double?,
+        usedPercent: Double,
         billingCycleStart: Date?,
         billingCycleEnd: Date?,
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> [DailyBudgetDay]? {
-        guard let limit = planLimitUSD, limit > 0 else { return nil }
-        let usdSpends = dailySpendByDay(events: events, calendar: calendar)
-        let spendsPercent = usdSpends.mapValues { $0 / limit * 100 }
+        guard let planLimitUSD, planLimitUSD > 0 else { return nil }
         let percentLimit: Double = 100
         if let start = billingCycleStart, let end = billingCycleEnd, end > start {
+            let usdSpends = dailySpendByDay(
+                events: events,
+                cycleStart: start,
+                cycleEnd: end,
+                calendar: calendar
+            )
             return DailyBudget.buildLast7Days(
                 periodStart: start,
                 periodEnd: end,
                 limitUSD: percentLimit,
-                spentByDay: spendsPercent,
+                spentByDay: quotaPercentsByDay(usdSpends: usdSpends, usedPercent: usedPercent),
                 now: now,
                 calendar: calendar
             )
         }
+        let monthStart = calendar.dateInterval(of: .month, for: now)?.start
+        let monthEnd = calendar.dateInterval(of: .month, for: now)?.end
+        let usdSpends = dailySpendByDay(
+            events: events,
+            cycleStart: monthStart,
+            cycleEnd: monthEnd,
+            calendar: calendar
+        )
         let daysInMonth = DailyBudget.daysInCalendarMonth(for: now, calendar: calendar)
         return DailyBudget.buildRolling7Days(
             limitUSD: percentLimit,
             daysInPeriod: daysInMonth,
-            spentByDay: spendsPercent,
+            spentByDay: quotaPercentsByDay(usdSpends: usdSpends, usedPercent: usedPercent),
             now: now,
             calendar: calendar
         )

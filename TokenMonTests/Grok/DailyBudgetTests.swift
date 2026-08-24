@@ -106,4 +106,78 @@ final class DailyBudgetTests: XCTestCase {
         XCTAssertEqual(calendar.isDate(days.last?.date ?? Date(), inSameDayAs: now), true)
         XCTAssertEqual(calendar.isDate(days.first?.date ?? Date(), inSameDayAs: date(2026, 8, 14)), true)
     }
+
+    // MARK: buildWeeklyWindowDays
+
+    /// August 2026: Aug 1/8/15/22/29 are Saturdays.
+    func testWeeklyWindowAnchorsAtSaturdayMidWeek() {
+        // Wednesday → first bar is the prior Saturday; full 7-bar Sat–Fri week.
+        let wednesday = date(2026, 8, 19)
+        let spent: [Date: Double] = [calendar.startOfDay(for: date(2026, 8, 15)): 3]
+        let days = DailyBudget.buildWeeklyWindowDays(
+            limitUSD: 70,
+            daysInPeriod: 7,
+            weekStartWeekday: 7,
+            spentByDay: spent,
+            now: wednesday,
+            calendar: calendar
+        )
+        XCTAssertEqual(days.count, 7)
+        XCTAssertEqual(calendar.isDate(days.first?.date ?? Date(), inSameDayAs: date(2026, 8, 15)), true)
+        XCTAssertEqual(calendar.isDate(days.last?.date ?? Date(), inSameDayAs: date(2026, 8, 21)), true)
+        XCTAssertEqual(days[0].spentUSD, 3)
+        XCTAssertEqual(days[1].spentUSD, 0)
+        // Days after today are present but empty (chart dims them as future).
+        XCTAssertEqual(days[5].spentUSD, 0)
+        XCTAssertEqual(days[6].spentUSD, 0)
+        XCTAssertEqual(days[0].budgetUSD, 10, accuracy: 1e-9)
+    }
+
+    func testWeeklyWindowOnResetDayStartsToday() {
+        // Fresh window on Saturday: 7 bars starting today, rest empty.
+        let saturday = date(2026, 8, 22)
+        let days = DailyBudget.buildWeeklyWindowDays(
+            limitUSD: 70,
+            daysInPeriod: 7,
+            weekStartWeekday: 7,
+            spentByDay: [:],
+            now: saturday,
+            calendar: calendar
+        )
+        XCTAssertEqual(days.count, 7)
+        XCTAssertEqual(calendar.isDate(days.first?.date ?? Date(), inSameDayAs: saturday), true)
+        XCTAssertEqual(calendar.isDate(days.last?.date ?? Date(), inSameDayAs: date(2026, 8, 28)), true)
+    }
+
+    func testWeeklyWindowSundayKeepsSaturdayFirst() {
+        let sunday = date(2026, 8, 23)
+        let days = DailyBudget.buildWeeklyWindowDays(
+            limitUSD: 70,
+            daysInPeriod: 7,
+            weekStartWeekday: 7,
+            spentByDay: [:],
+            now: sunday,
+            calendar: calendar
+        )
+        XCTAssertEqual(days.count, 7)
+        XCTAssertTrue(calendar.isDate(days[0].date, inSameDayAs: date(2026, 8, 22)))
+        XCTAssertTrue(calendar.isDate(days[1].date, inSameDayAs: sunday))
+        XCTAssertTrue(calendar.isDate(days[6].date, inSameDayAs: date(2026, 8, 28)))
+    }
+
+    func testWeeklyWindowFullWeekEndsFriday() {
+        // Friday closes the window: all 7 bars, Saturday first.
+        let friday = date(2026, 8, 28)
+        let days = DailyBudget.buildWeeklyWindowDays(
+            limitUSD: 70,
+            daysInPeriod: 7,
+            weekStartWeekday: 7,
+            spentByDay: [:],
+            now: friday,
+            calendar: calendar
+        )
+        XCTAssertEqual(days.count, 7)
+        XCTAssertEqual(calendar.isDate(days.first?.date ?? Date(), inSameDayAs: date(2026, 8, 22)), true)
+        XCTAssertEqual(calendar.isDate(days.last?.date ?? Date(), inSameDayAs: friday), true)
+    }
 }

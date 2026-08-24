@@ -252,4 +252,115 @@ final class CursorUsageClientTests: XCTestCase {
         XCTAssertFalse(CursorAuthSession.isCursorDomain("opencode.ai"))
         XCTAssertFalse(CursorAuthSession.isCursorDomain("grok.com"))
     }
+
+    // MARK: - Daily budget (quota scale)
+
+    private func utcCalendar() -> Calendar {
+        var gregorian = Calendar(identifier: .gregorian)
+        gregorian.timeZone = TimeZone(identifier: "UTC") ?? .gmt
+        return gregorian
+    }
+
+    private func utcDate(
+        _ year: Int,
+        _ month: Int,
+        _ day: Int,
+        hour: Int = 12,
+        minute: Int = 0,
+        calendar: Calendar
+    ) -> Date {
+        calendar.date(from: DateComponents(year: year, month: month, day: day, hour: hour, minute: minute))!
+    }
+
+    private func event(at date: Date, chargedCents: Double) -> [String: Any] {
+        [
+            "timestamp": String(Int64(date.timeIntervalSince1970 * 1000)),
+            "chargedCents": chargedCents
+        ]
+    }
+
+    func testQuotaPercentsByDayScalesListPriceToUsedPercent() {
+        let calendar = utcCalendar()
+        let saturday = calendar.startOfDay(for: utcDate(2026, 8, 22, calendar: calendar))
+        let sunday = calendar.startOfDay(for: utcDate(2026, 8, 23, calendar: calendar))
+        let percents = CursorUsageClient.quotaPercentsByDay(
+            usdSpends: [saturday: 3.0, sunday: 12.2],
+            usedPercent: 4
+        )
+        let cycleUSD = 15.2
+        XCTAssertEqual(percents[saturday] ?? -1, 3.0 / cycleUSD * 4, accuracy: 0.001)
+        XCTAssertEqual(percents[sunday] ?? -1, 12.2 / cycleUSD * 4, accuracy: 0.001)
+        XCTAssertEqual(percents.values.reduce(0, +), 4, accuracy: 0.001)
+    }
+
+    func testQuotaPercentsByDayEmptyWhenNoSpendOrNoUsage() {
+        let day = utcCalendar().startOfDay(for: Date(timeIntervalSince1970: 1_754_236_800))
+        XCTAssertTrue(CursorUsageClient.quotaPercentsByDay(usdSpends: [day: 10], usedPercent: 0).isEmpty)
+        XCTAssertTrue(CursorUsageClient.quotaPercentsByDay(usdSpends: [:], usedPercent: 4).isEmpty)
+    }
+
+    func testDailySpendByDayClipsEventsBeforeCycleStart() {
+        let calendar = utcCalendar()
+        let cycleStart = utcDate(2026, 8, 22, hour: 17, minute: 57, calendar: calendar)
+        let cycleEnd = utcDate(2026, 9, 22, hour: 17, minute: 57, calendar: calendar)
+        let previousCycleSameMorning = utcDate(2026, 8, 22, hour: 10, calendar: calendar)
+        let afterReset = utcDate(2026, 8, 22, hour: 20, calendar: calendar)
+        let sunday = utcDate(2026, 8, 23, calendar: calendar)
+
+        let byDay = CursorUsageClient.dailySpendByDay(
+            events: [
+                event(at: previousCycleSameMorning, chargedCents: 5000),
+                event(at: afterReset, chargedCents: 300),
+                event(at: sunday, chargedCents: 1220)
+            ],
+            cycleStart: cycleStart,
+            cycleEnd: cycleEnd,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(byDay[calendar.startOfDay(for: cycleStart)] ?? -1, 3.0, accuracy: 0.001)
+        XCTAssertEqual(byDay[calendar.startOfDay(for: sunday)] ?? -1, 12.2, accuracy: 0.001)
+        XCTAssertEqual(byDay.values.reduce(0, +), 15.2, accuracy: 0.001)
+    }
+
+    func testDailyBudgetDaysUsesQuotaNotPlanLimitDollars() {
+        let calendar = utcCalendar()
+        let cycleStart = utcDate(2026, 8, 22, hour: 17, minute: 57, calendar: calendar)
+        let cycleEnd = utcDate(2026, 9, 22, hour: 17, minute: 57, calendar: calendar)
+        let now = utcDate(2026, 8, 23, hour: 20, calendar: calendar)
+        let previousCycleSameMorning = utcDate(2026, 8, 22, hour: 10, calendar: calendar)
+
+        let days = CursorUsageClient.dailyBudgetDays(
+            events: [
+                event(at: previousCycleSameMorning, chargedCents: 5000),
+                event(at: utcDate(2026, 8, 22, hour: 20, calendar: calendar), chargedCents: 300),
+                event(at: utcDate(2026, 8, 23, calendar: calendar), chargedCents: 1220)
+            ],
+            planLimitUSD: 20,
+            usedPercent: 4,
+            billingCycleStart: cycleStart,
+            billingCycleEnd: cycleEnd,
+            now: now,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(days?.count, 7)
+        let saturday = days?.first { calendar.isDate($0.date, inSameDayAs: cycleStart) }
+        let sunday = days?.first { calendar.isDate($0.date, inSameDayAs: now) }
+        XCTAssertEqual(saturday?.spentUSD ?? -1, 3.0 / 15.2 * 4, accuracy: 0.001)
+        XCTAssertEqual(sunday?.spentUSD ?? -1, 12.2 / 15.2 * 4, accuracy: 0.001)
+        XCTAssertEqual((saturday?.spentUSD ?? 0) + (sunday?.spentUSD ?? 0), 4, accuracy: 0.001)
+
+        let expectedDaily = 100.0 / Double(DailyBudget.daysInBillingCycle(
+            start: cycleStart,
+            end: cycleEnd,
+            calendar: calendar
+        ))
+        XCTAssertEqual(saturday?.budgetUSD ?? -1, expectedDaily, accuracy: 0.001)
+        XCTAssertEqual(Int((saturday?.budgetUSD ?? 0).rounded()), 3)
+
+        // Old dollar-ratio math would have called Saturday 15% of the $20 limit.
+        XCTAssertLessThan(saturday?.spentUSD ?? 100, 2)
+        XCTAssertFalse(sunday?.isOverBudget ?? true)
+    }
 }
