@@ -53,6 +53,15 @@ final class AppSettingsTests: XCTestCase {
         XCTAssertTrue(second.showClaudeBarInMenuBar)
     }
 
+    func testShowSelectedProviderDefaultsOffAndPersists() throws {
+        XCTAssertFalse(makeSettings().showSelectedProviderInMenuBar)
+
+        let first = makeSettings()
+        first.showSelectedProviderInMenuBar = true
+
+        XCTAssertTrue(makeSettings().showSelectedProviderInMenuBar)
+    }
+
     func testNeedsGrokPollingFollowsBarAndProvider() {
         let settings = makeSettings()
         settings.selectedProvider = .cursor

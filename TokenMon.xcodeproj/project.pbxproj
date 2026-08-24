@@ -52,6 +52,7 @@
 		67CB3BAF2D6D0B348912F873 /* ThresholdNotifierTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57DE707648903EDB3AF63DD9 /* ThresholdNotifierTests.swift */; };
 		6C49B3BEC92293AB4BFC7CB4 /* OpenCodeSignInSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96616027EAA5189BC18E97E6 /* OpenCodeSignInSheet.swift */; };
 		6D3C3BF5E179DD1B60147EEB /* ProductCatalogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5685652948176D011F6AD18 /* ProductCatalogTests.swift */; };
+		6DA992476A20077DDFBA00CE /* MenuBarStatusRendererTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67459168AC9658D6D9E70D93 /* MenuBarStatusRendererTests.swift */; };
 		6FA1E641E5442AE0067C6D40 /* WebKitCookieCaptureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DE9ECA5176C08F0FECEABDD /* WebKitCookieCaptureTests.swift */; };
 		70049333F63FC283B5DC7866 /* DailyQuotaDeltaStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B702888EEE669BE5E778C5F /* DailyQuotaDeltaStore.swift */; };
 		71063F6D995FF528DD8A778E /* DailyUsageChartView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C4E9D4A9882DA1D0ECA5BD5 /* DailyUsageChartView.swift */; };
@@ -191,6 +192,7 @@
 		5915E51D49E8D3ADC7F0B9E8 /* PollingLoopTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PollingLoopTests.swift; sourceTree = "<group>"; };
 		59A75CD9EEFE026263DFB293 /* TokenMonTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TokenMonTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		6477629704DECD1265006252 /* OpenRouterUsagePoller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenRouterUsagePoller.swift; sourceTree = "<group>"; };
+		67459168AC9658D6D9E70D93 /* MenuBarStatusRendererTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarStatusRendererTests.swift; sourceTree = "<group>"; };
 		6AA910F6DC60F8FD9C4B9487 /* ISO8601.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ISO8601.swift; sourceTree = "<group>"; };
 		6CD292D52481609A3C0369D3 /* OpenRouterPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenRouterPanelView.swift; sourceTree = "<group>"; };
 		6EF44D1ED22184587190FAEF /* SignInSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInSheet.swift; sourceTree = "<group>"; };
@@ -417,6 +419,7 @@
 				A37FC6F12B3E19C5C9A8C445 /* HistoryStoreTests.swift */,
 				BDF40560D85850DB0EC7F326 /* HourlyDeltaActivityStoreTests.swift */,
 				BF58255DAC5BC7E940010E74 /* JSONTests.swift */,
+				67459168AC9658D6D9E70D93 /* MenuBarStatusRendererTests.swift */,
 				5915E51D49E8D3ADC7F0B9E8 /* PollingLoopTests.swift */,
 				585A7CA4EC26E9EC85F11B08 /* ProviderAuthSessionTests.swift */,
 				E45F0294D7F6833156223A81 /* UsageErrorTests.swift */,
@@ -716,6 +719,7 @@
 				86208DBEB0D029C1E2E2603D /* HistoryStoreTests.swift in Sources */,
 				C66EA68B69D41BE27419E22C /* HourlyDeltaActivityStoreTests.swift in Sources */,
 				0C0E31AE65D50DCB12474E92 /* JSONTests.swift in Sources */,
+				6DA992476A20077DDFBA00CE /* MenuBarStatusRendererTests.swift in Sources */,
 				962BB066A9FDA634D3F391D9 /* OpenCodeConsoleClientTests.swift in Sources */,
 				17B6500D43004D64A3A1716B /* OpenCodeStatsTests.swift in Sources */,
 				F168BFFEBC910644288539E2 /* OpenRouterAuthSessionTests.swift in Sources */,
