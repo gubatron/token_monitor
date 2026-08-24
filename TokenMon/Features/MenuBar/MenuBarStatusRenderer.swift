@@ -142,6 +142,7 @@ enum MenuBarStatusRenderer {
         if selectedProvider != .overview {
             return renderSelectedProvider(
                 selectedProvider,
+                grokProducts: grokProducts,
                 snapshot: snapshot,
                 openCodeSnapshot: openCodeSnapshot,
                 cursorSnapshot: cursorSnapshot,
@@ -149,7 +150,8 @@ enum MenuBarStatusRenderer {
                 chatGPTSnapshot: chatGPTSnapshot,
                 openRouterSnapshot: openRouterSnapshot,
                 isGrokSignedIn: isGrokSignedIn,
-                showGrokBar: showGrokBar
+                showGrokBar: showGrokBar,
+                showGrokCategories: showGrokCategories
             )
         }
         let height: CGFloat = 22
@@ -326,6 +328,7 @@ enum MenuBarStatusRenderer {
 
     private static func renderSelectedProvider(
         _ provider: MonitorProvider,
+        grokProducts: [ProductUsage],
         snapshot: WeeklyUsageSnapshot?,
         openCodeSnapshot: OpenCodeSnapshot?,
         cursorSnapshot: CursorSnapshot?,
@@ -333,7 +336,8 @@ enum MenuBarStatusRenderer {
         chatGPTSnapshot: ChatGPTSnapshot?,
         openRouterSnapshot: OpenRouterSnapshot?,
         isGrokSignedIn: Bool,
-        showGrokBar: Bool
+        showGrokBar: Bool,
+        showGrokCategories: Bool
     ) -> NSImage {
         let height: CGFloat = 22
         let iconSize: CGFloat = 16
@@ -342,6 +346,10 @@ enum MenuBarStatusRenderer {
         let barHeight: CGFloat = 8
         let font = NSFont.monospacedDigitSystemFont(ofSize: 12.5, weight: .medium)
         let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: chromeColor]
+        let labelAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 12.5, weight: .medium),
+            .foregroundColor: chromeColor
+        ]
 
         let usedPercent: Double?
         let text: String
@@ -370,7 +378,18 @@ enum MenuBarStatusRenderer {
 
         let textSize = text.size(withAttributes: attrs)
         let showBar = provider == .grok ? showGrokBar : true
-        let width = ceil(iconSize + gap + textSize.width + (showBar && usedPercent != nil ? gap + barWidth : 2))
+        let categoryLabels: [(product: ProductUsage, text: String, size: NSSize)] = provider == .grok && showGrokCategories && usedPercent != nil
+            ? grokProducts.map {
+                let label = "\(ProductCatalog.shortName(for: $0.id)) \(Int($0.percentOfPool.rounded()))%"
+                return (product: $0, text: label, size: label.size(withAttributes: labelAttrs))
+            }
+            : []
+        var width = iconSize + gap + textSize.width
+        if showBar && usedPercent != nil { width += gap + barWidth }
+        for category in categoryLabels {
+            width += gap + 7 + 4 + category.size.width
+        }
+        width = ceil(width + 2)
         let image = NSImage(size: NSSize(width: max(width, 20), height: height))
         image.isTemplate = false
         image.lockFocus()
@@ -385,6 +404,22 @@ enum MenuBarStatusRenderer {
                 usedPercent: usedPercent,
                 color: provider == .chatgpt ? NSColor.systemGreen : chromeColor
             )
+        }
+        if !categoryLabels.isEmpty {
+            var categoryX = textX + textSize.width
+            if showBar && usedPercent != nil { categoryX += gap + barWidth }
+            for category in categoryLabels {
+                categoryX += gap
+                let dotRect = NSRect(x: categoryX, y: midY - 3.5, width: 7, height: 7)
+                nsColor(category.product.colorToken).setFill()
+                NSBezierPath(ovalIn: dotRect).fill()
+                categoryX += 11
+                category.text.draw(
+                    at: NSPoint(x: categoryX, y: midY - category.size.height / 2 - 0.5),
+                    withAttributes: labelAttrs
+                )
+                categoryX += category.size.width
+            }
         }
         return image
     }
