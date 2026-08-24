@@ -3,6 +3,7 @@ import SwiftUI
 
 struct MenuBarLabelView: View {
     let selectedProvider: MonitorProvider
+    let showSelectedProvider: Bool
     let snapshot: WeeklyUsageSnapshot?
     let openCodeSnapshot: OpenCodeSnapshot?
     let cursorSnapshot: CursorSnapshot?
@@ -28,7 +29,7 @@ struct MenuBarLabelView: View {
         let chatGPTUsed = chatGPTSnapshot.map { Int($0.headlineUsedPercent.rounded()) } ?? -1
         let openRouterUsed = openRouterSnapshot?.usedPercent.map { Int($0.rounded()) } ?? -1
         let parts = [
-            "\(selectedProvider)-\(showGrokBar)-\(showGrokCategories)-\(showOpenCodeBar)-\(showCursorBar)-\(showClaudeBar)",
+            "\(selectedProvider)-\(showSelectedProvider)-\(showGrokBar)-\(showGrokCategories)-\(showOpenCodeBar)-\(showCursorBar)-\(showClaudeBar)",
             "\(products)-\(used)-\(openCodeUsed)-\(cursorUsed)-\(claudeUsed)-\(chatGPTUsed)-\(openRouterUsed)-\(isGrokSignedIn)-\(colorScheme)"
         ]
         return parts.joined(separator: "-")
@@ -37,6 +38,7 @@ struct MenuBarLabelView: View {
     var body: some View {
         Image(nsImage: MenuBarStatusRenderer.image(
             selectedProvider: selectedProvider,
+            showSelectedProvider: showSelectedProvider,
             snapshot: snapshot,
             openCodeSnapshot: openCodeSnapshot,
             cursorSnapshot: cursorSnapshot,

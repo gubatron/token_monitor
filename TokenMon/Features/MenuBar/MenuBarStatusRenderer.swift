@@ -22,6 +22,7 @@ enum MenuBarStatusRenderer {
     // swiftlint:disable:next function_parameter_count
     static func image(
         selectedProvider: MonitorProvider,
+        showSelectedProvider: Bool,
         snapshot: WeeklyUsageSnapshot?,
         openCodeSnapshot: OpenCodeSnapshot?,
         cursorSnapshot: CursorSnapshot?,
@@ -46,6 +47,7 @@ enum MenuBarStatusRenderer {
         let cacheKey = _cacheKey(
             grokProducts: grokProducts,
             selectedProvider: selectedProvider,
+            showSelectedProvider: showSelectedProvider,
             snapshot: snapshot,
             openCodeSnapshot: openCodeSnapshot,
             cursorSnapshot: cursorSnapshot,
@@ -67,6 +69,7 @@ enum MenuBarStatusRenderer {
         let image = _render(
             grokProducts: grokProducts,
             selectedProvider: selectedProvider,
+            showSelectedProvider: showSelectedProvider,
             snapshot: snapshot,
             openCodeSnapshot: openCodeSnapshot,
             cursorSnapshot: cursorSnapshot,
@@ -88,6 +91,7 @@ enum MenuBarStatusRenderer {
     private static func _cacheKey(
         grokProducts: [ProductUsage],
         selectedProvider: MonitorProvider,
+        showSelectedProvider: Bool,
         snapshot: WeeklyUsageSnapshot?,
         openCodeSnapshot: OpenCodeSnapshot?,
         cursorSnapshot: CursorSnapshot?,
@@ -115,7 +119,7 @@ enum MenuBarStatusRenderer {
             .joined(separator: ",")
         let productIDs = visibleProductIDs.sorted().joined(separator: ",")
         let parts = [
-            "mb-\(selectedProvider)-\(grok)-\(openCode)-\(cursor)-\(claude)-\(chatGPT)-\(openRouter)",
+            "mb-\(showSelectedProvider ? 1 : 0)-\(selectedProvider)-\(grok)-\(openCode)-\(cursor)-\(claude)-\(chatGPT)-\(openRouter)",
             "\(isGrokSignedIn)-\(showGrokBar)-\(showGrokCategories)-\(showOpenCodeBar)-\(showCursorBar)-\(showClaudeBar)",
             "\(productKey)-\(productIDs)-\(chrome)"
         ]
@@ -126,6 +130,7 @@ enum MenuBarStatusRenderer {
     private static func _render(
         grokProducts: [ProductUsage],
         selectedProvider: MonitorProvider,
+        showSelectedProvider: Bool,
         snapshot: WeeklyUsageSnapshot?,
         openCodeSnapshot: OpenCodeSnapshot?,
         cursorSnapshot: CursorSnapshot?,
@@ -139,19 +144,16 @@ enum MenuBarStatusRenderer {
         showCursorBar: Bool,
         showClaudeBar: Bool
     ) -> NSImage {
-        if selectedProvider != .overview {
+        if showSelectedProvider {
             return renderSelectedProvider(
                 selectedProvider,
-                grokProducts: grokProducts,
                 snapshot: snapshot,
                 openCodeSnapshot: openCodeSnapshot,
                 cursorSnapshot: cursorSnapshot,
                 claudeSnapshot: claudeSnapshot,
                 chatGPTSnapshot: chatGPTSnapshot,
                 openRouterSnapshot: openRouterSnapshot,
-                isGrokSignedIn: isGrokSignedIn,
-                showGrokBar: showGrokBar,
-                showGrokCategories: showGrokCategories
+                isGrokSignedIn: isGrokSignedIn
             )
         }
         let height: CGFloat = 22
@@ -326,18 +328,24 @@ enum MenuBarStatusRenderer {
         return image
     }
 
+    /// Single-provider label with fixed geometry: icon | percent slot | usage bar.
+    ///
+    /// Every selection — Overview included — renders through this template while
+    /// "show selected provider" is on, so the status item width never changes and
+    /// the dropdown anchored beneath it keeps one x position when switching
+    /// providers. The bar is tinted with the provider's brand accent; Overview
+    /// has no single headline metric, so it shows the TokenMon mark over an
+    /// empty track. Grok category labels are composite-only since their
+    /// variable widths would break the fixed anchor.
     private static func renderSelectedProvider(
         _ provider: MonitorProvider,
-        grokProducts: [ProductUsage],
         snapshot: WeeklyUsageSnapshot?,
         openCodeSnapshot: OpenCodeSnapshot?,
         cursorSnapshot: CursorSnapshot?,
         claudeSnapshot: ClaudeSnapshot?,
         chatGPTSnapshot: ChatGPTSnapshot?,
         openRouterSnapshot: OpenRouterSnapshot?,
-        isGrokSignedIn: Bool,
-        showGrokBar: Bool,
-        showGrokCategories: Bool
+        isGrokSignedIn: Bool
     ) -> NSImage {
         let height: CGFloat = 22
         let iconSize: CGFloat = 16
@@ -346,84 +354,70 @@ enum MenuBarStatusRenderer {
         let barHeight: CGFloat = 8
         let font = NSFont.monospacedDigitSystemFont(ofSize: 12.5, weight: .medium)
         let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: chromeColor]
-        let labelAttrs: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: 12.5, weight: .medium),
-            .foregroundColor: chromeColor
-        ]
 
         let usedPercent: Double?
-        let text: String
         switch provider {
+        case .overview:
+            usedPercent = nil
         case .grok:
             usedPercent = isGrokSignedIn ? snapshot?.usedPercent : nil
-            text = usedPercent.map { "\(Int($0.rounded()))%" } ?? "Grok"
         case .opencode:
             usedPercent = openCodeSnapshot?.primaryUsedPercent
-            text = usedPercent.map { "\(Int($0.rounded()))%" } ?? "OpenCode"
         case .cursor:
             usedPercent = cursorSnapshot?.usedPercent
-            text = usedPercent.map { "\(Int($0.rounded()))%" } ?? "Cursor"
         case .claude:
             usedPercent = claudeSnapshot?.headlineUsedPercent
-            text = usedPercent.map { "\(Int($0.rounded()))%" } ?? "Claude"
         case .chatgpt:
             usedPercent = chatGPTSnapshot?.headlineUsedPercent
-            text = usedPercent.map { "\(Int($0.rounded()))%" } ?? "ChatGPT"
         case .openrouter:
             usedPercent = openRouterSnapshot?.usedPercent
-            text = usedPercent.map { "\(Int($0.rounded()))%" } ?? "OpenRouter"
-        case .overview:
-            assertionFailure("Overview should be rendered by the composite path")
-            usedPercent = nil
-            text = "TokenMon"
         }
 
-        let textSize = text.size(withAttributes: attrs)
-        let showBar = provider == .grok ? showGrokBar : true
-        let categoryLabels: [(product: ProductUsage, text: String, size: NSSize)] = provider == .grok && showGrokCategories && usedPercent != nil
-            ? grokProducts.map {
-                let label = "\(ProductCatalog.shortName(for: $0.id)) \(Int($0.percentOfPool.rounded()))%"
-                return (product: $0, text: label, size: label.size(withAttributes: labelAttrs))
-            }
-            : []
-        var width = iconSize + gap + textSize.width
-        if showBar && usedPercent != nil { width += gap + barWidth }
-        for category in categoryLabels {
-            width += gap + 7 + 4 + category.size.width
-        }
-        width = ceil(width + 2)
+        // Monospaced digits make every "NN%" string the same width; the slot
+        // reserves that width so "—" (no data) renders at identical geometry.
+        let textSlotWidth = ceil("100%".size(withAttributes: attrs).width)
+        let textX = iconSize + gap
+        let barX = textX + textSlotWidth + gap
+        let width = ceil(barX + barWidth + 2)
+
         let image = NSImage(size: NSSize(width: max(width, 20), height: height))
         image.isTemplate = false
         image.lockFocus()
         defer { image.unlockFocus() }
+        NSGraphicsContext.current?.imageInterpolation = .high
+
         let midY = height / 2
-        drawProviderIcon(ProviderLogo.image(for: provider), in: NSRect(x: 0, y: midY - iconSize / 2, width: iconSize, height: iconSize), inset: 0)
-        let textX = iconSize + gap
+        let icon = provider == .overview ? ProviderLogo.tokenmon : ProviderLogo.image(for: provider)
+        drawProviderIcon(icon, in: NSRect(x: 0, y: midY - iconSize / 2, width: iconSize, height: iconSize), inset: 0)
+        let text = usedPercent.map { "\(Int($0.rounded()))%" } ?? "—"
+        let textSize = text.size(withAttributes: attrs)
         text.draw(at: NSPoint(x: textX, y: midY - textSize.height / 2 - 0.5), withAttributes: attrs)
-        if showBar, let usedPercent {
-            drawSolidBar(
-                in: NSRect(x: textX + textSize.width + gap, y: midY - barHeight / 2, width: barWidth, height: barHeight),
-                usedPercent: usedPercent,
-                color: provider == .chatgpt ? NSColor.systemGreen : chromeColor
-            )
-        }
-        if !categoryLabels.isEmpty {
-            var categoryX = textX + textSize.width
-            if showBar && usedPercent != nil { categoryX += gap + barWidth }
-            for category in categoryLabels {
-                categoryX += gap
-                let dotRect = NSRect(x: categoryX, y: midY - 3.5, width: 7, height: 7)
-                nsColor(category.product.colorToken).setFill()
-                NSBezierPath(ovalIn: dotRect).fill()
-                categoryX += 11
-                category.text.draw(
-                    at: NSPoint(x: categoryX, y: midY - category.size.height / 2 - 0.5),
-                    withAttributes: labelAttrs
-                )
-                categoryX += category.size.width
-            }
-        }
+        drawSolidBar(
+            in: NSRect(x: barX, y: midY - barHeight / 2, width: barWidth, height: barHeight),
+            usedPercent: usedPercent ?? 0,
+            color: providerAccent(provider)
+        )
         return image
+    }
+
+    /// Brand accent per provider; values mirror `ConcentricUsageRingView`.
+    private static func providerAccent(_ provider: MonitorProvider) -> NSColor {
+        switch provider {
+        case .overview:
+            return chromeColor
+        case .grok:
+            return SRGB(red: 0.11, green: 0.38, blue: 0.82).nsColor
+        case .opencode:
+            return ModelPalette.orange.nsColor
+        case .cursor:
+            return ConcentricUsageRingView.cursorSRGB.nsColor
+        case .claude:
+            return ConcentricUsageRingView.claudeSRGB.nsColor
+        case .chatgpt:
+            return SRGB(red: 0.16, green: 0.52, blue: 0.46).nsColor
+        case .openrouter:
+            return SRGB(red: 0.45, green: 0.36, blue: 0.90).nsColor
+        }
     }
 
     private static func drawSolidBar(in barRect: NSRect, usedPercent: Double, color: NSColor) {

@@ -271,6 +271,7 @@ struct MenuBarLabelContainer: View {
     var body: some View {
         MenuBarLabelView(
             selectedProvider: model.settings.selectedProvider,
+            showSelectedProvider: model.settings.showSelectedProviderInMenuBar,
             snapshot: model.poller.snapshot,
             openCodeSnapshot: model.openCodePoller.snapshot,
             cursorSnapshot: model.cursorPoller.snapshot,
