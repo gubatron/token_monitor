@@ -373,7 +373,9 @@ enum MenuBarStatusRenderer {
             usedPercent = openRouterSnapshot?.usedPercent
             text = usedPercent.map { "\(Int($0.rounded()))%" } ?? "OpenRouter"
         case .overview:
-            fatalError("Overview is rendered by the composite path")
+            assertionFailure("Overview should be rendered by the composite path")
+            usedPercent = nil
+            text = "TokenMon"
         }
 
         let textSize = text.size(withAttributes: attrs)
