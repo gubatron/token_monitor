@@ -27,6 +27,39 @@ struct PreferencesView: View {
 
     var body: some View {
         Form {
+            Section {
+                ForEach(MonitorProvider.usageProviders, id: \.id) { provider in
+                    Toggle(provider.displayName, isOn: Binding(
+                        get: { settings.enabledProviderIDs.contains(provider) },
+                        set: { on in
+                            if on {
+                                settings.enabledProviderIDs.insert(provider)
+                            } else {
+                                settings.enabledProviderIDs.remove(provider)
+                            }
+                        }
+                    ))
+                    .disabled(settings.enabledProviderIDs == [provider])
+                }
+            } header: {
+                Text("Providers")
+            } footer: {
+                Text("Choose which provider tabs appear in the menu dropdown.")
+            }
+
+            Section {
+                Toggle("Show selected provider", isOn: $settings.showSelectedProviderInMenuBar)
+                Toggle("Grok categories", isOn: $settings.showCategoriesInMenuBar)
+                Toggle("Grok bar graph", isOn: $settings.showGrokBarInMenuBar)
+                Toggle("OpenCode bar graph", isOn: $settings.showOpenCodeBarInMenuBar)
+                Toggle("Cursor bar graph", isOn: $settings.showCursorBarInMenuBar)
+                Toggle("Claude bar graph", isOn: $settings.showClaudeBarInMenuBar)
+            } header: {
+                Text("Menu Bar")
+            } footer: {
+                Text("Show selected provider replaces the pinned graphs with just the active provider's icon, percentage, and usage bar.")
+            }
+
             Section("Grok Account") {
                 if auth.isSignedIn {
                     LabeledContent("Signed in as") {
@@ -149,19 +182,6 @@ struct PreferencesView: View {
                 }
             }
 
-            Section {
-                Toggle("Show selected provider", isOn: $settings.showSelectedProviderInMenuBar)
-                Toggle("Grok categories", isOn: $settings.showCategoriesInMenuBar)
-                Toggle("Grok bar graph", isOn: $settings.showGrokBarInMenuBar)
-                Toggle("OpenCode bar graph", isOn: $settings.showOpenCodeBarInMenuBar)
-                Toggle("Cursor bar graph", isOn: $settings.showCursorBarInMenuBar)
-                Toggle("Claude bar graph", isOn: $settings.showClaudeBarInMenuBar)
-            } header: {
-                Text("Menu Bar")
-            } footer: {
-                Text("Show selected provider replaces the pinned graphs with just the active provider's icon, percentage, and usage bar.")
-            }
-
             Section("Refresh") {
                 Stepper(value: $settings.activePollSeconds, in: 15...300, step: 15) {
                     Text("While menu open: \(settings.activePollSeconds)s")
@@ -185,26 +205,6 @@ struct PreferencesView: View {
                     Text("Alert at \(Int(settings.thresholdPercent))% used")
                         .foregroundStyle(.secondary)
                 }
-            }
-
-            Section {
-                ForEach(MonitorProvider.usageProviders, id: \.id) { provider in
-                    Toggle(provider.displayName, isOn: Binding(
-                        get: { settings.enabledProviderIDs.contains(provider) },
-                        set: { on in
-                            if on {
-                                settings.enabledProviderIDs.insert(provider)
-                            } else {
-                                settings.enabledProviderIDs.remove(provider)
-                            }
-                        }
-                    ))
-                    .disabled(settings.enabledProviderIDs == [provider])
-                }
-            } header: {
-                Text("Providers")
-            } footer: {
-                Text("Choose which provider tabs appear in the menu dropdown.")
             }
 
             Section("Categories") {

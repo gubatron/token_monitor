@@ -264,12 +264,8 @@ struct MenuBarPanelView: View {
 
             Divider().padding(.vertical, 4)
 
-            if settings.selectedProvider == .overview {
-                panelButton("Open TokenMon…", shortcut: "⌘O", action: openPreferences)
-                    .keyboardShortcut("o", modifiers: [.command])
-            }
-
-            panelButton("Providers", shortcut: nil, action: openPreferences)
+            panelButton("Settings", shortcut: "⌘O", action: openPreferences)
+                .keyboardShortcut("o", modifiers: [.command])
 
             if let url = settings.selectedProvider.websiteURL {
                 let title: String = {
