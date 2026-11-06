@@ -266,6 +266,7 @@ fn test_midnight_schedule_handles_a_midnight_dst_gap() {
 /// `prop_segment_heights_fill_the_bar`; every slice must stay at least the
 /// minimum and the bar must still fill exactly.
 #[test]
+#[allow(clippy::unreadable_literal)] // verbatim proptest counterexample
 fn test_segment_heights_never_go_negative_when_lifts_exceed_tallest() {
     let acts = [
         42.8211712331521,
