@@ -1,0 +1,194 @@
+// Fixed-content host windows used by the offscreen snapshot tests and the
+// gallery. Each is 420px wide like the real panel (396 inside the 12px
+// window padding) so the rendered geometry matches production.
+import {
+    Theme, Typo, PanelCard, MetricStatGrid, SlimUsageTrack, SegmentedUsageBar, CategoryRow,
+    StaleDataCaption, CollapsibleSectionHeader, ProviderHeaderRow, DailyBudgetBars,
+    DailyUsageChart, PanelSectionHeader, BarSegment, CategoryItem, DayBar, MetricItem, LabelValue
+} from "kit.slint";
+
+/// Window chrome shared by every host.
+component Host inherits Window {
+    background: Theme.window-background;
+    width: 420px;
+    default-font-family: Typo.family;
+}
+
+export component SnapPanelCard inherits Host {
+    height: 140px;
+    VerticalLayout {
+        padding: 12px;
+        PanelCard {
+            ProviderHeaderRow { logo-key: "anthropic"; title: "Claude"; trailing: "Max 5x"; }
+            SlimUsageTrack {
+                label: "Session"; percent: 42; fill: Theme.panel-accent-claude;
+                caption: "Resets in 3h 20m";
+            }
+        }
+    }
+}
+
+export component SnapMetricGrid inherits Host {
+    height: 168px;
+    VerticalLayout {
+        padding: 12px;
+        MetricStatGrid {
+            items: [
+                { title: "Today", value: "1.2M" }, { title: "Week", value: "8.4M" },
+                { title: "Month", value: "31.0M" }, { title: "Cost", value: "$12.40" }
+            ];
+        }
+    }
+}
+
+export component SnapUsage inherits Host {
+    in property <[BarSegment]> segments;
+    in property <[CategoryItem]> categories;
+    height: 150px;
+    VerticalLayout {
+        padding: 12px;
+        spacing: 10px;
+        alignment: start;
+        SlimUsageTrack { label: "Weekly"; percent: 0; fill: Theme.panel-accent-grok; }
+        SlimUsageTrack { label: "Monthly"; percent: 100; fill: Theme.panel-accent-openrouter; caption: "Resets Friday"; }
+        SegmentedUsageBar { segments: root.segments; }
+        HorizontalLayout {
+            spacing: 12px;
+            alignment: start;
+            for c in root.categories: CategoryRow { name: c.name; percent-text: c.percent-text; dot: c.color; }
+        }
+    }
+}
+
+export component SnapCaptions inherits Host {
+    in-out property <bool> expanded: true;
+    height: 120px;
+    VerticalLayout {
+        padding: 12px;
+        spacing: 12px;
+        alignment: start;
+        StaleDataCaption { message: "Couldn't refresh usage."; detail: "Showing data from 5 min ago."; }
+        CollapsibleSectionHeader { title: "Models"; expanded: root.expanded; height: 18px; }
+        CollapsibleSectionHeader { title: "History"; expanded: false; height: 18px; }
+    }
+}
+
+export component SnapDailyBudget inherits Host {
+    in property <[DayBar]> days;
+    in property <string> footer;
+    height: 260px;
+    VerticalLayout {
+        padding: 12px;
+        PanelCard {
+            DailyBudgetBars {
+                days: root.days;
+                accent: Theme.panel-accent-claude;
+                header-percent: "14.3%";
+                range-label: "October 13 – 19";
+                footer: root.footer;
+                show-navigation: true;
+                can-previous: true;
+                can-next: true;
+            }
+        }
+    }
+}
+
+export component SnapDailyUsage inherits Host {
+    in property <[DayBar]> days;
+    height: 250px;
+    VerticalLayout {
+        padding: 12px;
+        PanelCard {
+            DailyUsageChart {
+                days: root.days;
+                accent: Theme.panel-accent-grok;
+                header-percent: "14.3%";
+                range-label: "October 13 – 19";
+                footer: "Bars update between polls · week totals above";
+                can-next: false;
+            }
+        }
+    }
+}
+
+/// The Claude panel card mock posted on the issue for fidelity review.
+export component SnapClaudeMock inherits Host {
+    in property <[DayBar]> days;
+    height: 460px;
+    VerticalLayout {
+        padding: 12px;
+        spacing: 12px;
+        alignment: start;
+        PanelCard {
+            ProviderHeaderRow { logo-key: "anthropic"; title: "Claude"; trailing: "Max 5x"; }
+            SlimUsageTrack {
+                label: "Session (5h)"; percent: 42; fill: Theme.panel-accent-claude;
+                caption: "Resets in 3h 20m";
+            }
+            SlimUsageTrack {
+                label: "Weekly"; percent: 68; fill: Theme.panel-accent-claude;
+                caption: "Resets Friday 9:00 AM";
+            }
+            SlimUsageTrack {
+                label: "Weekly Opus"; percent: 12; fill: Theme.panel-accent-claude;
+                caption: "Resets Friday 9:00 AM";
+            }
+        }
+        PanelCard {
+            DailyBudgetBars {
+                days: root.days;
+                accent: Theme.panel-accent-claude;
+                header-percent: "14.3%";
+                range-label: "October 13 – 19";
+                footer: "Usage 3.2% over today's allowance";
+                show-navigation: true;
+                can-previous: true;
+                can-next: true;
+            }
+        }
+    }
+}
+
+/// Demo / gallery window: every component on one scrolling-free sheet.
+export component Gallery inherits Host {
+    in property <[BarSegment]> segments;
+    in property <[CategoryItem]> categories;
+    in property <[DayBar]> days;
+    height: 820px;
+    VerticalLayout {
+        padding: 12px;
+        spacing: 12px;
+        alignment: start;
+        PanelCard {
+            ProviderHeaderRow { logo-key: "grok"; title: "Grok"; trailing: "SuperGrok"; }
+            SlimUsageTrack { label: "Weekly"; percent: 37; fill: Theme.panel-accent-grok; caption: "Resets Friday"; }
+            SegmentedUsageBar { segments: root.segments; }
+            HorizontalLayout {
+                spacing: 12px;
+                alignment: start;
+                for c in root.categories: CategoryRow { name: c.name; percent-text: c.percent-text; dot: c.color; }
+            }
+        }
+        MetricStatGrid {
+            items: [
+                { title: "Today", value: "1.2M" }, { title: "Week", value: "8.4M" },
+                { title: "Month", value: "31.0M" }, { title: "Cost", value: "$12.40" }
+            ];
+        }
+        PanelCard {
+            DailyBudgetBars {
+                days: root.days;
+                accent: Theme.panel-accent-grok;
+                header-percent: "14.3%";
+                range-label: "October 13 – 19";
+                footer: "Usage 3.2% over today's allowance";
+                show-navigation: true;
+                can-previous: true;
+                can-next: false;
+            }
+        }
+        CollapsibleSectionHeader { title: "Models"; expanded: true; height: 18px; }
+        StaleDataCaption { message: "Couldn't refresh usage."; detail: "Showing data from 5 min ago."; }
+    }
+}

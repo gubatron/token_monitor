@@ -1,0 +1,280 @@
+// Shared panel building blocks (spec 04 section 3.4).
+import { Theme, Typo, PanelMetrics } from "theme.slint";
+import { MetricItem, BarSegment, CategoryItem } from "types.slint";
+import { Logos } from "logos.slint";
+
+/// Small uppercase tracked header ("RESETS", "DAILY BUDGET").
+export component PanelSectionHeader inherits Text {
+    in property <string> title;
+    text: root.title.to-uppercase();
+    font-family: Typo.family;
+    font-size: Typo.micro-size;
+    font-weight: Typo.semibold;
+    letter-spacing: Typo.header-tracking;
+    color: Theme.secondary;
+}
+
+/// Meta label (micro semibold secondary), optionally uppercase + tracked.
+export component PanelMetaLabel inherits Text {
+    in property <string> label;
+    in property <bool> uppercased: false;
+    text: root.uppercased ? root.label.to-uppercase() : root.label;
+    font-family: Typo.family;
+    font-size: Typo.micro-size;
+    font-weight: Typo.semibold;
+    letter-spacing: root.uppercased ? Typo.header-tracking : 0px;
+    color: Theme.secondary;
+}
+
+/// 12pt semibold primary text used for digits and values.
+export component DigitText inherits Text {
+    font-family: Typo.family;
+    font-size: Typo.body-size;
+    font-weight: Typo.semibold;
+    color: Theme.primary;
+}
+
+/// 12pt regular tertiary caption below a track ("Resets in 3h 20m").
+export component ResetCaption inherits Text {
+    font-family: Typo.family;
+    font-size: Typo.body-size;
+    font-weight: Typo.regular;
+    color: Theme.tertiary;
+    wrap: word-wrap;
+}
+
+/// Rounded rect card: control background, 1px separator stroke, radius 12,
+/// padding 12, children stacked with spacing 8. Fills the width it is given.
+export component PanelCard inherits Rectangle {
+    background: Theme.control-background;
+    border-radius: PanelMetrics.card-radius;
+    border-width: 1px;
+    border-color: Theme.separator;
+    VerticalLayout {
+        padding: PanelMetrics.card-padding;
+        spacing: 8px;
+        alignment: start;
+        @children
+    }
+}
+
+/// A title above a value (padding 14). Used alone or inside `MetricStatGrid`.
+export component MetricStat inherits Rectangle {
+    in property <string> title;
+    in property <string> value;
+    VerticalLayout {
+        padding: 14px;
+        spacing: 6px;
+        alignment: start;
+        PanelSectionHeader { title: root.title; overflow: elide; }
+        DigitText { text: root.value; overflow: elide; }
+    }
+}
+
+/// 2x2 grid of four stats with hairline dividers, in a rounded card.
+/// `items` is read row-major (first two on top); extra items are ignored.
+export component MetricStatGrid inherits Rectangle {
+    in property <[MetricItem]> items;
+    background: Theme.control-background;
+    border-radius: PanelMetrics.card-radius;
+    border-width: 1px;
+    border-color: Theme.separator;
+    clip: true;
+    min-height: 2 * 70px;
+    for item[i] in root.items: MetricStat {
+        visible: i < 4;
+        x: mod(i, 2) * root.width / 2;
+        y: floor(i / 2) * root.height / 2;
+        width: root.width / 2;
+        height: root.height / 2;
+        title: item.title;
+        value: item.value;
+    }
+    Rectangle {
+        x: root.width / 2 - 0.5px;
+        width: 1px;
+        background: Theme.separator;
+    }
+    Rectangle {
+        y: root.height / 2 - 0.5px;
+        height: 1px;
+        background: Theme.separator;
+    }
+}
+
+/// Label + "NN% Used" over an 8px capsule track, with an optional caption.
+export component SlimUsageTrack inherits VerticalLayout {
+    in property <string> label;
+    /// 0...100 (clamped).
+    in property <float> percent;
+    in property <color> fill: Theme.panel-accent-overview;
+    in property <string> caption;
+    in property <bool> shows-label: true;
+    private property <float> clamped: max(0, min(100, root.percent));
+    spacing: 5px;
+    alignment: start;
+    if root.shows-label: HorizontalLayout {
+        spacing: 8px;
+        DigitText { text: root.label; horizontal-stretch: 1; overflow: elide; }
+        DigitText { text: Math.round(root.clamped) + "% Used"; horizontal-alignment: right; }
+    }
+    Rectangle {
+        height: 8px;
+        background: Theme.usage-remaining-track;
+        border-radius: 4px;
+        Rectangle {
+            x: 0;
+            width: parent.width * root.clamped / 100;
+            height: parent.height;
+            background: root.fill;
+            border-radius: 4px;
+        }
+    }
+    if root.caption != "": ResetCaption { text: root.caption; }
+}
+
+/// Multi-product usage bar: rounded segments separated by 2px gaps. Segment
+/// widths are precomputed (`kit::segments::layout_segments`) for `track-width`.
+export component SegmentedUsageBar inherits Rectangle {
+    in property <[BarSegment]> segments;
+    in property <length> bar-height: 8px;
+    height: root.bar-height;
+    HorizontalLayout {
+        spacing: 2px;
+        alignment: start;
+        for seg in root.segments: Rectangle {
+            width: seg.width;
+            background: seg.remainder ? Theme.usage-remaining-track : seg.color;
+            border-radius: 2px;
+        }
+    }
+}
+
+/// Legend entry: 7px dot, product name and rounded percentage.
+export component CategoryRow inherits HorizontalLayout {
+    in property <string> name;
+    in property <string> percent-text;
+    in property <color> dot: Theme.product-other;
+    spacing: 5px;
+    alignment: start;
+    Rectangle {
+        width: 7px;
+        height: 7px;
+        y: (parent.height - 7px) / 2;
+        border-radius: 3.5px;
+        background: root.dot;
+    }
+    Text {
+        text: root.name;
+        font-family: Typo.family;
+        font-size: Typo.body-size;
+        font-weight: Typo.semibold;
+        color: Theme.primary;
+        overflow: elide;
+    }
+    DigitText { text: root.percent-text; }
+}
+
+/// Caption shown when data could not be refreshed: the message, then
+/// "Showing data from 5 min ago." (`detail`, built by the view model).
+export component StaleDataCaption inherits VerticalLayout {
+    in property <string> message;
+    /// Empty when no last-refresh time is known.
+    in property <string> detail;
+    spacing: 2px;
+    alignment: start;
+    Text {
+        text: root.message;
+        font-family: Typo.family;
+        font-size: Typo.caption-size;
+        color: Theme.secondary;
+        wrap: word-wrap;
+    }
+    if root.detail != "": Text {
+        text: root.detail;
+        font-family: Typo.family;
+        font-size: Typo.caption-size;
+        color: Theme.secondary;
+        wrap: word-wrap;
+    }
+}
+
+/// Full-row toggle header with a chevron: 0 degrees when expanded, -90 when
+/// collapsed, animated ease-in-out 0.2s. The owner flips `expanded` in `toggled`.
+export component CollapsibleSectionHeader inherits Rectangle {
+    in property <string> title;
+    in property <bool> expanded: true;
+    callback toggled();
+    accessible-role: button;
+    accessible-label: root.title;
+    accessible-description: root.expanded ? "Expanded" : "Collapsed";
+    accessible-action-default => { root.toggled(); }
+    HorizontalLayout {
+        spacing: 8px;
+        PanelSectionHeader { title: root.title; vertical-alignment: center; horizontal-stretch: 1; }
+        Image {
+            source: @image-url("../assets/icons/chevron-down.svg");
+            colorize: Theme.secondary;
+            width: 12px;
+            height: 12px;
+            y: (parent.height - 12px) / 2;
+            transform-rotation: root.expanded ? 0deg : -90deg;
+            animate transform-rotation { duration: 200ms; easing: ease-in-out; }
+        }
+    }
+    TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.toggled(); }
+    }
+}
+
+/// Provider header: 14px logo (or the Overview grid glyph) + title, trailing
+/// text and a settings cog.
+export component ProviderHeaderRow inherits Rectangle {
+    /// `ProviderId::logo_asset_key()`; empty shows the Overview grid glyph.
+    in property <string> logo-key;
+    in property <string> title;
+    in property <string> trailing;
+    callback open-settings();
+    height: 18px;
+    HorizontalLayout {
+        spacing: 8px;
+        HorizontalLayout {
+            spacing: 6px;
+            Image {
+                source: root.logo-key == "" ? @image-url("../assets/icons/grid.svg") : Logos.image(root.logo-key);
+                colorize: Theme.primary;
+                width: 14px;
+                height: 14px;
+                y: (parent.height - 14px) / 2;
+            }
+            Text {
+                text: root.title;
+                font-family: Typo.family;
+                font-size: Typo.title-size;
+                font-weight: Typo.semibold;
+                color: Theme.primary;
+                vertical-alignment: center;
+            }
+        }
+        Rectangle { min-width: 8px; horizontal-stretch: 1; }
+        if root.trailing != "": DigitText { text: root.trailing; vertical-alignment: center; }
+        Rectangle {
+            width: 16px;
+            Image {
+                source: @image-url("../assets/icons/gear.svg");
+                colorize: Theme.secondary;
+                width: 14px;
+                height: 14px;
+                x: 1px;
+                y: (parent.height - 14px) / 2;
+            }
+            accessible-role: button;
+            accessible-label: "Settings";
+            TouchArea {
+                mouse-cursor: pointer;
+                clicked => { root.open-settings(); }
+            }
+        }
+    }
+}

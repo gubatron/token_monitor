@@ -1,0 +1,115 @@
+// Palette and typography for the TokenMon panels (spec 04 section 1.2 and 3.3).
+//
+// Provider accents are the exact 8-bit values of `ProviderId::accent()`
+// (`round(component * 255)`); a unit test pins them to the Rust contract.
+// Everything is in logical pixels (= DIPs at 96 DPI).
+
+/// Light/dark palette. Set `dark` from the Windows app theme
+/// (`AppsUseLightTheme`); every other color derives from it.
+export global Theme {
+    /// True when the panel renders with the dark palette.
+    in-out property <bool> dark: false;
+
+    // Semantic text colors (macOS label / secondary / tertiary approximations).
+    out property <color> primary: dark ? rgba(255, 255, 255, 0.85) : rgba(0, 0, 0, 0.85);
+    out property <color> secondary: dark ? rgba(255, 255, 255, 0.55) : rgba(0, 0, 0, 0.50);
+    out property <color> tertiary: dark ? rgba(255, 255, 255, 0.25) : rgba(0, 0, 0, 0.26);
+
+    // Surfaces.
+    out property <color> window-background: dark ? #323232 : #ececec;
+    out property <color> control-background: dark ? #1e1e1e : #ffffff;
+    out property <color> separator: dark ? rgba(255, 255, 255, 0.10) : rgba(0, 0, 0, 0.10);
+
+    /// Empty portion of usage tracks and bar stems (`primary` at 12%).
+    out property <color> usage-remaining-track: dark ? rgba(255, 255, 255, 0.12) : rgba(0, 0, 0, 0.12);
+    /// Background of the week-paging chevron buttons (`primary` at 8%).
+    out property <color> nav-button-background: dark ? rgba(255, 255, 255, 0.08) : rgba(0, 0, 0, 0.08);
+    /// Hover outline on a chart stem (`primary` at 35%).
+    out property <color> stem-hover-outline: dark ? rgba(255, 255, 255, 0.35) : rgba(0, 0, 0, 0.35);
+    /// Destructive confirm (sign-out confirm checkmark).
+    out property <color> destructive: #ff3b30;
+
+    // Provider accents (full alpha; menu-bar / tray use).
+    out property <color> accent-overview: rgb(128, 128, 128);
+    out property <color> accent-grok: rgb(28, 97, 209);
+    out property <color> accent-opencode: rgb(255, 140, 0);
+    out property <color> accent-cursor: rgb(46, 135, 97);
+    out property <color> accent-claude: rgb(217, 120, 87);
+    out property <color> accent-chatgpt: rgb(41, 133, 117);
+    out property <color> accent-openrouter: rgb(115, 92, 230);
+    out property <color> accent-grokbot: rgb(97, 107, 128);
+
+    // Panel accents: the accent at opacity 0.85 (bars and charts).
+    out property <color> panel-accent-overview: rgba(128, 128, 128, 0.85);
+    out property <color> panel-accent-grok: rgba(28, 97, 209, 0.85);
+    out property <color> panel-accent-opencode: rgba(255, 140, 0, 0.85);
+    out property <color> panel-accent-cursor: rgba(46, 135, 97, 0.85);
+    out property <color> panel-accent-claude: rgba(217, 120, 87, 0.85);
+    out property <color> panel-accent-chatgpt: rgba(41, 133, 117, 0.85);
+    out property <color> panel-accent-openrouter: rgba(115, 92, 230, 0.85);
+    out property <color> panel-accent-grokbot: rgba(97, 107, 128, 0.85);
+
+    // Product colors (Grok products) and model palette.
+    out property <color> product-chat: rgb(28, 97, 209);
+    out property <color> product-build: rgb(140, 199, 255);
+    out property <color> product-voice: rgb(102, 140, 209);
+    out property <color> product-api: rgb(56, 82, 122);
+    out property <color> product-imagine: rgb(191, 230, 255);
+    out property <color> product-other: rgb(115, 115, 115);
+    out property <color> model-orange: rgb(255, 140, 0);
+    out property <color> model-purple: rgb(148, 112, 219);
+
+    /// Panel accent for a persisted provider id (`"grok"`, `"claude"`, ...).
+    pure public function panel-accent(provider: string) -> color {
+        provider == "grok" ? panel-accent-grok
+        : provider == "opencode" ? panel-accent-opencode
+        : provider == "cursor" ? panel-accent-cursor
+        : provider == "claude" ? panel-accent-claude
+        : provider == "chatgpt" ? panel-accent-chatgpt
+        : provider == "openrouter" ? panel-accent-openrouter
+        : provider == "grokbot" ? panel-accent-grokbot
+        : panel-accent-overview
+    }
+
+    /// Full-alpha accent for a persisted provider id.
+    pure public function accent(provider: string) -> color {
+        provider == "grok" ? accent-grok
+        : provider == "opencode" ? accent-opencode
+        : provider == "cursor" ? accent-cursor
+        : provider == "claude" ? accent-claude
+        : provider == "chatgpt" ? accent-chatgpt
+        : provider == "openrouter" ? accent-openrouter
+        : provider == "grokbot" ? accent-grokbot
+        : accent-overview
+    }
+}
+
+/// Type scale of `PanelTypography` (sizes in px, weights 400 / 600).
+/// Slint cannot select tabular ("monospaced digit") figures; the digit styles
+/// differ from the plain ones only by weight (see PARITY divergences).
+export global Typo {
+    /// Preferred family. Windows resolves "Segoe UI Variable" and falls back
+    /// to the platform default (Segoe UI) when it is missing. Tests override
+    /// this with a bundled font for deterministic snapshots.
+    in-out property <string> family: "Segoe UI Variable";
+
+    out property <length> title-size: 13px;
+    out property <length> body-size: 12px;
+    out property <length> caption-size: 11px;
+    out property <length> micro-size: 10px;
+    out property <int> regular: 400;
+    out property <int> semibold: 600;
+    /// Letter tracking of uppercase section headers.
+    out property <length> header-tracking: 1.6px;
+}
+
+/// Fixed geometry shared by the chart components.
+export global PanelMetrics {
+    out property <length> panel-width: 420px;
+    out property <length> card-radius: 12px;
+    out property <length> card-padding: 12px;
+    out property <length> stem-height: 68px;
+    out property <length> stem-width: 12px;
+    out property <length> stem-radius: 5px;
+    out property <length> hover-gap: 14px;
+}

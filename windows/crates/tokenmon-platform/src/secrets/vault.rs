@@ -71,7 +71,9 @@ impl Vault {
 
     fn lock(&self) -> MutexGuard<'_, Inner> {
         // A panic while holding the lock leaves no torn state we rely on.
-        self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+        self.inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     /// The secret stored under `account`; `None` when missing or the vault is

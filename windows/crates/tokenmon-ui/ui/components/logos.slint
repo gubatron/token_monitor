@@ -1,0 +1,25 @@
+// Provider and model-company logos. Slint resolves `@image-url` at compile
+// time, so lookup by key is a conditional chain. Keys are
+// `ProviderId::logo_asset_key()` plus `tokenmon-mark` and the model companies.
+// All logos are monochrome templates: tint them with `colorize`.
+
+export global Logos {
+    pure public function image(key: string) -> image {
+        key == "grok" ? @image-url("../assets/logos/grok.svg")
+        : key == "cursor" ? @image-url("../assets/logos/cursor.svg")
+        : key == "opencode" ? @image-url("../assets/logos/opencode.svg")
+        : key == "anthropic" ? @image-url("../assets/logos/anthropic.svg")
+        : key == "openai" ? @image-url("../assets/logos/openai.svg")
+        : key == "openrouter" ? @image-url("../assets/logos/openrouter.svg")
+        : key == "grokbot" ? @image-url("../assets/logos/grokbot.svg")
+        : key == "tokenmon-mark" ? @image-url("../assets/logos/tokenmon-mark.svg")
+        : key == "alibaba" ? @image-url("../assets/logos/alibaba.svg")
+        : key == "deepseek" ? @image-url("../assets/logos/deepseek.svg")
+        : key == "meta" ? @image-url("../assets/logos/meta.svg")
+        : key == "minimax" ? @image-url("../assets/logos/minimax.svg")
+        : key == "nvidia" ? @image-url("../assets/logos/nvidia.svg")
+        : key == "zai" ? @image-url("../assets/logos/zai.svg")
+        : key == "kimi" ? @image-url("../assets/logos/kimi.png")
+        : @image-url("../assets/icons/grid.svg")
+    }
+}
