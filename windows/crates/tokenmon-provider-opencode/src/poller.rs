@@ -24,7 +24,7 @@ use tokenmon_core::polling::{PollOutcome, PollingLoop, PollingLoopBuilder, Provi
 use tokenmon_core::settings::AppSettings;
 use tokenmon_core::usage::{Calendar, DailyBudgetDay, DailyTokenUsage, DayKey, WeekOffset};
 use tokenmon_core::{
-    AuthEvent, AuthEventListener, AuthSession, BoxFuture, Clock, ProviderError,
+    AuthEvent, AuthEventListener, BoxFuture, Clock, ProviderAuthSession, ProviderError,
     ProviderErrorContext, ProviderId, ProviderUsagePoller,
 };
 
@@ -43,17 +43,6 @@ const MAX_LEGEND_MODELS: usize = 8;
 
 /// Monthly limit used when the snapshot has no monthly window.
 const DEFAULT_MONTHLY_LIMIT_USD: f64 = 60.0;
-
-/// What the poller needs from the OpenCode session beyond [`AuthSession`]:
-/// the remembered workspace and the "show the sign-in prompt" flag.
-pub trait OpenCodeSession: AuthSession {
-    /// The workspace id remembered from the last good fetch.
-    fn workspace_id(&self) -> Option<String>;
-    /// Remembers the workspace id.
-    fn set_workspace_id(&self, id: &str);
-    /// Sets the "show the sign-in prompt" flag.
-    fn set_needs_sign_in(&self, needs: bool);
-}
 
 /// Console seam: takes the cookie header and the known workspace id, returns
 /// the official snapshot and the workspace id that served it. Build the live
@@ -97,7 +86,7 @@ pub struct OpenCodePollerDeps {
     /// App settings: provider enablement and poll intervals.
     pub settings: Arc<AppSettings>,
     /// The console cookie session.
-    pub auth: Arc<dyn OpenCodeSession>,
+    pub auth: Arc<dyn ProviderAuthSession>,
     /// Time source for stamps and the local calendar.
     pub clock: Arc<dyn Clock>,
     /// The console fetch.
@@ -154,7 +143,7 @@ impl AuthEventListener for SessionListener {
 /// Polls the OpenCode console and falls back to the local database estimate.
 pub struct OpenCodeUsagePoller {
     settings: Arc<AppSettings>,
-    auth: Arc<dyn OpenCodeSession>,
+    auth: Arc<dyn ProviderAuthSession>,
     clock: Arc<dyn Clock>,
     fetch_console: Arc<FetchConsoleFn>,
     load_scan: Arc<ScanFn>,

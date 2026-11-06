@@ -219,4 +219,8 @@ impl ProviderAuthSession for FakeSession {
         Ok(())
     }
     fn refresh_from_disk(&self) {}
+    fn workspace_id(&self) -> Option<String> {
+        None
+    }
+    fn set_workspace_id(&self, _id: &str) {}
 }

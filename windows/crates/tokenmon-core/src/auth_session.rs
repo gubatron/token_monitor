@@ -79,6 +79,13 @@ pub trait ProviderAuthSession: AuthSession {
     /// bumped.
     fn refresh_from_disk(&self);
 
+    /// The provider workspace remembered from the last good fetch (OpenCode),
+    /// stored under [`CredentialKey::Workspace`]; empty counts as unset.
+    fn workspace_id(&self) -> Option<String>;
+
+    /// Remembers the workspace id (best effort: a refused write is logged only).
+    fn set_workspace_id(&self, id: &str);
+
     /// The current session generation.
     fn session_generation(&self) -> SessionGeneration {
         self.state().session_generation
@@ -520,6 +527,18 @@ impl ProviderAuthSession for CookieAuthSession {
         };
         self.fire(event);
         Ok(())
+    }
+
+    fn workspace_id(&self) -> Option<String> {
+        self.store
+            .get(CredentialKey::Workspace)
+            .filter(|w| !w.is_empty())
+    }
+
+    fn set_workspace_id(&self, id: &str) {
+        if let Err(e) = self.store.set(CredentialKey::Workspace, id) {
+            tracing::warn!(category = %self.config.log_category, "could not store workspace id: {e}");
+        }
     }
 
     fn refresh_from_disk(&self) {
