@@ -15,3 +15,8 @@ workspace = true
 tokenmon-core = { workspace = true }
 tiny-skia = { workspace = true }
 chrono = { workspace = true }
+slint = { workspace = true, features = ["std", "compat-1-18", "image-default-formats", "renderer-software", "backend-winit"] }
+rfd = { workspace = true, features = ["xdg-portal", "pollster", "common-controls-v6"] }
+
+[build-dependencies]
+slint-build = { workspace = true }

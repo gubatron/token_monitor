@@ -1,0 +1,598 @@
+// TokenMon Settings window (spec 01 section 2.1). Fluent style, four tabs.
+// Owner: ws-ui-settings. All strings that depend on data come from the Rust
+// view model (src/settings/screen.rs); only static labels live here.
+import { Button, LineEdit, Palette, ScrollView, Slider, Switch, TabWidget } from "std-widgets.slint";
+
+export struct ToggleRowData {
+    id: string,
+    label: string,
+    on: bool,
+    enabled: bool,
+}
+
+export struct ProviderRowData {
+    id: string,
+    name: string,
+    initial: string,
+    enabled: bool,
+    toggle-enabled: bool,
+    position: int,
+    accent: color,
+}
+
+export struct AccountRowData {
+    id: string,
+    name: string,
+    initial: string,
+    subtitle: string,
+    signed-in: bool,
+    error: string,
+    accent: color,
+}
+
+component Section inherits VerticalLayout {
+    in property <string> title;
+    in property <string> footer;
+    spacing: 6px;
+    if root.title != "": Text {
+        text: root.title;
+        font-size: 13px;
+        font-weight: 600;
+    }
+    Rectangle {
+        background: Palette.alternate-background;
+        border-radius: 6px;
+        border-width: 1px;
+        border-color: Palette.border;
+        VerticalLayout {
+            padding: 10px;
+            spacing: 8px;
+            @children
+        }
+    }
+    if root.footer != "": Text {
+        text: root.footer;
+        font-size: 11px;
+        color: Palette.foreground.transparentize(0.35);
+        wrap: word-wrap;
+    }
+}
+
+component Caption inherits Text {
+    font-size: 11px;
+    wrap: word-wrap;
+}
+
+component SwitchRow inherits HorizontalLayout {
+    in property <string> label;
+    in-out property <bool> checked;
+    in property <bool> row-enabled: true;
+    callback toggled(bool);
+    spacing: 8px;
+    Text {
+        text: root.label;
+        vertical-alignment: center;
+        horizontal-stretch: 1;
+        opacity: root.row-enabled ? 1 : 0.5;
+    }
+    Switch {
+        checked: root.checked;
+        enabled: root.row-enabled;
+        toggled => {
+            root.toggled(self.checked);
+        }
+    }
+}
+
+component Stepper inherits HorizontalLayout {
+    in property <string> label;
+    in property <string> value-text;
+    in property <bool> can-decrement;
+    in property <bool> can-increment;
+    callback step(int);
+    spacing: 8px;
+    Text {
+        text: root.label;
+        vertical-alignment: center;
+        horizontal-stretch: 1;
+    }
+    Text {
+        text: root.value-text;
+        vertical-alignment: center;
+        horizontal-alignment: right;
+        min-width: 48px;
+    }
+    Button {
+        text: "\u{2212}";
+        enabled: root.can-decrement;
+        clicked => {
+            root.step(-1);
+        }
+    }
+    Button {
+        text: "+";
+        enabled: root.can-increment;
+        clicked => {
+            root.step(1);
+        }
+    }
+}
+
+component ProviderDot inherits Rectangle {
+    in property <color> accent;
+    in property <string> initial;
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    background: root.accent;
+    Text {
+        text: root.initial;
+        font-size: 10px;
+        color: white;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+}
+
+export component SettingsWindow inherits Window {
+    title: "TokenMon";
+    default-font-size: 14px;
+    preferred-width: 480px;
+    preferred-height: 640px;
+    min-width: 460px;
+    min-height: 520px;
+
+    in-out property <int> current-tab: 0;
+
+    // General
+    in-out property <bool> launch-at-login;
+    in-out property <bool> desktop-menu;
+    in-out property <bool> checks-for-updates;
+    in property <string> version-text;
+    in property <string> update-action-title;
+    in property <bool> update-can-act;
+    in property <string> update-status-message;
+    in property <string> active-text;
+    in property <bool> active-can-decrement;
+    in property <bool> active-can-increment;
+    in property <string> idle-text;
+    in property <bool> idle-can-decrement;
+    in property <bool> idle-can-increment;
+    in property <[string]> refresh-lines;
+    in property <string> refresh-error;
+    in-out property <bool> threshold-enabled;
+    in property <string> threshold-text;
+    in-out property <float> threshold-percent: 80;
+    in property <[ToggleRowData]> alert-rows;
+    in property <string> updates-footer;
+    in property <string> alerts-footer;
+    // Providers
+    in property <[ProviderRowData]> provider-rows;
+    in property <string> providers-footer;
+    in-out property <bool> show-selected-only;
+    in property <[ToggleRowData]> graph-rows;
+    in property <string> menu-bar-footer;
+    // Accounts
+    in property <[AccountRowData]> account-rows;
+    in property <string> accounts-footer;
+    in property <bool> openrouter-connected;
+    in property <string> openrouter-error;
+    in-out property <string> openrouter-draft;
+    // Data
+    in property <[ToggleRowData]> category-rows;
+    in property <string> categories-footer;
+    in property <string> history-footer;
+    in property <string> export-error;
+    in property <string> store-failed-text;
+
+    callback launch-at-login-changed(bool);
+    callback desktop-menu-changed(bool);
+    callback checks-for-updates-changed(bool);
+    callback update-action();
+    callback active-step(int);
+    callback idle-step(int);
+    callback threshold-enabled-changed(bool);
+    callback threshold-changed(float);
+    callback alert-provider-changed(string, bool);
+    callback quit();
+    callback provider-enabled-changed(string, bool);
+    callback move-provider(string, int);
+    callback show-selected-only-changed(bool);
+    callback graph-changed(string, bool);
+    callback sign-in(string);
+    callback sign-out(string);
+    callback openrouter-save(string);
+    callback openrouter-sign-out();
+    callback category-changed(string, bool);
+    callback export-history(string);
+    callback clear-history();
+
+    TabWidget {
+        current-index <=> root.current-tab;
+
+        Tab {
+            title: "General";
+            ScrollView {
+                VerticalLayout {
+                    padding: 16px;
+                    spacing: 16px;
+                    alignment: start;
+                    Section {
+                        title: "Startup";
+                        SwitchRow {
+                            label: "Launch at Login";
+                            checked: root.launch-at-login;
+                            toggled(v) => {
+                                root.launch-at-login-changed(v);
+                            }
+                        }
+                        SwitchRow {
+                            label: "Show TokenMon in the desktop right-click menu";
+                            checked: root.desktop-menu;
+                            toggled(v) => {
+                                root.desktop-menu-changed(v);
+                            }
+                        }
+                    }
+                    Section {
+                        title: "Updates";
+                        footer: root.updates-footer;
+                        SwitchRow {
+                            label: "Check automatically";
+                            checked: root.checks-for-updates;
+                            toggled(v) => {
+                                root.checks-for-updates-changed(v);
+                            }
+                        }
+                        HorizontalLayout {
+                            spacing: 8px;
+                            Text {
+                                text: root.version-text;
+                                vertical-alignment: center;
+                                horizontal-stretch: 1;
+                            }
+                            Button {
+                                text: root.update-action-title;
+                                enabled: root.update-can-act;
+                                clicked => {
+                                    root.update-action();
+                                }
+                            }
+                        }
+                        if root.update-status-message != "": Caption {
+                            text: root.update-status-message;
+                        }
+                    }
+                    Section {
+                        title: "Refresh";
+                        Stepper {
+                            label: "While menu is open";
+                            value-text: root.active-text;
+                            can-decrement: root.active-can-decrement;
+                            can-increment: root.active-can-increment;
+                            step(d) => {
+                                root.active-step(d);
+                            }
+                        }
+                        Stepper {
+                            label: "While idle";
+                            value-text: root.idle-text;
+                            can-decrement: root.idle-can-decrement;
+                            can-increment: root.idle-can-increment;
+                            step(d) => {
+                                root.idle-step(d);
+                            }
+                        }
+                        for line in root.refresh-lines: Caption {
+                            text: line;
+                        }
+                        if root.refresh-error != "": Caption {
+                            text: root.refresh-error;
+                            color: #d13438;
+                        }
+                    }
+                    Section {
+                        title: "Alerts";
+                        footer: root.threshold-enabled ? root.alerts-footer : "";
+                        SwitchRow {
+                            label: "Notify when usage exceeds threshold";
+                            checked: root.threshold-enabled;
+                            toggled(v) => {
+                                root.threshold-enabled-changed(v);
+                            }
+                        }
+                        if root.threshold-enabled: VerticalLayout {
+                            spacing: 6px;
+                            Text {
+                                text: root.threshold-text;
+                            }
+                            Slider {
+                                minimum: 50;
+                                maximum: 99;
+                                value: root.threshold-percent;
+                                released(v) => {
+                                    root.threshold-changed(v);
+                                }
+                            }
+                            HorizontalLayout {
+                                Caption {
+                                    text: "50%";
+                                    horizontal-stretch: 1;
+                                }
+                                Caption {
+                                    text: "99%";
+                                    horizontal-alignment: right;
+                                }
+                            }
+                            for row in root.alert-rows: SwitchRow {
+                                label: row.label;
+                                checked: row.on;
+                                toggled(v) => {
+                                    root.alert-provider-changed(row.id, v);
+                                }
+                            }
+                        }
+                    }
+                    Section {
+                        Button {
+                            text: "Quit TokenMon";
+                            clicked => {
+                                root.quit();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Tab {
+            title: "Providers";
+            ScrollView {
+                VerticalLayout {
+                    padding: 16px;
+                    spacing: 16px;
+                    alignment: start;
+                    Section {
+                        title: "Providers";
+                        footer: root.providers-footer;
+                        // Fixed-identity rows positioned by `position`, so a
+                        // drag keeps its TouchArea and the move animates.
+                        Rectangle {
+                            height: 7 * 40px;
+                            for row[i] in root.provider-rows: Rectangle {
+                                y: row.position * 40px;
+                                height: 40px;
+                                animate y { duration: 120ms; }
+                                HorizontalLayout {
+                                    spacing: 10px;
+                                    handle := Rectangle {
+                                        width: 24px;
+                                        Text {
+                                            text: "\u{2261}";
+                                            font-size: 18px;
+                                            horizontal-alignment: center;
+                                            vertical-alignment: center;
+                                        }
+                                        TouchArea {
+                                            mouse-cursor: grab;
+                                            moved => {
+                                                // Rows under the pointer: each 40px of
+                                                // travel moves the row one slot.
+                                                if (abs(self.mouse-y - self.height / 2) > self.height / 2) {
+                                                    root.move-provider(row.id, clamp(row.position + floor(self.mouse-y / 40px), 0, 6));
+                                                }
+                                            }
+                                        }
+                                    }
+                                    ProviderDot {
+                                        accent: row.accent;
+                                        initial: row.initial;
+                                        y: (parent.height - self.height) / 2;
+                                    }
+                                    Text {
+                                        text: row.name;
+                                        vertical-alignment: center;
+                                        horizontal-stretch: 1;
+                                        opacity: row.toggle-enabled ? 1 : 0.5;
+                                    }
+                                    Switch {
+                                        checked: row.enabled;
+                                        enabled: row.toggle-enabled;
+                                        toggled => {
+                                            root.provider-enabled-changed(row.id, self.checked);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Section {
+                        title: "Menu Bar";
+                        footer: root.menu-bar-footer;
+                        SwitchRow {
+                            label: "Show selected provider only";
+                            checked: root.show-selected-only;
+                            toggled(v) => {
+                                root.show-selected-only-changed(v);
+                            }
+                        }
+                        for row in root.graph-rows: SwitchRow {
+                            label: row.label;
+                            checked: row.on;
+                            toggled(v) => {
+                                root.graph-changed(row.id, v);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Tab {
+            title: "Accounts";
+            ScrollView {
+                VerticalLayout {
+                    padding: 16px;
+                    spacing: 16px;
+                    alignment: start;
+                    Section {
+                        title: "Accounts";
+                        footer: root.accounts-footer;
+                        for row in root.account-rows: VerticalLayout {
+                            spacing: 2px;
+                            HorizontalLayout {
+                                spacing: 10px;
+                                ProviderDot {
+                                    accent: row.accent;
+                                    initial: row.initial;
+                                    y: 8px;
+                                }
+                                VerticalLayout {
+                                    horizontal-stretch: 1;
+                                    Text {
+                                        text: row.name;
+                                    }
+                                    Text {
+                                        text: row.subtitle;
+                                        font-size: 11px;
+                                        overflow: elide;
+                                        color: Palette.foreground.transparentize(0.35);
+                                    }
+                                }
+                                if row.signed-in: Button {
+                                    text: "Re-authenticate\u{2026}";
+                                    clicked => {
+                                        root.sign-in(row.id);
+                                    }
+                                }
+                                if row.signed-in: Button {
+                                    text: "Sign Out";
+                                    primary: false;
+                                    clicked => {
+                                        root.sign-out(row.id);
+                                    }
+                                }
+                                if !row.signed-in: Button {
+                                    text: "Sign In\u{2026}";
+                                    clicked => {
+                                        root.sign-in(row.id);
+                                    }
+                                }
+                            }
+                            if row.error != "": Caption {
+                                text: row.error;
+                                color: #d13438;
+                            }
+                        }
+                    }
+                    Section {
+                        title: "OpenRouter";
+                        if root.openrouter-connected: HorizontalLayout {
+                            spacing: 10px;
+                            VerticalLayout {
+                                horizontal-stretch: 1;
+                                Text {
+                                    text: "Connected with";
+                                }
+                                Text {
+                                    text: "OpenRouter API key";
+                                    font-size: 11px;
+                                    color: Palette.foreground.transparentize(0.35);
+                                }
+                            }
+                            Button {
+                                text: "Sign Out";
+                                clicked => {
+                                    root.openrouter-draft = "";
+                                    root.openrouter-sign-out();
+                                }
+                            }
+                        }
+                        if !root.openrouter-connected: VerticalLayout {
+                            spacing: 8px;
+                            Text {
+                                text: "Not connected";
+                            }
+                            LineEdit {
+                                placeholder-text: "sk-or-v1-\u{2026}";
+                                input-type: password;
+                                text <=> root.openrouter-draft;
+                            }
+                            Button {
+                                text: "Save API Key";
+                                enabled: root.openrouter-draft.character-count > 0;
+                                clicked => {
+                                    root.openrouter-save(root.openrouter-draft);
+                                }
+                            }
+                        }
+                        if root.openrouter-error != "": Caption {
+                            text: root.openrouter-error;
+                            color: #d13438;
+                        }
+                    }
+                }
+            }
+        }
+
+        Tab {
+            title: "Data";
+            ScrollView {
+                VerticalLayout {
+                    padding: 16px;
+                    spacing: 16px;
+                    alignment: start;
+                    Section {
+                        title: "SuperGrok Categories";
+                        footer: root.categories-footer;
+                        for row in root.category-rows: SwitchRow {
+                            label: row.label;
+                            checked: row.on;
+                            toggled(v) => {
+                                root.category-changed(row.id, v);
+                            }
+                        }
+                    }
+                    Section {
+                        title: "SuperGrok History";
+                        footer: root.history-footer;
+                        HorizontalLayout {
+                            spacing: 8px;
+                            Text {
+                                text: "Export history";
+                                vertical-alignment: center;
+                                horizontal-stretch: 1;
+                            }
+                            Button {
+                                text: "CSV\u{2026}";
+                                clicked => {
+                                    root.export-history("csv");
+                                }
+                            }
+                            Button {
+                                text: "JSON\u{2026}";
+                                clicked => {
+                                    root.export-history("json");
+                                }
+                            }
+                        }
+                        if root.export-error != "": Caption {
+                            text: root.export-error;
+                            color: #d13438;
+                        }
+                        Button {
+                            text: "Clear Local History";
+                            clicked => {
+                                root.clear-history();
+                            }
+                        }
+                        if root.store-failed-text != "": Caption {
+                            text: root.store-failed-text;
+                            color: #d13438;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
