@@ -23,9 +23,11 @@ use tokenmon_platform::install::handle_startup_args;
 use tokenmon_platform::notify::windows::WinRtToastBackend;
 use tokenmon_platform::notify::{AumidRegistration, ToastNotifier};
 use tokenmon_platform::power::{SystemEventSource, SystemWakeGate, windows::WindowsEventSource};
+use tokenmon_platform::secrets::register_owner_only_permissions;
 use tokenmon_platform::secrets::{APP_FALLBACK_POLICY, DpapiEncryptor};
-use tokenmon_platform::shell::ipc::pipe_name;
-use tokenmon_platform::shell::windows::{MutexInstanceLock, PipeClient, PipeServer, WinRegistry};
+use tokenmon_platform::shell::windows::{
+    MutexInstanceLock, PipeClient, PipeServer, WinRegistry, current_user_pipe_name,
+};
 use tokenmon_platform::shell::{IpcMessage, LaunchArgs, StartupDecision, decide_startup};
 use tokenmon_platform::webauth::WindowsWebAuthHost;
 use tokenmon_provider_opencode::db::DataDirEnv;
@@ -178,18 +180,24 @@ impl Panel {
     }
 }
 
-fn user_name() -> String {
-    std::env::var("USERNAME").unwrap_or_else(|_| "user".to_owned())
-}
-
 /// Entry point of the Windows build. Returns the process exit code.
 pub fn run(args: &[String], version: &str) -> ExitCode {
     let exe = std::env::current_exe().unwrap_or_default();
     // First: wait out a replaced predecessor and tidy update leftovers.
     handle_startup_args(args.iter().map(String::as_str), &exe);
     let launch = LaunchArgs::parse_lenient(args.iter().skip(1));
-    let pipe = pipe_name(&user_name());
-    match decide_startup(launch, &MutexInstanceLock, &PipeClient::new(pipe.clone())) {
+    // Before the first AppPaths: data files are created owner-only.
+    register_owner_only_permissions();
+    let (pipe, client) = match current_user_pipe_name()
+        .and_then(|n| PipeClient::for_current_user().map(|c| (n, c)))
+    {
+        Ok(pair) => pair,
+        Err(e) => {
+            tracing::error!(error = %e, "no per-user pipe name");
+            return ExitCode::FAILURE;
+        }
+    };
+    match decide_startup(launch, &MutexInstanceLock, &client) {
         Ok(StartupDecision::RunPrimary { guard, show_panel }) => {
             let code = run_primary(&pipe, show_panel, version);
             drop(guard);

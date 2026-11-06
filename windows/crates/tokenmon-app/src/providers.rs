@@ -255,10 +255,11 @@ pub fn build_registry(deps: &ProviderDeps<'_>) -> Result<ProviderRegistry, Build
         }),
     ));
 
-    let claude_http = tokenmon_core::net::ProviderHttp::new(
+    let claude_http = tokenmon_core::net::ProviderHttp::for_hosts(
         ProviderErrorContext::Claude,
         *version,
         Arc::clone(clock),
+        &sessions.claude.config().hosts,
     )?;
     let home = deps.home.clone().unwrap_or_else(|| dir.clone());
     let claude = ClaudeUsagePoller::new(ClaudePollerDeps {
@@ -310,10 +311,11 @@ pub fn build_registry(deps: &ProviderDeps<'_>) -> Result<ProviderRegistry, Build
     };
 
     let chatgpt_cache = Arc::new(AccessTokenCache::new());
-    let chatgpt_http = tokenmon_core::net::ProviderHttp::new(
+    let chatgpt_http = tokenmon_core::net::ProviderHttp::for_hosts(
         ProviderErrorContext::ChatGpt,
         *version,
         Arc::clone(clock),
+        &sessions.chatgpt.config().hosts,
     )?;
     let chatgpt = ChatGptPoller::new(ChatGptPollerConfig {
         session: sessions.chatgpt.clone(),
