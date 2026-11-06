@@ -37,8 +37,8 @@ pub use fetch::{ClaudeUsageClient, DEFAULT_BASE_URL};
 pub use ledger::ClaudeCodeUsageLedger;
 pub use line::{Entry, parse_complete_lines, parse_jsonl, parse_line, usage_line_ranges};
 pub use poller::{
-    ClaudeCodeUsageScan, ClaudePollerDeps, ClaudeSession, ClaudeUsagePoller, FetchUsageFn,
-    LoadCodeUsageFn, live_code_usage, no_code_usage,
+    ClaudeCodeUsageScan, ClaudePollerDeps, ClaudeUsagePoller, FetchUsageFn, LoadCodeUsageFn,
+    live_code_usage, no_code_usage,
 };
 pub use pricing::{ClaudeModelRates, base_model_id, cost, display_name, rates};
 pub use summary::{ClaudeCodeUsageSummary, ModelUsageRow, UsageTotals};

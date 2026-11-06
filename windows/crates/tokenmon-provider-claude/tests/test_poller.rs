@@ -15,15 +15,15 @@ use tokenmon_core::storage::{
 };
 use tokenmon_core::usage::{Calendar, DailyBudget, DailyBudgetDay, WeekOffset};
 use tokenmon_core::{
-    AUTH_FAILURE_THRESHOLD, AuthEvent, AuthEventListener, AuthSession, AuthSessionState, Clock,
-    ManualClock, ProviderError, ProviderErrorContext, ProviderId, ProviderUsagePoller,
-    SessionGeneration,
+    AUTH_FAILURE_THRESHOLD, AuthEvent, AuthEventListener, AuthSession, AuthSessionState,
+    CapturedSession, Clock, CredentialStoreError, ManualClock, ProviderAuthSession, ProviderError,
+    ProviderErrorContext, ProviderId, ProviderUsagePoller, SessionGeneration,
 };
 use tokenmon_provider_claude::budget::build_daily_budget_days;
 use tokenmon_provider_claude::{
-    ClaudeCodeUsageScan, ClaudeCodeUsageSummary, ClaudePollerDeps, ClaudeSession,
-    ClaudeUsagePoller, ClaudeUsageResponse, ClaudeUsageWindow, FetchUsageFn, LoadCodeUsageFn,
-    UsageTotals, no_code_usage, parse_usage_body,
+    ClaudeCodeUsageScan, ClaudeCodeUsageSummary, ClaudePollerDeps, ClaudeUsagePoller,
+    ClaudeUsageResponse, ClaudeUsageWindow, FetchUsageFn, LoadCodeUsageFn, UsageTotals,
+    no_code_usage, parse_usage_body,
 };
 
 const CTX: ProviderErrorContext = ProviderErrorContext::Claude;
@@ -119,10 +119,31 @@ impl AuthSession for FakeSession {
     }
 }
 
-impl ClaudeSession for FakeSession {
+impl ProviderAuthSession for FakeSession {
     fn set_needs_sign_in(&self, needs: bool) {
         self.inner.lock().unwrap().state.needs_sign_in = needs;
     }
+    fn save_account_email(&self, _email: &str) {}
+    fn note_account_identity(&self, _identity: &str) {}
+    fn apply_refreshed_cookies(&self, _set_cookie_headers: &[String]) {}
+    fn mark_session_invalid(&self, reason: Option<&str>) {
+        let mut g = self.inner.lock().unwrap();
+        g.cookie = None;
+        g.state.mark_session_invalid(reason);
+    }
+    fn sign_out(&self) {
+        FakeSession::sign_out(self);
+    }
+    fn save(&self, cookie_header: &str) -> Result<(), CredentialStoreError> {
+        let mut g = self.inner.lock().unwrap();
+        g.cookie = Some(cookie_header.to_owned());
+        g.state.mark_signed_in(None);
+        Ok(())
+    }
+    fn adopt(&self, _captured: &CapturedSession) -> Result<(), CredentialStoreError> {
+        Ok(())
+    }
+    fn refresh_from_disk(&self) {}
 }
 
 type Outcome = Result<(ClaudeUsageResponse, DateTime<Utc>), ProviderError>;

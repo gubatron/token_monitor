@@ -16,11 +16,12 @@ use tokenmon_core::polling::PollOutcome;
 use tokenmon_core::storage::{DailyQuotaDeltaStore, InMemoryStringStore};
 use tokenmon_core::usage::WeekOffset;
 use tokenmon_core::{
-    AuthEvent, AuthEventListener, AuthSession, AuthSessionState, ManualClock, ProviderError,
-    ProviderErrorContext, ProviderUsagePoller, SessionGeneration,
+    AuthEvent, AuthEventListener, AuthSession, AuthSessionState, CapturedSession,
+    CredentialStoreError, ManualClock, ProviderAuthSession, ProviderError, ProviderErrorContext,
+    ProviderUsagePoller, SessionGeneration,
 };
 use tokenmon_provider_cursor::{
-    CursorDayHourlyUsage, CursorFetchResult, CursorPollerConfig, CursorSession, CursorUsagePoller,
+    CursorDayHourlyUsage, CursorFetchResult, CursorPollerConfig, CursorUsagePoller,
     DailyBudgetInputs, FetchFn, build_daily_budget_days, parse_summary,
 };
 
@@ -232,7 +233,7 @@ impl AuthSession for FakeSession {
     }
 }
 
-impl CursorSession for FakeSession {
+impl ProviderAuthSession for FakeSession {
     fn set_needs_sign_in(&self, needs: bool) {
         self.state.lock().unwrap().needs_sign_in = needs;
     }
@@ -250,6 +251,22 @@ impl CursorSession for FakeSession {
             self.fire(AuthEvent::AccountReset);
         }
     }
+    fn note_account_identity(&self, _identity: &str) {}
+    fn apply_refreshed_cookies(&self, _set_cookie_headers: &[String]) {}
+    fn mark_session_invalid(&self, _reason: Option<&str>) {
+        self.state.lock().unwrap().mark_session_invalid(None);
+    }
+    fn sign_out(&self) {
+        FakeSession::sign_out(self);
+    }
+    fn save(&self, _cookie_header: &str) -> Result<(), CredentialStoreError> {
+        self.state.lock().unwrap().mark_signed_in(None);
+        Ok(())
+    }
+    fn adopt(&self, _captured: &CapturedSession) -> Result<(), CredentialStoreError> {
+        Ok(())
+    }
+    fn refresh_from_disk(&self) {}
 }
 
 fn now() -> DateTime<Utc> {

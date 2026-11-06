@@ -25,7 +25,7 @@ use tokenmon_core::storage::{DailyQuotaDeltaStore, QuotaWindow};
 use tokenmon_core::usage::attaching_tokens;
 use tokenmon_core::usage::{Calendar, DailyBudgetDay, DailyTokenUsage, WeekOffset};
 use tokenmon_core::{
-    AuthEvent, AuthEventListener, AuthSession, BoxFuture, Clock, ProviderError,
+    AuthEvent, AuthEventListener, BoxFuture, Clock, ProviderAuthSession, ProviderError,
     ProviderErrorContext, ProviderId, ProviderUsagePoller,
 };
 
@@ -39,18 +39,6 @@ const CTX: ProviderErrorContext = ProviderErrorContext::Cursor;
 /// Label shown under the panel's data.
 pub const DATA_SOURCE_LABEL: &str = "Cursor dashboard";
 
-/// The Cursor cookie session as the poller needs it: core's [`AuthSession`]
-/// plus the two writes the poller makes (`needsSignIn` and `saveAccountEmail`,
-/// which fires `AccountReset` when the account changed).
-pub trait CursorSession: AuthSession {
-    /// Sets or clears the "sign in again" flag.
-    fn set_needs_sign_in(&self, needs: bool);
-    /// Remembers the account email. A different account fires
-    /// [`AuthEvent::AccountReset`] synchronously, so the caller must not hold
-    /// a lock the listener takes.
-    fn save_account_email(&self, email: &str);
-}
-
 /// One fetch with the given cookie header (live: [`CursorUsageClient`];
 /// tests: a fake).
 pub type FetchFn = Arc<
@@ -60,7 +48,7 @@ pub type FetchFn = Arc<
 /// Everything a [`CursorUsagePoller`] is wired to.
 pub struct CursorPollerConfig {
     /// The shared Cursor session.
-    pub session: Arc<dyn CursorSession>,
+    pub session: Arc<dyn ProviderAuthSession>,
     /// Pool-percent growth per day (key `cursor_daily_usage` in production).
     pub daily: DailyQuotaDeltaStore,
     /// Local calendar and "now".
@@ -78,7 +66,7 @@ pub struct CursorPollerConfig {
 impl CursorPollerConfig {
     /// Config whose fetch is the live `client` (with its event cache).
     pub fn live(
-        session: Arc<dyn CursorSession>,
+        session: Arc<dyn ProviderAuthSession>,
         daily: DailyQuotaDeltaStore,
         clock: Arc<dyn Clock>,
         client: Arc<CursorUsageClient>,
@@ -157,7 +145,7 @@ impl AuthEventListener for SessionEvents {
 
 /// Polls Cursor usage and builds billing-cycle daily bars.
 pub struct CursorUsagePoller {
-    session: Arc<dyn CursorSession>,
+    session: Arc<dyn ProviderAuthSession>,
     daily: Mutex<DailyQuotaDeltaStore>,
     clock: Arc<dyn Clock>,
     fetch: FetchFn,
