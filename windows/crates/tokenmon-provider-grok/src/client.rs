@@ -169,18 +169,21 @@ impl HttpTransport for ReqwestTransport {
     }
 }
 
-/// Bot-protection challenge: any status with a `cf-mitigated` header, or a 403
-/// whose body starts (after whitespace) with `<`.
-///
-/// A private stand-in for the shared core-net helper.
+/// Bot-protection challenge, decided by [`tokenmon_core::net::is_bot_challenge`]
+/// (a `cf-mitigated` header, or a 403 whose body looks like HTML).
 pub fn is_bot_challenge(response: &HttpResponse) -> bool {
-    response.header("cf-mitigated").is_some()
-        || (response.status == 403
-            && response
-                .body
-                .iter()
-                .find(|b| !b.is_ascii_whitespace())
-                .is_some_and(|b| *b == b'<'))
+    let headers: reqwest::header::HeaderMap = response
+        .headers
+        .iter()
+        .filter_map(|(k, v)| {
+            Some((
+                reqwest::header::HeaderName::from_bytes(k.as_bytes()).ok()?,
+                reqwest::header::HeaderValue::from_str(v).ok()?,
+            ))
+        })
+        .collect();
+    let status = reqwest::StatusCode::from_u16(response.status).unwrap_or_default();
+    tokenmon_core::net::is_bot_challenge(status, &headers, &response.body)
 }
 
 /// The transient error for a bot challenge.

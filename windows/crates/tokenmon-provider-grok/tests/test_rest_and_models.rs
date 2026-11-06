@@ -11,9 +11,10 @@ use std::collections::HashSet;
 
 use common::utc;
 use serde_json::json;
+use tokenmon_core::net::Domain;
 use tokenmon_provider_grok::auth::{
-    CookieRecord, auth_config, domain_matches, is_auth_host, is_grok_domain,
-    is_preferred_session_cookie, is_return_page, select_session_cookies,
+    CookieRecord, auth_config, is_auth_host, is_grok_domain, is_preferred_session_cookie,
+    is_return_page, select_session_cookies,
 };
 use tokenmon_provider_grok::models::{
     ProductCatalog, ProductColor, ProductUsage, WeeklyUsageSnapshot, clamp_percent, fill_fraction,
@@ -286,8 +287,8 @@ fn test_grok_domain_matching_does_not_accept_lookalikes() {
     assert!(is_grok_domain("accounts.x.ai"));
     assert!(!is_grok_domain("evilgrok.com"));
     assert!(!is_grok_domain("x.ai.evil.example"));
-    assert!(domain_matches("WWW.Grok.COM", &["grok.com"]));
-    assert!(!domain_matches("grok.com.evil.example", &["grok.com"]));
+    assert!(Domain::matches("WWW.Grok.COM", &["grok.com"]));
+    assert!(!Domain::matches("grok.com.evil.example", &["grok.com"]));
 }
 
 /// X and Twitter are identity hosts, not Grok session domains.

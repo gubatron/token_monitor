@@ -7,6 +7,7 @@
 use std::time::Duration;
 
 use tokenmon_core::AuthConfig;
+use tokenmon_core::net::Domain;
 use url::Url;
 
 /// Title of the sign-in window.
@@ -42,36 +43,14 @@ pub const ESSENTIAL_COOKIES: [&str; 2] = ["sso", "sso-rw"];
 pub const CAPTURE_FAILURE_MESSAGE: &str =
     "No session cookies found. Finish signing in, then click Capture Session.";
 
-/// `Domain.matches`: case-insensitive; one leading `.` is stripped; matches
-/// when the host equals an entry or ends with `"." + entry`. A substring
-/// never matches.
-///
-/// A private stand-in for the shared core-net helper.
-///
-/// # Examples
-///
-/// ```
-/// use tokenmon_provider_grok::auth::domain_matches;
-/// assert!(domain_matches(".grok.com", &["grok.com"]));
-/// assert!(!domain_matches("evilgrok.com", &["grok.com"]));
-/// ```
-pub fn domain_matches(host: &str, entries: &[&str]) -> bool {
-    let host = host.to_lowercase();
-    let host = host.strip_prefix('.').unwrap_or(&host);
-    entries.iter().any(|entry| {
-        let entry = entry.to_lowercase();
-        host == entry || host.ends_with(&format!(".{entry}"))
-    })
-}
-
 /// Whether a cookie domain belongs to the Grok session.
 pub fn is_grok_domain(domain: &str) -> bool {
-    domain_matches(domain, &GROK_HOSTS)
+    Domain::matches(domain, &GROK_HOSTS)
 }
 
 /// Whether a host is an identity host allowed during sign-in.
 pub fn is_auth_host(host: &str) -> bool {
-    domain_matches(host, &AUTH_HOSTS)
+    Domain::matches(host, &AUTH_HOSTS)
 }
 
 /// Whether `url` is the post-sign-in return page: any URL whose host is
@@ -79,7 +58,7 @@ pub fn is_auth_host(host: &str) -> bool {
 pub fn is_return_page(url: &str) -> bool {
     Url::parse(url)
         .ok()
-        .and_then(|u| u.host_str().map(|h| domain_matches(h, &["grok.com"])))
+        .and_then(|u| u.host_str().map(|h| Domain::matches(h, &["grok.com"])))
         .unwrap_or(false)
 }
 
