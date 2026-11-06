@@ -191,7 +191,7 @@ fn profile_names_cannot_escape_the_root() {
 #[test]
 fn purge_removes_only_the_named_provider_and_tolerates_missing() {
     let tmp = tempfile::tempdir().unwrap();
-    let s = ProfileStore::new(tmp.path().join("signin"));
+    let s = ProfileStore::new(tmp.path().join("TokenMon").join("signin"));
     s.purge_provider("claude").unwrap();
     s.purge_all().unwrap();
     let a = s.session_dir("claude", "s1").unwrap();
@@ -213,7 +213,7 @@ fn purge_does_not_follow_symlinks() {
     let outside = tmp.path().join("outside");
     std::fs::create_dir_all(&outside).unwrap();
     std::fs::write(outside.join("keep.txt"), b"x").unwrap();
-    let s = ProfileStore::new(tmp.path().join("signin"));
+    let s = ProfileStore::new(tmp.path().join("TokenMon").join("signin"));
     std::fs::create_dir_all(s.root()).unwrap();
     std::os::unix::fs::symlink(&outside, s.root().join("claude")).unwrap();
     s.purge_provider("claude").unwrap();
@@ -295,4 +295,46 @@ fn grok_navigation_enforces_auth_hosts() {
     ] {
         assert!(!p.allows(bad), "{bad}");
     }
+}
+
+#[test]
+fn purge_all_refuses_roots_that_are_not_the_signin_folder() {
+    let tmp = tempfile::tempdir().unwrap();
+    // A wiring mistake: the TokenMon data dir itself (holds user data).
+    let data = tmp.path().join("TokenMon");
+    std::fs::create_dir_all(data.join("signin")).unwrap();
+    std::fs::write(data.join("settings.json"), b"keep").unwrap();
+    for root in [
+        data.clone(),
+        tmp.path().to_path_buf(),
+        tmp.path().join("other").join("signin"),
+        data.join("signin").join(".."),
+        std::path::PathBuf::from("/"),
+        std::path::PathBuf::from("C:\\"),
+    ] {
+        let s = ProfileStore::new(&root);
+        assert!(s.purge_all().is_err(), "{root:?}");
+        assert!(s.purge_provider("claude").is_err(), "{root:?}");
+    }
+    assert!(data.join("settings.json").exists());
+    assert!(data.join("signin").exists());
+    // The dedicated folder is accepted (case-insensitive).
+    let ok = ProfileStore::new(tmp.path().join("tokenmon").join("SignIn"));
+    ok.purge_all().unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn purge_all_refuses_a_symlinked_root() {
+    let tmp = tempfile::tempdir().unwrap();
+    let victim = tmp.path().join("victim");
+    std::fs::create_dir_all(&victim).unwrap();
+    std::fs::write(victim.join("keep.txt"), b"x").unwrap();
+    let parent = tmp.path().join("TokenMon");
+    std::fs::create_dir_all(&parent).unwrap();
+    std::os::unix::fs::symlink(&victim, parent.join("signin")).unwrap();
+    let s = ProfileStore::new(parent.join("signin"));
+    assert!(s.purge_all().is_err());
+    assert!(s.purge_provider("claude").is_err());
+    assert!(victim.join("keep.txt").exists());
 }
