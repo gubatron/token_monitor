@@ -139,3 +139,26 @@ fn test_clock_backed_calendar_handles_dst_day_lengths() {
         "2026-03-09"
     );
 }
+
+/// A clock whose offset changes at runtime.
+struct MovableClock(std::sync::atomic::AtomicI32);
+
+impl Clock for MovableClock {
+    fn now(&self) -> DateTime<Utc> {
+        Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap()
+    }
+    fn local_offset_at(&self, _at: DateTime<Utc>) -> FixedOffset {
+        off(self.0.load(std::sync::atomic::Ordering::SeqCst))
+    }
+}
+
+/// A time-zone change takes effect on the next call: the offset is never cached.
+#[test]
+fn test_calendar_never_caches_the_offset() {
+    let clock = MovableClock(std::sync::atomic::AtomicI32::new(0));
+    let cal = Calendar::local(&clock);
+    let t = Utc.with_ymd_and_hms(2026, 6, 1, 23, 0, 0).unwrap();
+    assert_eq!(DayKey::for_instant(t, &cal).as_str(), "2026-06-01");
+    clock.0.store(2 * 3600, std::sync::atomic::Ordering::SeqCst);
+    assert_eq!(DayKey::for_instant(t, &cal).as_str(), "2026-06-02");
+}

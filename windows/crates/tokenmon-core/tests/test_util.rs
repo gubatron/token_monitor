@@ -331,3 +331,25 @@ fn test_first_bool() {
         false
     ));
 }
+
+// ---- Percent and the currency helper from the Grok shared-helper tests ----
+
+/// Percent clamp bounds.
+#[test]
+fn test_percent_clamp_bounds() {
+    use tokenmon_core::usage::Percent;
+    assert_eq!(Percent::clamp(0.0), 0.0);
+    assert_eq!(Percent::clamp(100.0), 100.0);
+    assert_eq!(Percent::clamp(-5.0), 0.0);
+    assert_eq!(Percent::clamp(140.0), 100.0);
+    assert_eq!(Percent::clamp(37.6), 37.6);
+    assert_eq!(Percent::clamp(f64::NAN), 0.0);
+    assert_eq!(Percent::clamp(f64::INFINITY), 100.0);
+}
+
+/// Whole-dollar amounts keep two decimals.
+#[test]
+fn test_usd_currency_formatter() {
+    assert_eq!(Format::usd(410.0), "$410.00");
+    assert_eq!(Format::usd(4.1), "$4.10");
+}
