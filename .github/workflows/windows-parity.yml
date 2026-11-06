@@ -1,0 +1,110 @@
+name: Windows parity
+
+# Zero drift between the macOS app and the Windows port (windows/).
+#
+# - ledger: every Swift test has exactly one row in windows/docs/PARITY.md, and
+#   every row marked `ported` names a Rust test that exists. `todo` rows pass.
+# - drift-guard: a change to TokenMon/**, TokenMonTests/** or Tests/** must also
+#   change windows/**, or be tracked by an open issue labeled `windows-parity`.
+#
+# Runs on every branch, master included, because macOS changes (including
+# upstream faulknerpearce/token_monitor merges) land there first.
+on:
+  push:
+  pull_request:
+    # `edited` re-runs the guard after a PR description gains an issue reference.
+    types: [opened, synchronize, reopened, edited]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-parity-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Every third-party action is pinned to a full commit SHA (version in the
+# trailing comment). The scripts use the runner's Python 3 standard library only.
+jobs:
+  ledger:
+    name: Parity ledger
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check windows/docs/PARITY.md against the Swift tests
+        run: python3 -I windows/scripts/parity/check_parity.py --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Unit tests for the parity scripts
+        if: ${{ !cancelled() }}
+        run: python3 -I -m unittest discover -s windows/scripts/parity/tests -v
+
+  drift-guard:
+    name: Drift guard
+    # Nothing to compare on a manual run.
+    if: ${{ github.event_name != 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: read
+    steps:
+      # Full history: the guard diffs the PR base, or the commit before a push.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Collect the change
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/parity"
+          mkdir -p "$out"
+          if [ "$EVENT" = "pull_request" ]; then
+            base="$PR_BASE"
+            head="$PR_HEAD"
+            # Three dots: only what the PR adds on top of its merge base.
+            git diff --name-only "$base...$head" > "$out/changed.txt"
+            git log --format=%H "$base..$head" > "$out/shas.txt"
+            printf '%s\n\n%s\n' "$PR_TITLE" "$PR_BODY" > "$out/text.txt"
+          else
+            head="$GITHUB_SHA"
+            base="$PUSH_BEFORE"
+            if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ] \
+              || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+              # New branch or force push: compare with where it left the
+              # default branch, or with the parent commit.
+              base="$(git merge-base "origin/$DEFAULT_BRANCH" "$head" 2>/dev/null || true)"
+              if [ -z "$base" ]; then
+                base="$(git rev-parse "$head^" 2>/dev/null || echo "$head")"
+              fi
+            fi
+            git diff --name-only "$base" "$head" > "$out/changed.txt"
+            git log --format=%H "$base..$head" > "$out/shas.txt"
+            git log --format=%B "$base..$head" > "$out/text.txt"
+          fi
+          echo "PARITY_BASE=$base" >> "$GITHUB_ENV"
+          echo "PARITY_HEAD=$head" >> "$GITHUB_ENV"
+          echo "Compared $base..$head: $(wc -l < "$out/changed.txt") changed paths, $(wc -l < "$out/shas.txt") commits."
+
+      - name: Require Windows parity or a windows-parity issue
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python3 -I windows/scripts/parity/drift_guard.py \
+            --changed-files "$RUNNER_TEMP/parity/changed.txt" \
+            --text-file "$RUNNER_TEMP/parity/text.txt" \
+            --shas-file "$RUNNER_TEMP/parity/shas.txt" \
+            --base "$PARITY_BASE" --head "$PARITY_HEAD" \
+            --summary "$GITHUB_STEP_SUMMARY"
