@@ -38,5 +38,7 @@ pub use routing::{
     APP_FALLBACK_POLICY, FallbackPolicy, SecretRoutingCredentialStore, SecretStoreError,
     VAULT_UNAVAILABLE_REASON,
 };
+#[cfg(windows)]
+pub(crate) use secure_file::current_user_sid;
 pub use secure_file::{create_new_owner_only, owner_only_sddl};
 pub use vault::{PENDING_FILE_NAME, VAULT_FILE_NAME, Vault};

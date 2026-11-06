@@ -33,6 +33,13 @@ pub fn owner_only_sddl(sid: &str) -> String {
     format!("D:P(A;;FA;;;{sid})")
 }
 
+/// The current user's SID as an `S-1-5-...` string (also names the
+/// single-instance pipe and restricts its DACL).
+#[cfg(windows)]
+pub(crate) fn current_user_sid() -> io::Result<String> {
+    windows_impl::current_user_sid()
+}
+
 /// Creates `path` (it must not exist) readable and writable by the current
 /// user only, and returns it opened for writing.
 pub fn create_new_owner_only(path: &Path) -> io::Result<File> {
@@ -89,7 +96,7 @@ mod windows_impl {
     }
 
     /// The current user's SID as an `S-1-5-...` string.
-    fn current_user_sid() -> io::Result<String> {
+    pub(super) fn current_user_sid() -> io::Result<String> {
         let mut token: HANDLE = null_mut();
         // SAFETY: valid pseudo-handle, out-pointer to a local.
         if unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &raw mut token) } == 0 {
