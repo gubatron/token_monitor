@@ -66,6 +66,7 @@ windows-sys = { version = "0.61", features = [
     "Win32_System_IO",
     "Win32_System_Pipes",
     "Win32_System_Registry",
+    "Win32_System_RemoteDesktop",
     "Win32_System_Threading",
 ] }
 # ws-webauth: WebView2 sign-in window (webview2-com 0.39 pins windows 0.62).
