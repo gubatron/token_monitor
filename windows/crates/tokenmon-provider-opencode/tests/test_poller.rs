@@ -292,6 +292,41 @@ async fn test_headline_resets_at_is_none_like_swift() {
     assert_eq!(rig.poller.headline_resets_at(), None);
 }
 
+/// #55 audit: the Overview card's reset caption is the monthly window's own
+/// reset (Swift `openCodeUsageCard`), while the headline stays `nil`; with no
+/// monthly window there is no caption even if a weekly reset exists.
+#[tokio::test]
+async fn test_overview_reset_is_the_monthly_windows() {
+    let monthly = Utc.with_ymd_and_hms(2026, 9, 5, 0, 0, 0).unwrap();
+    let mut snapshot = console_snapshot(30.0);
+    snapshot.windows.push(WindowUsage {
+        kind: WindowKind::Weekly,
+        used_usd: 1.0,
+        limit_usd: 10.0,
+        resets_at: Some(Utc.with_ymd_and_hms(2026, 8, 24, 0, 0, 0).unwrap()),
+        session_count: 0,
+    });
+    let rig = rig_with(
+        FakeSession::signed_in("auth=1"),
+        console(Ok((snapshot.clone(), "wrk_1".into()))),
+        scan_seam(local_scan()),
+    );
+    assert_eq!(rig.poller.overview_resets_at(), None, "no snapshot yet");
+    rig.poller.refresh_now().await;
+    assert_eq!(rig.poller.overview_resets_at(), Some(monthly));
+    assert_eq!(rig.poller.overview_used_percent(), Some(50.0));
+    assert_eq!(rig.poller.headline_resets_at(), None);
+
+    snapshot.windows.retain(|w| w.kind != WindowKind::Monthly);
+    let rig = rig_with(
+        FakeSession::signed_in("auth=1"),
+        console(Ok((snapshot, "wrk_1".into()))),
+        scan_seam(local_scan()),
+    );
+    rig.poller.refresh_now().await;
+    assert_eq!(rig.poller.overview_resets_at(), None);
+}
+
 /// Without a cookie the local estimate is published with the sign-in caption.
 #[tokio::test]
 async fn test_local_estimate_publishes_when_started_signed_out() {

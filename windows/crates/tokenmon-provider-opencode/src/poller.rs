@@ -496,6 +496,16 @@ impl ProviderUsagePoller for OpenCodeUsagePoller {
         None
     }
 
+    /// Swift `openCodeUsageCard`: the monthly window's own reset, never a
+    /// weekly fallback (the percent falls back, the caption does not).
+    fn overview_resets_at(&self) -> Option<DateTime<Utc>> {
+        self.state()
+            .snapshot
+            .as_ref()
+            .and_then(|s| s.window(WindowKind::Monthly))
+            .and_then(|w| w.resets_at)
+    }
+
     fn alert_account(&self) -> Option<String> {
         self.auth.state().account_email
     }

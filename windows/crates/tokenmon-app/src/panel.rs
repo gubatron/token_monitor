@@ -279,12 +279,14 @@ pub fn card_inputs(
             let poller = &model.registry().entry(p)?.poller;
             let percent = poller.overview_used_percent();
             let state = sessions.signed_in(p);
-            let (key_usage_usd, has_budget_source, remaining_usd) = openrouter
-                .filter(|_| p == ProviderId::OpenRouter)
-                .unwrap_or((None, false, None));
+            let facts = openrouter.filter(|_| p == ProviderId::OpenRouter);
+            let (key_usage_usd, has_budget_source, remaining_usd) =
+                facts.unwrap_or((None, false, None));
             Some(OverviewCardInput {
                 provider: p,
-                has_snapshot: percent.is_some(),
+                // An OpenRouter key without a credit limit has a snapshot but no
+                // percent (Swift shows its spend, not "No OpenRouter data yet").
+                has_snapshot: percent.is_some() || facts.is_some(),
                 percent,
                 reset_at: poller.overview_resets_at(),
                 signed_in: state,
