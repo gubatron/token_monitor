@@ -21,6 +21,7 @@ mod encryptor;
 mod files;
 mod payload;
 mod routing;
+mod secure_file;
 mod vault;
 
 #[cfg(windows)]
@@ -33,5 +34,9 @@ pub use files::{FileBackedCredentialStore, atomic_write};
 pub use payload::{
     MAX_PAYLOAD_BYTES, PayloadError, VaultPayload, decode_payload, decode_pending, encode_payload,
 };
-pub use routing::{FallbackPolicy, SecretRoutingCredentialStore};
+pub use routing::{
+    APP_FALLBACK_POLICY, FallbackPolicy, SecretRoutingCredentialStore, SecretStoreError,
+    VAULT_UNAVAILABLE_REASON,
+};
+pub use secure_file::{create_new_owner_only, owner_only_sddl};
 pub use vault::{PENDING_FILE_NAME, VAULT_FILE_NAME, Vault};

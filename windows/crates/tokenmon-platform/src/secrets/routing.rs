@@ -29,6 +29,43 @@ pub enum FallbackPolicy {
     Refuse,
 }
 
+/// The plaintext-fallback policy the app builds its stores with. This is the
+/// single place to change it: the maintainer decision is pending (the
+/// coordinator recommends [`FallbackPolicy::Refuse`] on Windows); the default
+/// follows the spec until then.
+pub const APP_FALLBACK_POLICY: FallbackPolicy = FallbackPolicy::PlainFile;
+
+/// The `WriteFailed` reason a [`FallbackPolicy::Refuse`] store reports when the
+/// vault refuses a secret. Classify it with [`SecretStoreError::classify`].
+pub const VAULT_UNAVAILABLE_REASON: &str = "vault unavailable";
+
+/// A credential write failure, classified for the sign-in UI.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum SecretStoreError {
+    /// The encrypted vault could not take the secret and policy forbids a
+    /// plaintext file, so nothing was stored and the user is not signed in.
+    #[error(
+        "Could not save your sign-in securely: the encrypted credential vault is unavailable. \
+         Nothing was stored. Restart TokenMon or sign in again."
+    )]
+    VaultUnavailable,
+    /// Any other write failure (disk full, access denied, ...).
+    #[error("Could not save your sign-in: {0}")]
+    Other(String),
+}
+
+impl SecretStoreError {
+    /// Classifies a store error for display.
+    pub fn classify(error: &CredentialStoreError) -> Self {
+        match error {
+            CredentialStoreError::WriteFailed(reason) if reason == VAULT_UNAVAILABLE_REASON => {
+                Self::VaultUnavailable
+            }
+            CredentialStoreError::WriteFailed(reason) => Self::Other(reason.clone()),
+        }
+    }
+}
+
 /// Production [`CredentialStore`] for one provider prefix.
 #[derive(Debug)]
 pub struct SecretRoutingCredentialStore {
@@ -108,7 +145,7 @@ impl CredentialStore for SecretRoutingCredentialStore {
                 self.files.set(key, value)
             }
             FallbackPolicy::Refuse => Err(CredentialStoreError::WriteFailed(
-                "vault unavailable".into(),
+                VAULT_UNAVAILABLE_REASON.into(),
             )),
         }
     }
