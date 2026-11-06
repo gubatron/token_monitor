@@ -10,12 +10,12 @@ use std::sync::Arc;
 use chrono::{DateTime, TimeZone, Utc};
 use common::{Fixture, Msg};
 use tokenmon_core::usage::budget::SpentByDay;
-use tokenmon_core::usage::{Calendar, DailyBudgetDay, WeekOffset};
+use tokenmon_core::usage::{Calendar, DailyBudgetDay, UsagePool, WeekOffset};
 use tokenmon_provider_opencode::budget::{
     MonthBudgetRequest, OpenCodeMonthBudget, ScanFn, daily_tokens, month_daily_budget_days,
 };
 use tokenmon_provider_opencode::db::{ScanCache, load_scan};
-use tokenmon_provider_opencode::snapshot::{OpenCodeSnapshot, WindowKind};
+use tokenmon_provider_opencode::snapshot::{OpenCodeSnapshot, WindowKind, WindowUsage};
 
 fn day(m: u32, d: u32, h: u32) -> DateTime<Utc> {
     Utc.with_ymd_and_hms(2026, m, d, h, 0, 0).unwrap()
@@ -277,4 +277,63 @@ fn test_preview_snapshot() {
     assert_eq!(preview.windows[0].kind, WindowKind::Rolling5h);
     assert!((preview.monthly_used_percent() - 16.9 / 60.0 * 100.0).abs() < 0.01);
     assert!(preview.windows.iter().all(|w| w.resets_at.unwrap() > now));
+}
+
+/// `testOpenCodeDailyTokens`: two identical rows sum tokens (668), cache reads
+/// (600) and billable cost (1), under the display model name.
+#[test]
+fn test_open_code_daily_tokens_sum_rows_cache_and_cost() {
+    let mut f = Fixture::new();
+    for id in ["a", "b"] {
+        f.insert(
+            id,
+            Msg::go(id, day(11, 4, 12).timestamp(), "minimax-m3", 0.5).tokens([10, 20, 300, 4]),
+            false,
+        );
+    }
+    let cal = Calendar::utc();
+    let tokens = daily_tokens(scan_fn(&f).as_ref(), day(10, 1, 0), &cal);
+    assert_eq!(tokens.len(), 1);
+    let usage = tokens.values().next().unwrap();
+    assert_eq!(usage.total_tokens(), 668);
+    assert_eq!(usage.cache_read_tokens, 600);
+    assert_eq!(usage.cost_usd, Some(1.0));
+    let names: Vec<&str> = usage.models.iter().map(|m| m.name.as_str()).collect();
+    assert_eq!(
+        names,
+        [tokenmon_provider_opencode::model_name::display_name("minimax-m3")]
+    );
+}
+
+fn window(kind: WindowKind) -> WindowUsage {
+    WindowUsage {
+        kind,
+        used_usd: 0.0,
+        limit_usd: 100.0,
+        resets_at: None,
+        session_count: 0,
+    }
+}
+
+fn snapshot_of(kinds: &[WindowKind]) -> OpenCodeSnapshot {
+    let mut s = OpenCodeSnapshot::preview(day(8, 20, 12));
+    s.windows = kinds.iter().copied().map(window).collect();
+    s
+}
+
+/// `testOpenCodeMixedPools`: three stacked windows read `Usage Pool Mixed`.
+#[test]
+fn test_open_code_mixed_pools() {
+    let s = snapshot_of(&[WindowKind::Rolling5h, WindowKind::Weekly, WindowKind::Monthly]);
+    assert_eq!(s.usage_pool(), UsagePool::Mixed);
+    assert_eq!(s.usage_pool().section_title(), "Usage Pool Mixed");
+    assert_eq!(snapshot_of(&[]).usage_pool(), UsagePool::Mixed);
+}
+
+/// `testOpenCodeSingleWindowKeepsItsCadence`.
+#[test]
+fn test_open_code_single_window_keeps_its_cadence() {
+    assert_eq!(snapshot_of(&[WindowKind::Monthly]).usage_pool(), UsagePool::Monthly);
+    assert_eq!(snapshot_of(&[WindowKind::Weekly]).usage_pool(), UsagePool::Weekly);
+    assert_eq!(snapshot_of(&[WindowKind::Rolling5h]).usage_pool(), UsagePool::Hourly);
 }

@@ -2,6 +2,7 @@
 //! (spec 03 sections 3.2 and 3.6).
 
 use chrono::{DateTime, Utc};
+use tokenmon_core::usage::UsagePool;
 
 /// Which usage window a limit bar describes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -21,6 +22,15 @@ impl WindowKind {
             Self::Rolling5h => 12.0,
             Self::Weekly => 30.0,
             Self::Monthly => 60.0,
+        }
+    }
+
+    /// The cadence this window contributes to the panel's usage pool.
+    pub const fn usage_pool(self) -> UsagePool {
+        match self {
+            Self::Rolling5h => UsagePool::Hourly,
+            Self::Weekly => UsagePool::Weekly,
+            Self::Monthly => UsagePool::Monthly,
         }
     }
 
@@ -113,6 +123,13 @@ pub struct OpenCodeSnapshot {
 }
 
 impl OpenCodeSnapshot {
+    /// Stacked 5-hour + weekly + monthly limits: one cadence keeps its name,
+    /// several (or none) give `Mixed`.
+    pub fn usage_pool(&self) -> UsagePool {
+        let pools: Vec<UsagePool> = self.windows.iter().map(|w| w.kind.usage_pool()).collect();
+        UsagePool::combining(&pools)
+    }
+
     /// The window of `kind`, if present.
     pub fn window(&self, kind: WindowKind) -> Option<&WindowUsage> {
         self.windows.iter().find(|w| w.kind == kind)

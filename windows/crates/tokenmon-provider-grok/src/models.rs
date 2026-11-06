@@ -436,6 +436,11 @@ pub struct WeeklyUsageSnapshot {
 }
 
 impl WeeklyUsageSnapshot {
+    /// Grok's allowance is always a weekly pool.
+    pub fn usage_pool(&self) -> tokenmon_core::usage::UsagePool {
+        tokenmon_core::usage::UsagePool::Weekly
+    }
+
     /// A snapshot with `remaining = 100 - used`, no reset, products or account.
     pub fn new(fetched_at: DateTime<Utc>, used_percent: f64) -> Self {
         let used = clamp_percent(used_percent);

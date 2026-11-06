@@ -367,3 +367,10 @@ fn test_select_session_cookies_accepts_sso_rw_only() {
     assert_eq!(select_session_cookies(&jar).as_deref(), Some("sso-rw=rw"));
     assert!(auth_config().is_preferred_session_cookie("SSO-RW"));
 }
+
+/// `testGrokIsWeekly`.
+#[test]
+fn test_grok_is_weekly() {
+    let s = WeeklyUsageSnapshot::new(chrono::DateTime::UNIX_EPOCH, 10.0);
+    assert_eq!(s.usage_pool(), tokenmon_core::usage::UsagePool::Weekly);
+}

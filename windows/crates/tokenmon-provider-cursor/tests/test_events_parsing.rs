@@ -274,3 +274,38 @@ fn test_aggregate_events_bundles_cost_hourly_and_tokens() {
     assert_eq!(a.hourly.day_start, at(2026, 8, 10, 0, 0));
     assert_eq!(a.tokens_by_day.len(), 1);
 }
+
+/// `testCursorEventsRollUpPerDay`: `chargedCents` 150 gives $1.50 and the
+/// cache splits count toward the model's 334 tokens.
+#[test]
+fn test_cursor_events_roll_up_per_day_with_cache_splits() {
+    let e = event(json!({
+        "timestamp": ms(at(2026, 11, 4, 12, 0)),
+        "model": "claude-4.5-sonnet",
+        "chargedCents": 150,
+        "tokenUsage": {
+            "inputTokens": 10, "outputTokens": 20,
+            "cacheReadTokens": 300, "cacheWriteTokens": 4
+        }
+    }));
+    assert_eq!(e.model, "claude-4.5-sonnet");
+    let days = daily_tokens(&utc(), std::slice::from_ref(&e));
+    let day = &days[&chrono::NaiveDate::from_ymd_opt(2026, 11, 4).unwrap()];
+    assert_eq!(day.total_tokens(), 334);
+    assert_eq!(day.cache_read_tokens, 300);
+    assert_eq!(day.cost_usd, Some(1.5));
+    assert_eq!(day.models.len(), 1);
+    assert_eq!(
+        (day.models[0].name.as_str(), day.models[0].tokens),
+        ("claude-4.5-sonnet", 334)
+    );
+}
+
+/// `testCursorIsMonthly`.
+#[test]
+fn test_cursor_is_monthly() {
+    let now = at(2026, 8, 10, 12, 0);
+    let snap: CursorSnapshot =
+        parse_summary(common::summary_body(now).to_string().as_bytes(), now).unwrap();
+    assert_eq!(snap.usage_pool(), tokenmon_core::usage::UsagePool::Monthly);
+}
