@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="windows-1252"?>
+<!--
+  TokenMon for Windows: per-user MSI (WiX Toolset v3, built with cargo-wix).
+
+  Built by .github/workflows/windows-release.yml (and by hand, see the
+  "Releases" section of windows/README.md) with cargo-wix 0.3.9 and WiX
+  Toolset 3.14.1. cargo-wix passes Version (the workspace version, read
+  through cargo metadata), Platform and CargoTargetBinDir. AppExe can be
+  overridden with the compiler argument -dAppExe=<path>.
+
+  What it does
+  * Installs TokenMon.exe and LICENSE.txt to %LOCALAPPDATA%\Programs\TokenMon
+    without elevation (InstallScope perUser, InstallPrivileges limited).
+  * Adds a Start-menu shortcut "TokenMon" whose System.AppUserModel.ID is
+    "TokenMon" (tokenmon_platform::notify::APP_USER_MODEL_ID), so toasts
+    are attributed to the app.
+  * MajorUpgrade: a newer MSI replaces the installed one in place; an older
+    one refuses to install over a newer one.
+  * A real uninstall (not the removal of the old version during an upgrade)
+    deletes the HKCU registrations the app writes at run time:
+      Software\Microsoft\Windows\CurrentVersion\Run                         value TokenMon  (shell::autostart)
+      Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run value TokenMon  (shell::autostart)
+      Software\Classes\DesktopBackground\Shell\TokenMon                     key             (shell::context_menu)
+      Software\Classes\AppUserModelId\TokenMon                              key             (notify::aumid)
+  * It never touches the user's data in %LOCALAPPDATA%\TokenMon (settings,
+    vault, history, sign-in profiles). Removing those is the user's choice.
+
+  Fixed GUIDs. Never change the UpgradeCode: MajorUpgrade finds installed
+  copies by it. Component GUIDs stay fixed as long as the component keeps
+  its key path; a component that changes key path gets a new GUID.
+    UpgradeCode       97EEF0DA-B00F-4527-93D7-EF335558A346
+    Payload           2F22E1D0-C336-4D3A-9E99-00A9B1D1907E
+    StartMenuShortcut E0FA14B5-4173-42B0-BA26-81121A22B913
+-->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
+     xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
+
+  <?if $(var.Platform) != x64 ?>
+    <?error TokenMon for Windows is x64 only: build for x86_64-pc-windows-msvc. ?>
+  <?endif?>
+  <?ifndef AppExe ?>
+    <!-- The cargo [[bin]] is "tokenmon"; it is installed as TokenMon.exe. -->
+    <?define AppExe = "$(var.CargoTargetBinDir)\tokenmon.exe" ?>
+  <?endif?>
+  <?define RepoRoot = "$(sys.SOURCEFILEDIR)..\.." ?>
+  <?define AppIcon = "$(sys.SOURCEFILEDIR)..\crates\tokenmon-app\assets\tokenmon.ico" ?>
+  <?define InstallerKey = "Software\TokenMon\Installer" ?>
+
+  <Product Id="*"
+           Name="TokenMon"
+           UpgradeCode="97EEF0DA-B00F-4527-93D7-EF335558A346"
+           Manufacturer="TokenMon"
+           Language="1033"
+           Codepage="1252"
+           Version="$(var.Version)">
+
+    <!-- MSI 5.0 (Windows 7 and later) for MsiShortcutProperty (the AUMID). -->
+    <Package Id="*"
+             Keywords="Installer"
+             Description="TokenMon $(var.Version) installer"
+             Manufacturer="TokenMon"
+             InstallerVersion="500"
+             Languages="1033"
+             Compressed="yes"
+             SummaryCodepage="1252"
+             InstallScope="perUser"
+             InstallPrivileges="limited"
+             Platform="x64" />
+
+    <MajorUpgrade Schedule="afterInstallInitialize"
+                  AllowSameVersionUpgrades="yes"
+                  DowngradeErrorMessage="A newer version of [ProductName] is already installed. Uninstall it first to install this version." />
+
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <Icon Id="TokenMonIcon" SourceFile="$(var.AppIcon)" />
+    <Property Id="ARPPRODUCTICON" Value="TokenMonIcon" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/gubatron/token_monitor" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/gubatron/token_monitor/issues" />
+    <Property Id="ARPNOMODIFY" Value="1" />
+    <Property Id="ARPNOREPAIR" Value="1" />
+    <SetProperty Id="ARPINSTALLLOCATION" Value="[INSTALLDIR]" After="CostFinalize" />
+
+    <!-- Close a running TokenMon before its files are replaced or removed. -->
+    <util:CloseApplication Id="CloseTokenMon"
+                           Target="TokenMon.exe"
+                           CloseMessage="yes"
+                           RebootPrompt="no"
+                           TerminateProcess="1" />
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="LocalAppDataFolder">
+        <Directory Id="UserProgramsDir" Name="Programs">
+          <Directory Id="INSTALLDIR" Name="TokenMon" />
+        </Directory>
+      </Directory>
+      <Directory Id="ProgramMenuFolder" />
+    </Directory>
+
+    <!--
+      Files in the user profile need an HKCU key path (ICE38) and explicit
+      folder removal (ICE64). The RemoveFile rows also clear what the in-app
+      updater can leave next to the exe (swap::aside_path and the staged copy),
+      so the folder can go.
+    -->
+    <DirectoryRef Id="INSTALLDIR">
+      <Component Id="Payload" Guid="2F22E1D0-C336-4D3A-9E99-00A9B1D1907E">
+        <File Id="TokenMonExe" Name="TokenMon.exe" Source="$(var.AppExe)" KeyPath="no" />
+        <File Id="LicenseTxt" Name="LICENSE.txt" Source="$(var.RepoRoot)\LICENSE" KeyPath="no" />
+        <RegistryValue Root="HKCU" Key="$(var.InstallerKey)" Name="InstallDir"
+                       Type="string" Value="[INSTALLDIR]" KeyPath="yes" />
+        <RegistryValue Root="HKCU" Key="$(var.InstallerKey)" Name="Version"
+                       Type="string" Value="$(var.Version)" />
+        <RemoveFile Id="UpdaterAside" Name="TokenMon.old-*.exe" On="uninstall" />
+        <RemoveFile Id="UpdaterStaged" Name=".TokenMon-update-*" On="uninstall" />
+        <RemoveFile Id="UpdaterProbe" Name=".tokenmon-write-probe-*" On="uninstall" />
+        <RemoveFolder Id="RemoveInstallDir" Directory="INSTALLDIR" On="uninstall" />
+        <RemoveFolder Id="RemoveUserProgramsDir" Directory="UserProgramsDir" On="uninstall" />
+      </Component>
+    </DirectoryRef>
+
+    <DirectoryRef Id="ProgramMenuFolder">
+      <Component Id="StartMenuShortcut" Guid="E0FA14B5-4173-42B0-BA26-81121A22B913">
+        <Shortcut Id="TokenMonShortcut"
+                  Name="TokenMon"
+                  Description="AI usage monitor in the system tray"
+                  Target="[INSTALLDIR]TokenMon.exe"
+                  WorkingDirectory="INSTALLDIR"
+                  Icon="TokenMonIcon">
+          <ShortcutProperty Key="System.AppUserModel.ID" Value="TokenMon" />
+        </Shortcut>
+        <RegistryValue Root="HKCU" Key="$(var.InstallerKey)" Name="StartMenuShortcut"
+                       Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+
+    <Feature Id="Main" Title="TokenMon" Level="1" Absent="disallow">
+      <ComponentRef Id="Payload" />
+      <ComponentRef Id="StartMenuShortcut" />
+    </Feature>
+
+    <!--
+      Uninstall cleanup of the app's run-time registrations. MSI can only
+      remove registry entries it wrote itself, so reg.exe deletes them
+      (WixQuietExec64: no console window). Return="ignore": reg.exe exits 1
+      when the entry is already gone. The condition skips the removal of the
+      old version during a major upgrade, so autostart, the desktop verb and
+      the toast registration survive an update.
+    -->
+    <SetProperty Id="CleanRunValue" Sequence="execute" Before="CleanRunValue"
+                 Value="&quot;[System64Folder]reg.exe&quot; delete HKCU\Software\Microsoft\Windows\CurrentVersion\Run /v TokenMon /f" />
+    <SetProperty Id="CleanStartupApproved" Sequence="execute" Before="CleanStartupApproved"
+                 Value="&quot;[System64Folder]reg.exe&quot; delete HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run /v TokenMon /f" />
+    <SetProperty Id="CleanDesktopVerb" Sequence="execute" Before="CleanDesktopVerb"
+                 Value="&quot;[System64Folder]reg.exe&quot; delete HKCU\Software\Classes\DesktopBackground\Shell\TokenMon /f" />
+    <SetProperty Id="CleanAumid" Sequence="execute" Before="CleanAumid"
+                 Value="&quot;[System64Folder]reg.exe&quot; delete HKCU\Software\Classes\AppUserModelId\TokenMon /f" />
+
+    <CustomAction Id="CleanRunValue" BinaryKey="WixCA" DllEntry="WixQuietExec64"
+                  Execute="deferred" Impersonate="yes" Return="ignore" />
+    <CustomAction Id="CleanStartupApproved" BinaryKey="WixCA" DllEntry="WixQuietExec64"
+                  Execute="deferred" Impersonate="yes" Return="ignore" />
+    <CustomAction Id="CleanDesktopVerb" BinaryKey="WixCA" DllEntry="WixQuietExec64"
+                  Execute="deferred" Impersonate="yes" Return="ignore" />
+    <CustomAction Id="CleanAumid" BinaryKey="WixCA" DllEntry="WixQuietExec64"
+                  Execute="deferred" Impersonate="yes" Return="ignore" />
+
+    <InstallExecuteSequence>
+      <Custom Action="CleanRunValue" After="RemoveRegistryValues">REMOVE~="ALL" AND NOT UPGRADINGPRODUCTCODE</Custom>
+      <Custom Action="CleanStartupApproved" After="CleanRunValue">REMOVE~="ALL" AND NOT UPGRADINGPRODUCTCODE</Custom>
+      <Custom Action="CleanDesktopVerb" After="CleanStartupApproved">REMOVE~="ALL" AND NOT UPGRADINGPRODUCTCODE</Custom>
+      <Custom Action="CleanAumid" After="CleanDesktopVerb">REMOVE~="ALL" AND NOT UPGRADINGPRODUCTCODE</Custom>
+    </InstallExecuteSequence>
+  </Product>
+</Wix>
