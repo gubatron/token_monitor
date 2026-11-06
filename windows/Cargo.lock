@@ -5553,7 +5553,13 @@ dependencies = [
 name = "tokenmon-provider-chatgpt"
 version = "0.1.0"
 dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
  "tokenmon-core",
+ "tokio",
+ "tracing",
+ "wiremock",
 ]
 
 [[package]]
