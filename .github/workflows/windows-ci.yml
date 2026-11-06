@@ -23,6 +23,8 @@ on:
       - "windows/**"
       - ".github/workflows/windows-ci.yml"
   workflow_dispatch:
+  # windows-release.yml runs every gate on the tagged commit before packaging.
+  workflow_call:
 
 permissions:
   contents: read

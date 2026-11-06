@@ -1,0 +1,448 @@
+name: Windows release
+
+# Release pipeline for TokenMon for Windows (windows/), the counterpart of
+# release.yml (spec 04 §6.4 and §6.6).
+#
+# Pushing a tag windows-vX.Y.Z (X.Y.Z = [workspace.package] version in
+# windows/Cargo.toml) checks the tag, runs every Windows CI gate
+# (windows-ci.yml) on the tagged commit, builds TokenMon.exe for
+# x86_64-pc-windows-msvc, packages
+#   tokenmon-windows-<version>-x64.msi          per-user MSI (cargo-wix, WiX 3)
+#   tokenmon-windows-<version>-x64.zip          portable: TokenMon.exe, README.txt, LICENSE.txt
+#   tokenmon-windows-<version>-SHA256SUMS.txt   sha256sum -c format
+# installs, upgrades, downgrades and uninstalls the MSI on a clean runner,
+# and attaches the three files to a DRAFT GitHub release. The maintainer
+# reviews and publishes it; the in-app updater ignores drafts, prereleases,
+# tags without the windows-v prefix and assets without the tokenmon-windows-
+# prefix (so this release and the macOS ones never mix).
+#
+# Dry runs build and test the same files without creating a release:
+#   * every push to windows-port that touches windows/installer/ or this file
+#     (the gates already run in windows-ci.yml for that push);
+#   * workflow_dispatch (Actions tab or `gh workflow run windows-release.yml
+#     --ref windows-port`), with the gates unless `gates` is false.
+# The files are kept as workflow artifacts for 14 days.
+#
+# Authenticode signing is off until signing secrets exist (see the "Sign"
+# steps). Unsigned builds work, but SmartScreen warns on first run.
+#
+# Every third-party action is pinned to a full commit SHA (version in the
+# trailing comment); WiX and cargo-wix are downloaded by version and checked
+# against a SHA-256 here. The release build uses no cache, so nothing a
+# branch run wrote can reach a published binary.
+
+on:
+  push:
+    tags:
+      - "windows-v*"
+    branches:
+      - windows-port
+    # Path filters do not apply to tag pushes.
+    paths:
+      - "windows/installer/**"
+      - ".github/workflows/windows-release.yml"
+  workflow_dispatch:
+    inputs:
+      gates:
+        description: Run the Windows CI gates (windows-ci.yml) first
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  # WiX Toolset v3 binaries (cargo-wix drives candle/light from WiX 3).
+  WIX_VERSION: "3.14.1"
+  WIX_URL: https://github.com/wixtoolset/wix3/releases/download/wix3141rtm/wix314-binaries.zip
+  WIX_SHA256: "6ac824e1642d6f7277d0ed7ea09411a508f6116ba6fae0aa5f2c7daa2ff43d31"
+  # cargo-wix publishes no binaries: build the crates.io source, checked
+  # against the checksum crates.io records, with its own Cargo.lock.
+  CARGO_WIX_VERSION: "0.3.9"
+  CARGO_WIX_SHA256: "7023fb5f51309588c35ef9323b58a805e6a9bad4be4d4e3054264fea9a1cdbad"
+  TARGET: x86_64-pc-windows-msvc
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  version:
+    name: Version and tag check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      probe_version: ${{ steps.version.outputs.probe_version }}
+      msi: ${{ steps.version.outputs.msi }}
+      zip: ${{ steps.version.outputs.zip }}
+      sums: ${{ steps.version.outputs.sums }}
+      release: ${{ steps.mode.outputs.release }}
+      gates: ${{ steps.mode.outputs.gates }}
+      toolchain: ${{ steps.detect.outputs.toolchain }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Unit-test the packaging script
+        run: python3 -I -m unittest discover -s windows/installer/tests -v
+
+      - name: Read the version
+        id: version
+        run: |
+          set -euo pipefail
+          version=$(python3 -I windows/installer/package.py version)
+          IFS=. read -r major minor patch <<<"$version"
+          {
+            echo "version=$version"
+            # A higher version of the same package, only for the upgrade test.
+            echo "probe_version=$major.$minor.$((patch + 1))"
+            python3 -I windows/installer/package.py asset-names "$version"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Decide release or dry run
+        id: mode
+        env:
+          EVENT: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          GATES_INPUT: ${{ inputs.gates }}
+        run: |
+          set -euo pipefail
+          release=false
+          gates=false
+          if [ "$EVENT" = push ] && [ "$REF_TYPE" = tag ]; then
+            release=true
+            gates=true
+          elif [ "$EVENT" = workflow_dispatch ] && [ "$GATES_INPUT" = true ]; then
+            gates=true
+          fi
+          echo "release=$release" >> "$GITHUB_OUTPUT"
+          echo "gates=$gates" >> "$GITHUB_OUTPUT"
+
+      - name: Require the tag to match the crate version
+        if: steps.mode.outputs.release == 'true'
+        run: python3 -I windows/installer/package.py check-tag "$GITHUB_REF_NAME"
+
+      - name: Detect the pinned toolchain
+        id: detect
+        run: bash windows/scripts/ci/detect.sh windows
+
+      - name: Version summary
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          RELEASE: ${{ steps.mode.outputs.release }}
+          GATES: ${{ steps.mode.outputs.gates }}
+        run: |
+          {
+            echo "### Windows release: $VERSION"
+            echo
+            if [ "$RELEASE" = true ]; then
+              echo "Tag \`$GITHUB_REF_NAME\` matches the crate version. A draft release is created when every job passes."
+            else
+              echo "Dry run on \`$GITHUB_REF_NAME\` ($GITHUB_EVENT_NAME): the files are built and tested, and no release is created."
+            fi
+            echo
+            echo "Windows CI gates in this run: $GATES"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  gates:
+    name: CI gates
+    needs: version
+    if: needs.version.outputs.gates == 'true'
+    permissions:
+      contents: read
+      actions: read # coverage baseline and the gates' Summary job
+    uses: ./.github/workflows/windows-ci.yml
+
+  build:
+    name: Build MSI and zip
+    needs: [version, gates]
+    # Runs after the gates pass, or without them on a dry run that skips them.
+    if: >-
+      always() && needs.version.result == 'success' &&
+      (needs.gates.result == 'success' ||
+       (needs.gates.result == 'skipped' && needs.version.outputs.gates != 'true'))
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      PROBE_VERSION: ${{ needs.version.outputs.probe_version }}
+      MSI: ${{ needs.version.outputs.msi }}
+      ZIP: ${{ needs.version.outputs.zip }}
+      SUMS: ${{ needs.version.outputs.sums }}
+    defaults:
+      run:
+        # A job-level `defaults.run` replaces the workflow-level one, so the
+        # shell is repeated here (Windows runners default to pwsh).
+        shell: bash
+        working-directory: windows
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master (2026-10-16)
+        with:
+          toolchain: ${{ needs.version.outputs.toolchain }}
+          targets: x86_64-pc-windows-msvc
+
+      - name: cargo build --release (tokenmon-app)
+        run: |
+          set -euo pipefail
+          cargo build --locked --release -p tokenmon-app --target "$TARGET"
+          exe="target/$TARGET/release/tokenmon.exe"
+          test -f "$exe"
+          echo "APP_EXE=$PWD/$exe" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/dist" "$RUNNER_TEMP/probe"
+
+      # Signing. TODO(signing): add the repository secrets below, then the
+      # Sign steps run on tag builds and manual runs. Until then they are
+      # skipped and the build is unsigned; a missing secret never fails it.
+      #   WINDOWS_SIGNING_PFX_BASE64    base64 of a code-signing .pfx
+      #   WINDOWS_SIGNING_PFX_PASSWORD  its password
+      # For Azure Trusted Signing instead, replace the two Sign steps with
+      # azure/trusted-signing-action (pinned by SHA) fed by AZURE_TENANT_ID,
+      # AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, the endpoint, account and
+      # certificate-profile names, keeping the same files and the same gate.
+      # The secrets are only given to the Sign steps, after cargo has run,
+      # so no build script can read them.
+      - name: Detect signing secrets
+        id: signing
+        env:
+          HAS_PFX: ${{ secrets.WINDOWS_SIGNING_PFX_BASE64 != '' && secrets.WINDOWS_SIGNING_PFX_PASSWORD != '' }}
+          EVENT: ${{ github.event_name }}
+          RELEASE: ${{ needs.version.outputs.release }}
+        run: |
+          enabled=false
+          if [ "$HAS_PFX" = true ] && { [ "$RELEASE" = true ] || [ "$EVENT" = workflow_dispatch ]; }; then
+            enabled=true
+          fi
+          echo "enabled=$enabled" >> "$GITHUB_OUTPUT"
+          echo "Authenticode signing: $enabled"
+
+      - name: Sign TokenMon.exe
+        if: steps.signing.outputs.enabled == 'true'
+        env:
+          PFX_BASE64: ${{ secrets.WINDOWS_SIGNING_PFX_BASE64 }}
+          PFX_PASSWORD: ${{ secrets.WINDOWS_SIGNING_PFX_PASSWORD }}
+        run: bash installer/sign.sh "$APP_EXE"
+
+      - name: Install WiX Toolset (pinned, checksummed)
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 3 "$WIX_URL" -o "$RUNNER_TEMP/wix.zip"
+          echo "${WIX_SHA256}  $RUNNER_TEMP/wix.zip" | sha256sum -c -
+          python -I -m zipfile -e "$RUNNER_TEMP/wix.zip" "$RUNNER_TEMP/wix"
+          banner=$("$RUNNER_TEMP/wix/candle.exe" -? || true)
+          head -n 1 <<<"$banner"
+          grep -qF "version $WIX_VERSION" <<<"$banner"
+          echo "WIX_BIN=$(cygpath -w "$RUNNER_TEMP/wix")" >> "$GITHUB_ENV"
+
+      - name: Install cargo-wix (pinned, checksummed)
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 3 "https://static.crates.io/crates/cargo-wix/cargo-wix-${CARGO_WIX_VERSION}.crate" \
+            -o "$RUNNER_TEMP/cargo-wix.crate"
+          echo "${CARGO_WIX_SHA256}  $RUNNER_TEMP/cargo-wix.crate" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/cargo-wix.crate" -C "$RUNNER_TEMP"
+          cargo install --locked --path "$RUNNER_TEMP/cargo-wix-${CARGO_WIX_VERSION}" --root "$RUNNER_TEMP/cargo-wix"
+          echo "$RUNNER_TEMP/cargo-wix/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/cargo-wix/bin/cargo-wix" wix --version | grep -F "$CARGO_WIX_VERSION"
+
+      - name: Build the MSI (and a higher-version upgrade probe)
+        run: |
+          set -euo pipefail
+          wxs=$(cygpath -w "$PWD/installer/main.wxs")
+          wix() { # <install-version> <output>
+            cargo wix -p tokenmon-app --no-build --nocapture --target "$TARGET" \
+              --bin-path "$WIX_BIN" --include "$wxs" \
+              --install-version "$1" --output "$(cygpath -w "$2")"
+          }
+          wix "$VERSION" "$RUNNER_TEMP/dist/$MSI"
+          # Only for the smoke test's major-upgrade check; never published.
+          wix "$PROBE_VERSION" "$RUNNER_TEMP/probe/tokenmon-upgrade-probe.msi"
+          ls -l "$RUNNER_TEMP/dist" "$RUNNER_TEMP/probe"
+
+      - name: Sign the MSI
+        if: steps.signing.outputs.enabled == 'true'
+        env:
+          PFX_BASE64: ${{ secrets.WINDOWS_SIGNING_PFX_BASE64 }}
+          PFX_PASSWORD: ${{ secrets.WINDOWS_SIGNING_PFX_PASSWORD }}
+        run: bash installer/sign.sh "$RUNNER_TEMP/dist/$MSI"
+
+      - name: Build the portable zip and SHA256SUMS
+        run: |
+          set -euo pipefail
+          python -I installer/package.py zip --exe "$APP_EXE" --license ../LICENSE \
+            --readme installer/portable-README.txt --out "$RUNNER_TEMP/dist/$ZIP"
+          cd "$RUNNER_TEMP/dist"
+          python -I "$GITHUB_WORKSPACE/windows/installer/package.py" sums --out "$SUMS" "$MSI" "$ZIP"
+          sha256sum -c "$SUMS"
+
+      - name: Release summary
+        env:
+          SIGNED: ${{ steps.signing.outputs.enabled == 'true' && 'yes' || 'no' }}
+        run: |
+          set -euo pipefail
+          python -I installer/package.py summary --version "$VERSION" --signed "$SIGNED" \
+            "$RUNNER_TEMP/dist/$MSI" "$RUNNER_TEMP/dist/$ZIP" "$RUNNER_TEMP/dist/$SUMS" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo
+            echo "Built with $(rustc --version), WiX $WIX_VERSION, cargo-wix $CARGO_WIX_VERSION."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the release files
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: tokenmon-windows-${{ env.VERSION }}
+          path: ${{ runner.temp }}/dist/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload the upgrade probe
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: msi-upgrade-probe
+          path: ${{ runner.temp }}/probe/
+          if-no-files-found: error
+          retention-days: 3
+
+  smoke:
+    name: MSI install, upgrade and uninstall
+    needs: [version, build]
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      PROBE_VERSION: ${{ needs.version.outputs.probe_version }}
+      MSI: ${{ needs.version.outputs.msi }}
+      ZIP: ${{ needs.version.outputs.zip }}
+      SUMS: ${{ needs.version.outputs.sums }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: windows/installer
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: tokenmon-windows-${{ env.VERSION }}
+          path: ${{ runner.temp }}/dist
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: msi-upgrade-probe
+          path: ${{ runner.temp }}/probe
+
+      - name: Check SHA256SUMS and the zip layout
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/dist"
+          sha256sum -c "$SUMS"
+          python -I "$GITHUB_WORKSPACE/windows/installer/package.py" validate-zip "$ZIP"
+
+      - name: Install, upgrade, downgrade and uninstall
+        shell: pwsh
+        run: >-
+          & windows/installer/smoke-test.ps1
+          -Msi (Join-Path $env:RUNNER_TEMP "dist\$env:MSI")
+          -UpgradeMsi (Join-Path $env:RUNNER_TEMP 'probe\tokenmon-upgrade-probe.msi')
+          -Version $env:VERSION -UpgradeVersion $env:PROBE_VERSION
+
+      - name: Upload msiexec logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: msi-logs
+          path: ${{ runner.temp }}/*.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+  publish:
+    name: Draft GitHub release
+    needs: [version, build, smoke]
+    if: needs.version.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      MSI: ${{ needs.version.outputs.msi }}
+      ZIP: ${{ needs.version.outputs.zip }}
+      SUMS: ${{ needs.version.outputs.sums }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Tags, to start the generated notes at the previous Windows release.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: tokenmon-windows-${{ env.VERSION }}
+          path: dist
+
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          files=("dist/$MSI" "dist/$ZIP" "dist/$SUMS")
+          (cd dist && sha256sum -c "$SUMS")
+          if gh release view "$tag" >/dev/null 2>&1; then
+            # Keep hand-written notes; replace files only on a deliberate re-run.
+            existing="$(gh release view "$tag" --json assets --jq '.assets[].name')"
+            clashes=()
+            for file in "${files[@]}"; do
+              if grep -Fxq "$(basename "$file")" <<<"$existing"; then
+                clashes+=("$(basename "$file")")
+              fi
+            done
+            if [ "${#clashes[@]}" -gt 0 ] && [ "$RUN_ATTEMPT" -le 1 ]; then
+              echo "Release $tag already has: ${clashes[*]}"
+              echo "Refusing to replace them. Delete them, or re-run this workflow run to replace them."
+              exit 1
+            fi
+            gh release upload "$tag" "${files[@]}" --clobber
+          else
+            notes=(--generate-notes)
+            previous=$(git tag --list 'windows-v*' --sort=-v:refname | grep -vxF "$tag" | head -n 1 || true)
+            if [ -n "$previous" ]; then
+              notes+=(--notes-start-tag "$previous")
+            fi
+            {
+              echo "TokenMon for Windows $VERSION (Windows 10 and 11, x64)."
+              echo
+              echo "* \`$MSI\`: per-user installer (no admin rights), adds a Start-menu entry."
+              echo "* \`$ZIP\`: portable; unzip anywhere and run \`TokenMon.exe\`."
+              echo "* \`$SUMS\`: SHA-256 of both."
+              echo
+              echo "Unsigned for now: SmartScreen shows \"Windows protected your PC\"; choose More info, then Run anyway."
+              echo
+              echo '```text'
+              cat "dist/$SUMS"
+              echo '```'
+            } > "$RUNNER_TEMP/notes.md"
+            gh release create "$tag" "${files[@]}" \
+              --draft \
+              --verify-tag \
+              --title "TokenMon for Windows $VERSION" \
+              --notes-file "$RUNNER_TEMP/notes.md" \
+              "${notes[@]}"
+          fi
+          url=$(gh release view "$tag" --json url --jq .url)
+          {
+            echo "### Draft release"
+            echo
+            echo "[$tag]($url) has \`$MSI\`, \`$ZIP\` and \`$SUMS\`. Review it, then publish it; the in-app updater ignores drafts."
+          } >> "$GITHUB_STEP_SUMMARY"
