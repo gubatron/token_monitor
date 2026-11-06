@@ -103,10 +103,16 @@ fn test_grpc_product_breakdown_with_voice_gap() {
         2_000_000_000,
     );
     let parsed = parse_usage(&frame, now()).unwrap();
+    assert_close(parsed.used_percent, 64.0);
     assert_eq!(parsed.products.len(), 4);
+    assert_close(pct(&parsed, "build").unwrap(), 30.0);
+    assert_close(pct(&parsed, "chat").unwrap(), 21.0);
     assert_close(pct(&parsed, "imagine").unwrap(), 12.0);
     assert_close(pct(&parsed, "other").unwrap(), 1.0);
-    assert!(pct(&parsed, "voice").is_none());
+    assert!(
+        pct(&parsed, "voice").is_none(),
+        "Voice (0%) must not steal Imagine's percent"
+    );
 }
 
 /// An explicit 0.0 voice percent also yields no product.

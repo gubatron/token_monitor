@@ -136,11 +136,17 @@ fn test_days_in_period_uses_calendar_days_not_truncated_hours() {
 /// Same-day start and reset falls back to a week.
 #[test]
 fn test_same_day_start_and_reset_falls_back_to_a_week() {
-    let s = span(Some((20, 1)), Some((20, 23)));
-    assert_eq!(s.days_in_period(&cal()), 7);
-    let (mut p, _) = publisher(utc(2026, 8, 20, 12));
-    p.publish(snap(1.0, s.period_start, s.resets_at, utc(2026, 8, 20, 12)));
-    assert_eq!(days_of(&p).len(), 7);
+    // Swift's inputs: start 01:00 and reset 13:00 on Sep 2, now 14:00 (after the reset).
+    let now = utc(2026, 9, 2, 14);
+    let start = Some(utc(2026, 9, 2, 1));
+    let reset = Some(utc(2026, 9, 2, 13));
+    let snapshot = snap(96.0, start, reset, now);
+    assert_eq!(snapshot.days_in_period(&cal()), 7);
+    let (mut p, _) = publisher(now);
+    p.publish(snapshot);
+    let days = days_of(&p);
+    assert_eq!(days.len(), 7);
+    assert!((days[0].budget_usd - 100.0 / 7.0).abs() < 1e-9);
 }
 
 /// No period start falls back to seven.

@@ -97,7 +97,15 @@ fn test_build_daily_budget_days_nil_without_cycle_dates() {
 fn test_tracked_exceeding_pool_percent_is_rescaled() {
     let (s, e) = aug_cycle();
     let obs = [(day(8, 23), 1.0), (day(8, 25), 6.0), (day(8, 26), 4.0)];
-    let out = blend(&obs, &[], 5.0, s, e, None).unwrap();
+    // Estimated weights exist for unobserved days, so back-fill is possible
+    // and the assertions below prove it does not happen (tracked 6+4 = 10 →
+    // scale 5/10).
+    let weights = [
+        (day(8, 22), 100.0),
+        (day(8, 24), 100.0),
+        (day(8, 27), 100.0),
+    ];
+    let out = blend(&obs, &weights, 5.0, s, e, None).unwrap();
     assert!((out.blended[&day(8, 25)] - 3.0).abs() < 1e-9);
     assert!((out.blended[&day(8, 26)] - 2.0).abs() < 1e-9);
     assert!((out.blended.values().sum::<f64>() - 5.0).abs() < 1e-9);
