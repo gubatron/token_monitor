@@ -8,6 +8,7 @@
 //! and hands control to the platform glue.
 
 pub mod alerts;
+pub mod app;
 pub mod model;
 pub mod poller;
 pub mod providers;
@@ -16,3 +17,4 @@ pub mod sessions;
 pub mod signin;
 pub mod smoke;
 pub mod testing;
+pub mod tray;
