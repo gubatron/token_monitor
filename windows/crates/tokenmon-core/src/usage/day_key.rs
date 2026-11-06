@@ -90,6 +90,10 @@ impl DayKey {
         let date = self
             .to_date()?
             .checked_add_signed(chrono::Duration::try_days(days)?)?;
+        // Keys only round-trip for four-digit years ("-001" or "10000" would not re-parse).
+        if !(0..=9999).contains(&date.year()) {
+            return None;
+        }
         // Re-derive through the calendar so the result is what the local day of the shifted start is.
         let start = calendar.start_of_date(date)?;
         Some(Self::for_instant(start, calendar))

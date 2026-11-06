@@ -274,3 +274,24 @@ path = "fuzz_targets/update_archive.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "core_iso8601"
+path = "fuzz_targets/core_iso8601.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "core_json_number"
+path = "fuzz_targets/core_json_number.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "core_day_key"
+path = "fuzz_targets/core_day_key.rs"
+test = false
+doc = false
+bench = false
