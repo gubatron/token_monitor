@@ -214,11 +214,12 @@ jobs:
           set -uo pipefail
           shopt -s nullglob
           rows=("$RUNNER_TEMP"/rows/*.json)
+          status=0 # bash -e: record the table's verdict instead of stopping here
           python3 -I windows/scripts/ci/fuzz_report.py table \
             --title "Nightly fuzz: all targets (${FUZZ_SECONDS} s each)" \
             --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
-            "${rows[@]}" > "$RUNNER_TEMP/table.md"
-          echo "status=$?" >> "$GITHUB_OUTPUT"
+            "${rows[@]}" > "$RUNNER_TEMP/table.md" || status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
           # The per-target jobs already show crash details; keep the table only.
           sed '/^#### /,$d' "$RUNNER_TEMP/table.md" >> "$GITHUB_STEP_SUMMARY"
 

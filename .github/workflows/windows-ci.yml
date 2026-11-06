@@ -342,12 +342,14 @@ jobs:
                       --baseline-url "$BASE_URL" --baseline-label "run $BASE_RUN ($BASE_SHA)")
           fi
           mkdir -p "$RUNNER_TEMP/coverage-out"
+          # Actions runs bash with -e: capture the gate's status so the
+          # summary is written before the step fails.
+          status=0
           "$PYTHON" -I scripts/ci/render_coverage.py --json "$RUNNER_TEMP/cov.json" --root . \
             --floors .config/coverage-floors.toml "${baseline[@]}" --max-drop "$COVERAGE_MAX_DROP" \
             --write-summary "$RUNNER_TEMP/coverage-out/coverage-summary.json" \
             --commit "$GITHUB_SHA" --source "run $GITHUB_RUN_ID (${GITHUB_SHA:0:7})" \
-            --title "Coverage (${{ matrix.os }})" > "$RUNNER_TEMP/coverage.md"
-          status=$?
+            --title "Coverage (${{ matrix.os }})" > "$RUNNER_TEMP/coverage.md" || status=$?
           cat "$RUNNER_TEMP/coverage.md" >> "$GITHUB_STEP_SUMMARY"
           cp "$RUNNER_TEMP/lcov.info" "$RUNNER_TEMP/cov.json" "$RUNNER_TEMP/coverage.md" "$RUNNER_TEMP/coverage-out/"
           exit $status
@@ -611,10 +613,10 @@ jobs:
           if [ "$WORKSPACE" != true ]; then
             note="Skipped jobs: \`windows/Cargo.toml\` does not exist on this commit yet, so there is nothing to build, test, measure or fuzz."
           fi
+          status=0 # bash -e: keep the exit code, write the summary, then fail
           python3 -I windows/scripts/ci/render_ci_summary.py --jobs /tmp/jobs.json --run-url "$run_url" \
             --self Summary --skip-note "$note" --supersedable coverage,fuzz-smoke,windows-build \
             --sha "$GITHUB_SHA" --ref "$GITHUB_REF_NAME" --event "$GITHUB_EVENT_NAME" \
-            --server-url "$GITHUB_SERVER_URL" --repo "$GITHUB_REPOSITORY" > /tmp/summary.md
-          status=$?
+            --server-url "$GITHUB_SERVER_URL" --repo "$GITHUB_REPOSITORY" > /tmp/summary.md || status=$?
           cat /tmp/summary.md >> "$GITHUB_STEP_SUMMARY"
           exit $status
