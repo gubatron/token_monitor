@@ -267,6 +267,31 @@ async fn test_console_success_publishes_merged_snapshot() {
     );
 }
 
+/// Regression for #61 item 5: Swift `headlineResetsAt` is `nil`, so the
+/// headline shows no reset even when the snapshot has monthly and weekly ones.
+#[tokio::test]
+async fn test_headline_resets_at_is_none_like_swift() {
+    let auth = FakeSession::signed_in("auth=1");
+    let mut snapshot = console_snapshot(30.0);
+    snapshot.windows.push(WindowUsage {
+        kind: WindowKind::Weekly,
+        used_usd: 1.0,
+        limit_usd: 10.0,
+        resets_at: Some(Utc.with_ymd_and_hms(2026, 8, 24, 0, 0, 0).unwrap()),
+        session_count: 0,
+    });
+    let rig = rig_with(
+        auth,
+        console(Ok((snapshot, "wrk_1".into()))),
+        scan_seam(local_scan()),
+    );
+
+    rig.poller.refresh_now().await;
+
+    assert!(rig.poller.snapshot().is_some());
+    assert_eq!(rig.poller.headline_resets_at(), None);
+}
+
 /// Without a cookie the local estimate is published with the sign-in caption.
 #[tokio::test]
 async fn test_local_estimate_publishes_when_started_signed_out() {

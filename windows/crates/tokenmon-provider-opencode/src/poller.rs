@@ -297,9 +297,9 @@ impl OpenCodeUsagePoller {
                 Some(c) => Some(c.merged_with_local(local.as_ref())),
                 None => local,
             };
-            let hourly = scan.as_ref().map(|s| {
-                build_day_hourly_usage(&s.rows, now, cal.offset_at(now), MAX_LEGEND_MODELS)
-            });
+            let hourly = scan
+                .as_ref()
+                .map(|s| build_day_hourly_usage(&s.rows, now, &cal, MAX_LEGEND_MODELS));
             let budget = snapshot
                 .as_ref()
                 .and_then(|snap| build_budget(snap, now, load.as_ref(), &cal));
@@ -491,12 +491,9 @@ impl ProviderUsagePoller for OpenCodeUsagePoller {
     }
 
     fn headline_resets_at(&self) -> Option<DateTime<Utc>> {
-        let state = self.state();
-        let snapshot = state.snapshot.as_ref()?;
-        snapshot
-            .window(WindowKind::Monthly)
-            .or_else(|| snapshot.window(WindowKind::Weekly))
-            .and_then(|w| w.resets_at)
+        // Swift `headlineResetsAt` is `nil`: the Overview card takes the
+        // monthly window's own reset, never a weekly fallback.
+        None
     }
 
     fn alert_account(&self) -> Option<String> {

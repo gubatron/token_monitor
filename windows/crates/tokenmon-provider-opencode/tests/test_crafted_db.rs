@@ -26,7 +26,8 @@ fn exercise(path: &Path) {
     let snap = snapshot(&scan, now);
     assert!(snap.monthly_used_percent().is_finite());
     let utc = chrono::FixedOffset::east_opt(0).unwrap();
-    let _ = build_day_hourly_usage(&scan.rows, now, utc, 8);
+    let cal = tokenmon_core::usage::Calendar::fixed(utc);
+    let _ = build_day_hourly_usage(&scan.rows, now, &cal, 8);
 }
 
 fn exercise_bytes(bytes: &[u8]) {
