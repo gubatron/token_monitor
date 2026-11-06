@@ -117,3 +117,23 @@ async fn test_fetch_usage_maps_429_retry_after() {
         }
     );
 }
+
+/// #50: a usage body past the provider's own cap is refused, far below the
+/// shared 16 MiB default.
+#[tokio::test]
+async fn test_usage_body_over_the_claude_cap_is_refused() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .respond_with(ResponseTemplate::new(200).set_body_bytes(vec![
+            b' ';
+            tokenmon_provider_claude::fetch::MAX_RESPONSE_BYTES
+                + 1
+        ]))
+        .mount(&server)
+        .await;
+    let err = client(&server)
+        .fetch_usage(COOKIE, now())
+        .await
+        .unwrap_err();
+    assert!(format!("{err:?}").contains("Response too large"), "{err:?}");
+}

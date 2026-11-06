@@ -22,6 +22,10 @@ use crate::auth::CURSOR_COOKIE_HOSTS;
 /// Production base URL.
 pub const CURSOR_BASE_URL: &str = "https://cursor.com";
 
+/// Largest response accepted: usage summaries are a few KB, event pages a few
+/// MiB at most.
+pub const MAX_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
+
 /// A [`ProviderHttp`] bound to a `cursor.com` base URL.
 ///
 /// Cheap to clone. The wrapped client fixes the error wording
@@ -125,6 +129,7 @@ impl CursorHttp {
             cookie_header: Some(cookie),
             referer: Some(referer),
             origin,
+            max_response_bytes: Some(MAX_RESPONSE_BYTES),
             ..RequestOptions::default()
         }
     }

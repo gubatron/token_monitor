@@ -20,6 +20,10 @@ use crate::snapshot::OpenRouterSnapshot;
 /// Production API base.
 pub const DEFAULT_BASE_URL: &str = "https://openrouter.ai/api/v1";
 
+/// Largest response accepted: key and credits are tiny, the activity list is
+/// bounded to a month of rows.
+pub const MAX_RESPONSE_BYTES: usize = 2 * 1024 * 1024;
+
 /// The three read endpoints.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Endpoint {
@@ -98,6 +102,7 @@ impl EndpointFetcher for ReqwestFetcher {
         Box::pin(async move {
             let options = RequestOptions {
                 bearer_token: Some(self.key.expose()),
+                max_response_bytes: Some(MAX_RESPONSE_BYTES),
                 ..RequestOptions::default()
             };
             self.http

@@ -27,6 +27,11 @@ pub const MAX_SCAN_DEPTH: usize = 4;
 /// Longest path [`scan_protobuf`] can record.
 pub const MAX_SCAN_PATH_LEN: usize = MAX_SCAN_DEPTH + 1;
 
+/// Most fields (varint plus fixed32) one [`scan_protobuf`] call collects; the
+/// walk stops there. A real usage response has a few dozen, so this only
+/// bounds the allocation a hostile body of two-byte fields could force.
+pub const MAX_SCAN_FIELDS: usize = 100_000;
+
 /// Smallest value treated as a plausible Unix reset timestamp.
 const RESET_MIN_SECS: u64 = 1_700_000_000;
 /// Largest value treated as a plausible Unix reset timestamp.
@@ -338,16 +343,48 @@ pub fn looks_like_protobuf(data: &[u8]) -> bool {
 /// length-delimited field is also scanned as a message down to depth 4, so
 /// strings can produce garbage entries; consumers select by exact path. Any
 /// malformed field ends the walk and returns what was collected.
+///
+/// At most [`MAX_SCAN_FIELDS`] fields are collected.
 pub fn scan_protobuf(data: &[u8], order: usize) -> Scan {
+    scan_with_budget(data, order, MAX_SCAN_FIELDS)
+}
+
+/// [`scan_protobuf`] collecting at most `budget` fields.
+fn scan_with_budget(data: &[u8], order: usize, budget: usize) -> Scan {
     let mut scan = Scan {
         order,
         ..Scan::default()
     };
-    scan_into(data, 0, &mut Vec::new(), &mut scan);
+    let mut limits = Limits { budget };
+    scan_into(data, 0, &mut Vec::new(), &mut scan, &mut limits);
     scan
 }
 
-fn scan_into(bytes: &[u8], depth: usize, path: &mut Vec<u64>, scan: &mut Scan) {
+/// Remaining field budget of one walk.
+struct Limits {
+    budget: usize,
+}
+
+impl Limits {
+    /// Takes one field from the budget; `false` when it is spent.
+    fn take(&mut self) -> bool {
+        match self.budget.checked_sub(1) {
+            Some(left) => {
+                self.budget = left;
+                true
+            }
+            None => false,
+        }
+    }
+}
+
+fn scan_into(
+    bytes: &[u8],
+    depth: usize,
+    path: &mut Vec<u64>,
+    scan: &mut Scan,
+    limits: &mut Limits,
+) {
     let end = bytes.len();
     let mut index = 0usize;
     while index < end {
@@ -355,7 +392,7 @@ fn scan_into(bytes: &[u8], depth: usize, path: &mut Vec<u64>, scan: &mut Scan) {
             return;
         };
         path.push(key >> 3);
-        let keep_going = scan_field(bytes, key & 7, &mut index, depth, path, scan);
+        let keep_going = scan_field(bytes, key & 7, &mut index, depth, path, scan, limits);
         path.pop();
         if !keep_going {
             return;
@@ -371,6 +408,7 @@ fn scan_field(
     depth: usize,
     path: &mut Vec<u64>,
     scan: &mut Scan,
+    limits: &mut Limits,
 ) -> bool {
     let end = bytes.len();
     match wire {
@@ -378,6 +416,9 @@ fn scan_field(
             let Some(value) = read_varint(bytes, index, end) else {
                 return false;
             };
+            if !limits.take() {
+                return false;
+            }
             scan.varints.push(VarintField {
                 path: path.clone(),
                 value,
@@ -403,7 +444,7 @@ fn scan_field(
                 return false;
             };
             if depth < MAX_SCAN_DEPTH {
-                scan_into(&bytes[*index..sub_end], depth + 1, path, scan);
+                scan_into(&bytes[*index..sub_end], depth + 1, path, scan, limits);
             }
             *index = sub_end;
             true
@@ -412,6 +453,9 @@ fn scan_field(
             let Some(value) = read_f32_le(bytes, *index).filter(|_| fits(*index, 4, end)) else {
                 return false;
             };
+            if !limits.take() {
+                return false;
+            }
             scan.fixed32.push(Fixed32Field {
                 path: path.clone(),
                 value,
@@ -630,7 +674,8 @@ pub fn parse_usage(data: &[u8], now: DateTime<Utc>) -> Result<Parsed, ProviderEr
 
     let mut all = Scan::default();
     for payload in &payloads {
-        let scan = scan_protobuf(payload, all.order);
+        let used = all.fixed32.len() + all.varints.len();
+        let scan = scan_with_budget(payload, all.order, MAX_SCAN_FIELDS.saturating_sub(used));
         all.fixed32.extend(scan.fixed32);
         all.varints.extend(scan.varints);
         all.order = scan.order;
