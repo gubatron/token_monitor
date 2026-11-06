@@ -86,6 +86,9 @@ jobs:
     timeout-minutes: 20
     defaults:
       run:
+        # A job-level `defaults.run` replaces the workflow-level one, so the
+        # shell is repeated here (Windows runners default to pwsh).
+        shell: bash
         working-directory: windows
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -130,7 +133,8 @@ jobs:
         continue-on-error: true
         run: |
           set -o pipefail
-          cargo deny --manifest-path Cargo.toml check --config deny.toml \
+          # cargo-deny reads deny.toml next to the manifest.
+          cargo deny --manifest-path Cargo.toml check \
             advisories bans licenses sources 2>&1 | tee "$RUNNER_TEMP/deny.log"
 
       - name: Lint summary
@@ -181,6 +185,9 @@ jobs:
       PYTHON: ${{ matrix.os == 'windows-latest' && 'python' || 'python3' }}
     defaults:
       run:
+        # A job-level `defaults.run` replaces the workflow-level one, so the
+        # shell is repeated here (Windows runners default to pwsh).
+        shell: bash
         working-directory: windows
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -246,6 +253,9 @@ jobs:
       SUMMARY_ARTIFACT: windows-coverage-summary-${{ matrix.os }}
     defaults:
       run:
+        # A job-level `defaults.run` replaces the workflow-level one, so the
+        # shell is repeated here (Windows runners default to pwsh).
+        shell: bash
         working-directory: windows
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -335,6 +345,9 @@ jobs:
       RUSTUP_TOOLCHAIN: nightly-2026-10-01
     defaults:
       run:
+        # A job-level `defaults.run` replaces the workflow-level one, so the
+        # shell is repeated here (Windows runners default to pwsh).
+        shell: bash
         working-directory: windows
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -411,6 +424,9 @@ jobs:
     timeout-minutes: 40
     defaults:
       run:
+        # A job-level `defaults.run` replaces the workflow-level one, so the
+        # shell is repeated here (Windows runners default to pwsh).
+        shell: bash
         working-directory: windows
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
