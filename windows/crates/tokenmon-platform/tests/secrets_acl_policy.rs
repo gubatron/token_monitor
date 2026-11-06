@@ -146,3 +146,66 @@ fn owner_only_implementation_restricts_and_stays_usable() {
     fs::write(dir.path().join("new"), b"y").unwrap();
     assert_eq!(fs::read(&file).unwrap(), b"x");
 }
+
+/// Lists the ACEs `icacls` reports for `path`, as `(principal, rights)` pairs.
+///
+/// `icacls` prints the path followed by `DOMAIN\user:(OI)(CI)(F)` lines and a
+/// trailing status line; the path prefix is stripped from the first ACE.
+#[cfg(windows)]
+fn read_back_aces(path: &std::path::Path) -> Vec<(String, String)> {
+    let out = std::process::Command::new("icacls")
+        .arg(path)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "icacls failed: {out:?}");
+    let text = String::from_utf8_lossy(&out.stdout).into_owned();
+    let path_text = path.display().to_string();
+    text.lines()
+        .map(|l| l.trim().trim_start_matches(&path_text).trim())
+        .filter(|l| l.contains(":("))
+        .filter_map(|l| {
+            let (who, rights) = l.split_once(":(")?;
+            Some((who.trim().to_owned(), format!("({rights}")))
+        })
+        .collect()
+}
+
+/// FEAT-core-storage-owner-only-acl: reads the DACL back from disk. The
+/// directory and the file each carry exactly one ACE, for the current user,
+/// with full control, and neither inherits from its parent (no `(I)` flag);
+/// the directory's ACE is inheritable by children.
+#[cfg(windows)]
+#[test]
+fn windows_owner_only_dacl_read_back_has_a_single_current_user_ace() {
+    use tokenmon_core::storage::OwnerOnlyPermissions;
+    use tokenmon_platform::secrets::WindowsOwnerOnly;
+    let dir = TempDir::new().unwrap();
+    let file = dir.path().join("f");
+    fs::write(&file, b"x").unwrap();
+    WindowsOwnerOnly.restrict_directory(dir.path()).unwrap();
+    WindowsOwnerOnly.restrict_file(&file).unwrap();
+
+    let whoami = std::process::Command::new("whoami").output().unwrap();
+    let user = String::from_utf8_lossy(&whoami.stdout)
+        .trim()
+        .to_lowercase();
+
+    let dir_aces = read_back_aces(dir.path());
+    assert_eq!(dir_aces.len(), 1, "directory ACEs: {dir_aces:?}");
+    assert_eq!(dir_aces[0].0.to_lowercase(), user);
+    assert!(dir_aces[0].1.contains("(F)"), "{dir_aces:?}");
+    assert!(dir_aces[0].1.contains("(OI)") && dir_aces[0].1.contains("(CI)"));
+    assert!(
+        !dir_aces[0].1.contains("(I)"),
+        "inherited ACE: {dir_aces:?}"
+    );
+
+    let file_aces = read_back_aces(&file);
+    assert_eq!(file_aces.len(), 1, "file ACEs: {file_aces:?}");
+    assert_eq!(file_aces[0].0.to_lowercase(), user);
+    assert!(file_aces[0].1.contains("(F)"), "{file_aces:?}");
+    assert!(
+        !file_aces[0].1.contains("(I)"),
+        "inherited ACE: {file_aces:?}"
+    );
+}
