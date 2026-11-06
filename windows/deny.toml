@@ -21,6 +21,7 @@ ignore = [
     { id = "RUSTSEC-2026-0371", reason = "zbus_names via zbus in i-slint-backend-winit (Linux desktop portals); Linux-only, absent from the Windows binary." },
     { id = "RUSTSEC-2026-0370", reason = "zvariant via zbus in i-slint-backend-winit (Linux desktop portals); Linux-only, absent from the Windows binary." },
     { id = "RUSTSEC-2026-0372", reason = "zvariant_derive via zbus in i-slint-backend-winit (Linux desktop portals); Linux-only proc-macro, absent from the Windows binary." },
+    { id = "RUSTSEC-2024-0370", reason = "proc-macro-error via glib-macros (gtk-rs 0.18) under tray-icon -> libappindicator; the dependency is cfg(windows) in tokenmon-app and gtk is Linux-only, so it is absent from the Windows binary; compile-time proc-macro only." },
 ]
 
 [licenses]
