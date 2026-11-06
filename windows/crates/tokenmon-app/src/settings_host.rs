@@ -274,11 +274,18 @@ impl SettingsHost for AppHost {
 
     fn update_primary_action(&self) {
         let updates = Arc::clone(&self.parts.updates);
+        let quit = Arc::clone(&self.parts.quit);
         self.parts.handle.spawn(async move {
-            updates
+            let relaunching = updates
                 .checker
                 .perform_primary_action(updates.installer.as_ref())
                 .await;
+            // The relaunched build hands off to us while we hold the
+            // single-instance lock, so a scheduled relaunch needs the normal
+            // quit path (hooks, lock and pipe released) to run now.
+            if relaunching {
+                quit();
+            }
         });
     }
 

@@ -9,11 +9,15 @@ use tokenmon_app::app::{App, AppInputs};
 use tokenmon_app::settings_host::{AppHost, AppSettingsBackend, HostParts, refresh_time};
 use tokenmon_app::sources::HistoryAccess;
 use tokenmon_app::updates::UpdateService;
+use tokenmon_core::BoxFuture;
 use tokenmon_core::ProviderId;
 use tokenmon_core::SystemClock;
 use tokenmon_core::alerts::RecordingNotifier;
 use tokenmon_core::storage::AppPaths;
-use tokenmon_core::update::UrlOpener;
+use tokenmon_core::update::{
+    AppVersion, InstallError, InstallOutcome, InstallRequest, ReleaseFeedFetcher, ReleaseSource,
+    UpdateChecker, UpdateError, UpdateInstaller, UpdateSettings, UrlOpener,
+};
 use tokenmon_platform::secrets::{APP_FALLBACK_POLICY, FakeEncryptor};
 use tokenmon_platform::shell::{DesktopVerb, MemoryRegistry, RunKeyLoginItem};
 use tokenmon_platform::webauth::FakeWebAuthHost;
@@ -53,6 +57,11 @@ struct Fixture {
 }
 
 fn fixture() -> Fixture {
+    fixture_with(None)
+}
+
+/// A fixture whose update service is `updates` (production wiring when `None`).
+fn fixture_with(updates: Option<Arc<UpdateService>>) -> Fixture {
     let dir = tempfile::tempdir().expect("tempdir");
     let app = App::build(
         AppInputs {
@@ -73,10 +82,12 @@ fn fixture() -> Fixture {
     let history = Arc::new(FakeHistory(std::sync::Mutex::default()));
     let quit = Arc::new(AtomicBool::new(false));
     let q = Arc::clone(&quit);
-    let updates = Arc::new(
-        UpdateService::production(&app.settings, "1.2.3", EXE.into(), Arc::new(NoOpener))
-            .expect("updates"),
-    );
+    let updates = updates.unwrap_or_else(|| {
+        Arc::new(
+            UpdateService::production(&app.settings, "1.2.3", EXE.into(), Arc::new(NoOpener))
+                .expect("updates"),
+        )
+    });
     let host = AppHost::new(HostParts {
         settings: Arc::clone(&app.settings),
         model: Arc::clone(&app.model),
@@ -242,4 +253,89 @@ fn test_refresh_time_format() {
         refresh_time(at, FixedOffset::east_opt(0).unwrap()),
         "Jul 10, 2026 at 3:04 PM"
     );
+}
+
+const RELEASE_URL: &str =
+    "https://github.com/gubatron/token_monitor/releases/download/windows-v1.6.0";
+
+struct OneRelease;
+impl ReleaseFeedFetcher for OneRelease {
+    fn fetch(&self) -> BoxFuture<'_, Result<Vec<u8>, UpdateError>> {
+        let body = format!(
+            r#"{{"tag_name":"windows-v1.6.0","html_url":"https://github.com/gubatron/token_monitor/releases/tag/windows-v1.6.0","assets":[{{"name":"tokenmon-windows-x64.zip","browser_download_url":"{RELEASE_URL}/tokenmon-windows-x64.zip","digest":"sha256:{}"}}]}}"#,
+            "c".repeat(64)
+        );
+        Box::pin(async move { Ok(body.into_bytes()) })
+    }
+}
+
+struct AlwaysOn;
+impl UpdateSettings for AlwaysOn {
+    fn checks_for_updates(&self) -> bool {
+        true
+    }
+}
+
+struct FakeInstaller(InstallOutcome);
+impl UpdateInstaller for FakeInstaller {
+    fn can_replace_running_app(&self) -> bool {
+        true
+    }
+    fn install(
+        &self,
+        _request: InstallRequest,
+    ) -> BoxFuture<'_, Result<InstallOutcome, InstallError>> {
+        let outcome = self.0.clone();
+        Box::pin(async move { Ok(outcome) })
+    }
+}
+
+/// A service that already found 1.6.0 and installs through `installer`.
+async fn service_with_update(installer: FakeInstaller) -> Arc<UpdateService> {
+    let checker = Arc::new(UpdateChecker::new(
+        ReleaseSource::default(),
+        AppVersion::parse("1.5.0"),
+        Arc::new(AlwaysOn),
+        Arc::new(OneRelease),
+        Arc::new(NoOpener),
+    ));
+    checker.check_manually().await;
+    assert!(checker.state().available_release.is_some());
+    Arc::new(UpdateService {
+        checker,
+        installer: Arc::new(installer),
+    })
+}
+
+async fn wait_until(mut done: impl FnMut() -> bool) -> bool {
+    for _ in 0..200 {
+        if done() {
+            return true;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    done()
+}
+
+/// Installing an update that schedules a relaunch quits the app, so the
+/// relaunched build is not handed off to a still-running instance (#63).
+#[tokio::test]
+async fn test_installing_an_update_quits_the_running_app() {
+    let f = fixture_with(Some(
+        service_with_update(FakeInstaller(InstallOutcome::Relaunching)).await,
+    ));
+    f.host.update_primary_action();
+    assert!(wait_until(|| f.quit.load(Ordering::SeqCst)).await);
+}
+
+/// An install that needs a manual restart must not quit the app behind the
+/// user's back.
+#[tokio::test]
+async fn test_manual_restart_install_keeps_the_app_running() {
+    let f = fixture_with(Some(
+        service_with_update(FakeInstaller(InstallOutcome::InstalledNeedsManualRestart)).await,
+    ));
+    f.host.update_primary_action();
+    tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+    assert!(!f.quit.load(Ordering::SeqCst));
 }
