@@ -21,6 +21,7 @@ tokenmon-provider-cursor = { path = "../crates/tokenmon-provider-cursor" }
 arbitrary = { version = "1", features = ["derive"] }
 serde_json = "1.0"
 tokenmon-provider-grokbot = { path = "../crates/tokenmon-provider-grokbot" }
+url = "2.5"
 
 # Own workspace: nightly-only, never built by the stable workspace gate.
 [workspace]
@@ -42,6 +43,8 @@ bench = false
 [[bin]]
 name = "tokenmon_core_settings_decode"
 path = "fuzz_targets/tokenmon_core_settings_decode.rs"
+name = "platform_webauth_email"
+path = "fuzz_targets/platform_webauth_email.rs"
 test = false
 doc = false
 bench = false
@@ -49,6 +52,8 @@ bench = false
 [[bin]]
 name = "tokenmon_core_threshold_notifier"
 path = "fuzz_targets/tokenmon_core_threshold_notifier.rs"
+name = "platform_webauth_cookies"
+path = "fuzz_targets/platform_webauth_cookies.rs"
 test = false
 doc = false
 bench = false
@@ -138,6 +143,8 @@ bench = false
 [[bin]]
 name = "opencode_bounds"
 path = "fuzz_targets/opencode_bounds.rs"
+name = "platform_webauth_navigation"
+path = "fuzz_targets/platform_webauth_navigation.rs"
 test = false
 doc = false
 bench = false

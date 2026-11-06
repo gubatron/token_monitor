@@ -288,3 +288,116 @@ fn sign_out_deletions_are_scoped_to_the_provider() {
     assert_eq!(del[0].name, "sessionKey");
     assert_eq!(del[0].domain, ".claude.ai");
 }
+
+// ---- ports of WebKitCookieCaptureTests / ProviderCookieAllowlistTests ----
+
+#[test]
+fn foreign_domain_cookies_are_ignored_by_every_allowlist_policy() {
+    let foreign = |n: &str| {
+        vec![
+            cookie(n, "v", ".evil.example"),
+            cookie(n, "v", "google.com"),
+        ]
+    };
+    for (policy, name) in [
+        (claude_policy(), "sessionKey"),
+        (chatgpt_policy(), "__Secure-next-auth.session-token"),
+        (grok_policy(), "sso"),
+        (opencode_policy(), "auth"),
+    ] {
+        assert!(select(&foreign(name), &policy).is_none(), "{name}");
+    }
+}
+
+#[test]
+fn essential_names_narrow_what_is_stored() {
+    let jar = vec![
+        cookie("sso", "1", ".grok.com"),
+        cookie("sso-rw", "2", ".grok.com"),
+        cookie("cf_clearance", "3", ".grok.com"),
+        cookie("_ga", "4", ".grok.com"),
+    ];
+    let names: Vec<_> = select(&jar, &grok_policy())
+        .unwrap()
+        .into_iter()
+        .map(|c| c.name)
+        .collect();
+    assert_eq!(names, ["sso", "sso-rw"]);
+}
+
+#[test]
+fn empty_allowlist_keeps_broad_capture() {
+    let mut p = grok_policy();
+    p.auth.essential_cookie_names.clear();
+    let jar = vec![
+        cookie("sso", "1", ".grok.com"),
+        cookie("_ga", "4", ".grok.com"),
+    ];
+    assert_eq!(select(&jar, &p).unwrap().len(), 2);
+}
+
+#[test]
+fn other_domain_cookies_are_ignored_but_provider_ones_kept() {
+    let jar = vec![
+        cookie("sso", "1", ".grok.com"),
+        cookie("sso", "x", ".other.com"),
+    ];
+    assert_eq!(select(&jar, &grok_policy()).unwrap().len(), 1);
+}
+
+#[test]
+fn extracts_email_named_cookie_decoded() {
+    let c = cookie("email", "dev%40example.com", "d");
+    assert_eq!(extract_email(&[c]).as_deref(), Some("dev@example.com"));
+}
+
+#[test]
+fn extracts_user_email_named_cookie_case_insensitively() {
+    let c = cookie("User_Email", "dev%40example.com", "d");
+    assert_eq!(extract_email(&[c]).as_deref(), Some("dev@example.com"));
+}
+
+#[test]
+fn falls_back_to_short_value_containing_at() {
+    let c = cookie("account_hint", "me@site.io", "d");
+    assert_eq!(extract_email(&[c]).as_deref(), Some("me@site.io"));
+}
+
+#[test]
+fn rejects_implausible_email_values() {
+    for bad in [
+        "a@b",
+        "@example.com",
+        "user@",
+        "x@y@z.com",
+        "token@abc.12",
+        "user@example.com; path=/",
+        "\"q\"@example.com",
+        "https://u@example.com",
+        "not-an-email@localhost",
+    ] {
+        assert!(!is_plausible_email(bad), "{bad}");
+        assert_eq!(extract_email(&[cookie("email", bad, "d")]), None, "{bad}");
+    }
+}
+
+#[test]
+fn ignores_long_values_with_spaces() {
+    let v = format!("{} and more text @ example.com", "word ".repeat(80));
+    assert_eq!(extract_email(&[cookie("note", &v, "d")]), None);
+}
+
+#[test]
+fn returns_nil_without_email_like_cookies() {
+    let jar = vec![cookie("a", "1", "d"), cookie("b", "plain", "d")];
+    assert_eq!(extract_email(&jar), None);
+}
+
+#[test]
+fn prefers_explicit_email_cookie_over_fallback() {
+    let jar = vec![
+        cookie("first", "other@x.io", "d"),
+        cookie("email", "mine@y.io", "d"),
+    ];
+    assert_eq!(extract_email(&jar).as_deref(), Some("mine@y.io"));
+}
