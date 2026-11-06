@@ -14,7 +14,8 @@ workspace = true
 [dependencies]
 tokenmon-core = { workspace = true }
 chrono = { workspace = true }
-rusqlite = { workspace = true }
+# `hooks` for the progress handler that enforces the query time budget.
+rusqlite = { workspace = true, features = ["hooks"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt"] }

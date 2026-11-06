@@ -4,12 +4,22 @@
 //! reads. This module therefore never creates or modifies the file: it opens
 //! with `SQLITE_OPEN_READ_ONLY` only, uses a plain path, and sets a busy
 //! timeout so a writer holding a lock delays the read instead of failing it.
+//!
+//! The file is another application's data, so it is treated as untrusted:
+//! `SQLITE_DBCONFIG_DEFENSIVE`, `trusted_schema=OFF` and `query_only=ON` are
+//! set, `message` and `session` must be real tables (never views), every
+//! connection has a [`QUERY_BUDGET`] enforced by a progress handler, and the
+//! row set is capped at [`MAX_ROWS`]. Anything over a bound is an error
+//! (rendered as the "unreadable" caption), never a silent partial read.
+//! `immutable=1` is deliberately not used: it makes SQLite ignore the WAL,
+//! which would read stale data from a live OpenCode database.
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 
 use chrono::{DateTime, TimeZone, Utc};
+use rusqlite::config::DbConfig;
 use rusqlite::types::ValueRef;
 use rusqlite::{Connection, OpenFlags};
 use thiserror::Error;
@@ -26,6 +36,18 @@ pub const MAX_ROW_MS: i64 = 253_402_300_799_000;
 
 /// Busy timeout for the read connection.
 pub const BUSY_TIMEOUT: Duration = Duration::from_millis(2000);
+
+/// Wall-clock budget of one read connection (all its queries together). A
+/// crafted or corrupt database cannot pin the polling thread longer.
+pub const QUERY_BUDGET: Duration = Duration::from_secs(5);
+
+/// Most raw message rows one scan may return (a heavy user has well under
+/// 100k in the 62-day window). More is an error; at roughly 200 bytes a row
+/// the cap bounds the scan near 100 MiB.
+pub const MAX_ROWS: usize = 500_000;
+
+/// SQLite VM instructions between progress-handler checks.
+const PROGRESS_INTERVAL: std::os::raw::c_int = 1000;
 
 /// Why the local database could not be read.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -189,17 +211,56 @@ fn query_err(e: &rusqlite::Error) -> DbError {
 /// [`DbError::Missing`] when the file is absent, [`DbError::OpenFailed`]
 /// otherwise.
 pub fn open_read_only(path: &Path) -> Result<Connection, DbError> {
+    open_read_only_with_budget(path, QUERY_BUDGET)
+}
+
+/// [`open_read_only`] with an explicit time budget (tests use a tiny one).
+///
+/// # Errors
+/// As [`open_read_only`]; also [`DbError::OpenFailed`] when `message` or
+/// `session` exists but is not a table.
+pub fn open_read_only_with_budget(path: &Path, budget: Duration) -> Result<Connection, DbError> {
     if !path.is_file() {
         return Err(DbError::Missing(path.display().to_string()));
     }
-    let conn = Connection::open_with_flags(
+    let open_err = |e: rusqlite::Error| DbError::OpenFailed(e.to_string());
+    let mut conn = Connection::open_with_flags(
         path,
         OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
     )
-    .map_err(|e| DbError::OpenFailed(e.to_string()))?;
-    conn.busy_timeout(BUSY_TIMEOUT)
-        .map_err(|e| DbError::OpenFailed(e.to_string()))?;
+    .map_err(open_err)?;
+    conn.busy_timeout(BUSY_TIMEOUT).map_err(open_err)?;
+    conn.set_db_config(DbConfig::SQLITE_DBCONFIG_DEFENSIVE, true)
+        .map_err(open_err)?;
+    conn.set_db_config(DbConfig::SQLITE_DBCONFIG_TRUSTED_SCHEMA, false)
+        .map_err(open_err)?;
+    conn.pragma_update(None, "query_only", "ON")
+        .map_err(open_err)?;
+    let deadline = Instant::now() + budget;
+    conn.progress_handler(PROGRESS_INTERVAL, Some(move || Instant::now() >= deadline))
+        .map_err(open_err)?;
+    require_tables(&conn)?;
     Ok(conn)
+}
+
+/// `message` and `session` must be plain tables: a view (or virtual table)
+/// there could hide an arbitrarily expensive definition.
+fn require_tables(conn: &Connection) -> Result<(), DbError> {
+    let mut stmt = conn
+        .prepare("SELECT name, type FROM sqlite_master WHERE lower(name) IN ('message', 'session')")
+        .map_err(|e| DbError::OpenFailed(e.to_string()))?;
+    let found = stmt
+        .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))
+        .map_err(|e| DbError::OpenFailed(e.to_string()))?;
+    for item in found {
+        let (name, kind) = item.map_err(|e| DbError::OpenFailed(e.to_string()))?;
+        if kind != "table" {
+            return Err(DbError::OpenFailed(format!(
+                "`{name}` is a {kind}, not a table"
+            )));
+        }
+    }
+    Ok(())
 }
 
 const ANCHOR_SQL: &str = "SELECT MIN(time_created) FROM session \
@@ -213,7 +274,8 @@ json_extract(data, '$.tokens.input'), json_extract(data, '$.tokens.output'), \
 json_extract(data, '$.tokens.cache.read'), json_extract(data, '$.tokens.cache.write') \
 FROM message \
 WHERE time_created >= ?1 \
-AND (CASE WHEN json_valid(data) THEN json_extract(data, '$.role') END) = 'assistant'";
+AND (CASE WHEN json_valid(data) THEN json_extract(data, '$.role') END) = 'assistant' \
+LIMIT ?2";
 
 /// Query 1: the earliest non-archived Go session, as the subscription anchor.
 ///
@@ -240,10 +302,35 @@ pub fn read_assistant_message_rows(
     conn: &Connection,
     start_ms: i64,
 ) -> Result<Vec<MessageRow>, DbError> {
+    read_assistant_message_rows_capped(conn, start_ms, MAX_ROWS)
+}
+
+/// [`read_assistant_message_rows`] with an explicit row cap: more than
+/// `max_rows` matching rows is an error, not a truncated result.
+///
+/// # Errors
+/// [`DbError::QueryFailed`], including the time budget and the row cap.
+pub fn read_assistant_message_rows_capped(
+    conn: &Connection,
+    start_ms: i64,
+    max_rows: usize,
+) -> Result<Vec<MessageRow>, DbError> {
     let mut stmt = conn.prepare(ROWS_SQL).map_err(|e| query_err(&e))?;
-    let mut rows = stmt.query([start_ms]).map_err(|e| query_err(&e))?;
+    let limit = i64::try_from(max_rows)
+        .unwrap_or(i64::MAX)
+        .saturating_add(1);
+    let mut rows = stmt
+        .query(rusqlite::params![start_ms, limit])
+        .map_err(|e| query_err(&e))?;
     let mut out = Vec::new();
+    let mut seen = 0usize;
     while let Some(row) = rows.next().map_err(|e| query_err(&e))? {
+        seen += 1;
+        if seen > max_rows {
+            return Err(DbError::QueryFailed(format!(
+                "more than {max_rows} messages in the scan window"
+            )));
+        }
         let get = |i| row.get_ref(i).map_err(|e| query_err(&e));
         let provider_id = coerce_text(get(2)?);
         let model_id = coerce_text(get(3)?);
