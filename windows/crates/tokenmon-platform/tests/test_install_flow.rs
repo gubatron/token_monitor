@@ -18,7 +18,7 @@ use tokenmon_core::update::{
     ReleaseSource, UpdateInstaller,
 };
 use tokenmon_platform::install::{
-    CommandSpec, DownloadedFile, Downloader, PeHeaderVerifier, ProcessLauncher,
+    CommandSpec, DownloadedFile, Downloader, PeHeaderVerifier, ProcessLauncher, SignatureVerifier,
     WindowsUpdateInstaller,
 };
 
@@ -300,7 +300,11 @@ async fn test_msi_is_verified_and_launched() {
         .unwrap();
     assert_eq!(out, InstallOutcome::Relaunching);
     let spawned = r.launcher.spawned.lock().unwrap();
-    assert_eq!(spawned[0].program, "msiexec.exe");
+    let program = spawned[0].program.to_string_lossy().to_lowercase();
+    assert!(
+        program.ends_with(r"\system32\msiexec.exe") && program.len() > "msiexec.exe".len() + 1,
+        "msiexec must be an absolute system path: {program}"
+    );
     let msi = PathBuf::from(&spawned[0].args[1]);
     assert!(msi.starts_with(&r.work) && msi.is_file());
     drop(r.dir);
@@ -319,4 +323,53 @@ async fn test_non_msi_is_refused() {
         Err(InstallError::Verification(_))
     ));
     assert!(r.launcher.spawned.lock().unwrap().is_empty());
+}
+
+/// A verifier that swaps the package after approving it (a TOCTOU attacker).
+struct SwappingVerifier;
+impl SignatureVerifier for SwappingVerifier {
+    fn verify_exe(&self, _: &Path) -> Result<(), InstallError> {
+        Ok(())
+    }
+    fn verify_msi(&self, path: &Path) -> Result<(), InstallError> {
+        let mut evil = fake_msi();
+        evil.extend_from_slice(b"tampered");
+        fs::write(path, evil).unwrap();
+        Ok(())
+    }
+}
+
+/// #46: a package replaced between verification and launch is never run.
+#[tokio::test]
+async fn test_msi_swapped_after_verification_is_not_launched() {
+    let body = fake_msi();
+    let r = rig(body.clone(), false);
+    let installer = WindowsUpdateInstaller::new(
+        ReleaseSource::default(),
+        r.exe.clone(),
+        4242,
+        r.work.clone(),
+        r.downloader.clone(),
+        Arc::new(SwappingVerifier),
+        r.launcher.clone(),
+    );
+    let url = URL.replace(".zip", ".msi");
+    let err = installer
+        .install(request(&body, AssetKind::Msi, &url, "1.5.0", "1.6.0"))
+        .await
+        .unwrap_err();
+    assert!(matches!(err, InstallError::Verification(_)), "{err:?}");
+    assert!(r.launcher.spawned.lock().unwrap().is_empty());
+}
+
+/// #46: msiexec is addressed by absolute system path, never by bare name.
+#[test]
+fn test_msiexec_spec_uses_the_supplied_system_directory() {
+    use tokenmon_platform::install::relaunch::{msiexec_spec, msiexec_spec_in};
+    let spec = msiexec_spec_in(r"C:\Windows\System32\", Path::new(r"C:\t\x.msi"));
+    assert_eq!(spec.program, r"C:\Windows\System32\msiexec.exe");
+    let bare = msiexec_spec(Path::new("x.msi"));
+    let program = bare.program.to_string_lossy().to_lowercase();
+    assert_ne!(program, "msiexec.exe");
+    assert!(program.contains(r"\system32\"));
 }
