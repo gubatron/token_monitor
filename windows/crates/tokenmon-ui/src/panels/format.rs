@@ -77,24 +77,52 @@ pub fn reset_caption_short(at: DateTime<Utc>, tz: FixedOffset) -> String {
     Format::reset_caption(at, "EEE h:mma", tz)
 }
 
-/// Named relative future time, e.g. `Resets in 2 hours`.
+/// Relative reset wording matching SwiftUI's
+/// `date.formatted(.relative(presentation: .named))`, prefixed with `Resets `.
+///
+/// The value is rounded half-up to the nearest whole unit and the unit is the
+/// largest whose rounded value still fits: seconds below a minute, minutes
+/// below an hour, hours below a day, then days (`tomorrow` / `yesterday` for
+/// one). Zero gives `now`; past dates read `N units ago`.
 ///
 /// ```
 /// use chrono::{Duration, TimeZone, Utc};
 /// use tokenmon_ui::panels::format::reset_caption_relative;
 /// let now = Utc.with_ymd_and_hms(2026, 7, 16, 10, 0, 0).unwrap();
 /// assert_eq!(reset_caption_relative(now + Duration::minutes(130), now), "Resets in 2 hours");
-/// assert_eq!(reset_caption_relative(now + Duration::minutes(1), now), "Resets in 1 minute");
+/// assert_eq!(reset_caption_relative(now + Duration::seconds(3599), now), "Resets in 1 hour");
+/// assert_eq!(reset_caption_relative(now, now), "Resets now");
 /// ```
 pub fn reset_caption_relative(at: DateTime<Utc>, now: DateTime<Utc>) -> String {
-    let secs = (at - now).num_seconds().max(0);
-    let (n, unit) = match secs {
-        s if s >= 86_400 => (s / 86_400, "day"),
-        s if s >= 3_600 => (s / 3_600, "hour"),
-        s if s >= 60 => (s / 60, "minute"),
-        s => (s, "second"),
+    let secs = {
+        let ms = (at - now).num_milliseconds();
+        (ms + ms.signum() * 500) / 1_000
     };
-    format!("Resets in {n} {unit}{}", if n == 1 { "" } else { "s" })
+    let abs = secs.abs();
+    let round_div = |unit: i64| (abs * 2 + unit) / (2 * unit);
+    let (n, unit) = if abs < 60 {
+        (abs, "second")
+    } else if round_div(60) < 60 {
+        (round_div(60), "minute")
+    } else if round_div(3_600) < 24 {
+        (round_div(3_600), "hour")
+    } else {
+        (round_div(86_400), "day")
+    };
+    let phrase = match (secs, n, unit) {
+        (0, _, _) => "now".to_owned(),
+        (s, 1, "day") if s > 0 => "tomorrow".to_owned(),
+        (_, 1, "day") => "yesterday".to_owned(),
+        (s, n, unit) => {
+            let plural = if n == 1 { "" } else { "s" };
+            if s > 0 {
+                format!("in {n} {unit}{plural}")
+            } else {
+                format!("{n} {unit}{plural} ago")
+            }
+        }
+    };
+    format!("Resets {phrase}")
 }
 
 /// Abbreviated age used by the stale-data caption: `5 min`, `2 hr`, `3 days`.

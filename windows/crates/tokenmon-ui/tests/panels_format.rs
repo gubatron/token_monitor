@@ -90,11 +90,46 @@ fn test_relative_and_age_text() {
     );
     assert_eq!(
         reset_caption_relative(now - Duration::hours(1), now),
-        "Resets in 0 seconds"
+        "Resets 1 hour ago"
     );
     assert_eq!(age_text(now - Duration::minutes(5), now), "5 min");
     assert_eq!(age_text(now - Duration::hours(2), now), "2 hr");
     assert_eq!(age_text(now - Duration::days(1), now), "1 day");
     assert_eq!(age_text(now - Duration::days(3), now), "3 days");
     assert_eq!(age_text(now + Duration::days(3), now), "0 sec");
+}
+
+/// Boundaries measured against `Date.formatted(.relative(presentation: .named))`
+/// on macOS (issue #58): the Mac rounds to the nearest unit, it never truncates.
+#[test]
+fn test_reset_caption_relative_matches_swift_relative_style() {
+    let now = Utc.with_ymd_and_hms(2026, 7, 16, 10, 0, 0).unwrap();
+    let table: [(i64, &str); 19] = [
+        (0, "Resets now"),
+        (5, "Resets in 5 seconds"),
+        (59, "Resets in 59 seconds"),
+        (60, "Resets in 1 minute"),
+        (89, "Resets in 1 minute"),
+        (90, "Resets in 2 minutes"),
+        (119, "Resets in 2 minutes"),
+        (3599, "Resets in 1 hour"),
+        (3600, "Resets in 1 hour"),
+        (5399, "Resets in 1 hour"),
+        (5400, "Resets in 2 hours"),
+        (7199, "Resets in 2 hours"),
+        (16_800, "Resets in 5 hours"),
+        (17_999, "Resets in 5 hours"),
+        (86_399, "Resets tomorrow"),
+        (86_400, "Resets tomorrow"),
+        (129_600, "Resets in 2 days"),
+        (-30, "Resets 30 seconds ago"),
+        (-3600, "Resets 1 hour ago"),
+    ];
+    for (secs, expected) in table {
+        assert_eq!(
+            reset_caption_relative(now + Duration::seconds(secs), now),
+            expected,
+            "{secs} s"
+        );
+    }
 }
