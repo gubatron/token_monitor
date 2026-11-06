@@ -6,13 +6,14 @@ use std::sync::Arc;
 use tempfile::{Builder, TempDir};
 use tokenmon_core::BoxFuture;
 use tokenmon_core::update::{
-    AssetKind, InstallError, InstallOutcome, InstallRequest, MAX_DOWNLOAD_BYTES,
+    AppVersion, AssetKind, InstallError, InstallOutcome, InstallRequest, MAX_DOWNLOAD_BYTES,
     MAX_EXTRACTED_BYTES, ReleaseSource, Sha256Stream, UpdateInstaller,
     is_repository_release_download,
 };
 
 use super::archive::{extract_zip, locate_exe};
 use super::download::Downloader;
+use super::pe_version::{PackageVersionReader, SystemVersionReader};
 use super::relaunch::{ProcessLauncher, msiexec_spec, relaunch_spec};
 use super::swap::{can_replace_running_exe, commit_swap, stage_next_to};
 use super::verify::SignatureVerifier;
@@ -29,6 +30,7 @@ pub struct WindowsUpdateInstaller {
     downloader: Arc<dyn Downloader>,
     verifier: Arc<dyn SignatureVerifier>,
     launcher: Arc<dyn ProcessLauncher>,
+    versions: Arc<dyn PackageVersionReader>,
 }
 
 impl WindowsUpdateInstaller {
@@ -53,7 +55,15 @@ impl WindowsUpdateInstaller {
             downloader,
             verifier,
             launcher,
+            versions: Arc::new(SystemVersionReader),
         }
+    }
+
+    /// Replaces how a downloaded binary's own version is read (tests).
+    #[must_use]
+    pub fn with_version_reader(mut self, versions: Arc<dyn PackageVersionReader>) -> Self {
+        self.versions = versions;
+        self
     }
 
     fn work_dir(&self) -> Result<TempDir, InstallError> {
@@ -105,6 +115,26 @@ impl WindowsUpdateInstaller {
         Ok(())
     }
 
+    /// The downloaded binary's own version must match the release and be newer
+    /// than the running app: the tag alone could front a replayed older build (#77).
+    fn check_declared_version(
+        req: &InstallRequest,
+        declared: Result<AppVersion, InstallError>,
+    ) -> Result<(), InstallError> {
+        let declared = declared?;
+        if declared <= req.current {
+            return Err(InstallError::Verification(
+                "The download is not newer than this version.".into(),
+            ));
+        }
+        if declared != req.target {
+            return Err(InstallError::Verification(
+                "The download is not the version the release announced.".into(),
+            ));
+        }
+        Ok(())
+    }
+
     async fn install_zip(&self, req: &InstallRequest) -> Result<InstallOutcome, InstallError> {
         let work = self.work_dir()?;
         let zip = self
@@ -114,8 +144,11 @@ impl WindowsUpdateInstaller {
         extract_zip(&zip, &unpacked, MAX_EXTRACTED_BYTES)?;
         let new_exe = locate_exe(&unpacked)?;
         self.verifier.verify_exe(&new_exe)?;
+        Self::check_declared_version(req, self.versions.exe_version(&new_exe))?;
         let staged = stage_next_to(&new_exe, &self.running_exe)?;
         self.verifier.verify_exe(staged.path())?;
+        // What gets installed is the staged copy, so check that one too.
+        Self::check_declared_version(req, self.versions.exe_version(staged.path()))?;
         commit_swap(staged, &self.running_exe)?;
         Ok(self.relaunch())
     }
@@ -149,6 +182,7 @@ impl WindowsUpdateInstaller {
     ) -> Result<InstallOutcome, InstallError> {
         let msi = self.fetch_verified(req, dir, "TokenMon.msi").await?;
         self.verifier.verify_msi(&msi)?;
+        Self::check_declared_version(req, self.versions.msi_version(&msi))?;
         // Close the verify-to-run gap: the file must still be the checked
         // download at the moment msiexec is spawned.
         if hash_file(&msi)? != req.expected_sha256.to_ascii_lowercase() {

@@ -11,15 +11,15 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
-use common::{fake_msi, fake_pe, make_zip, make_zip_with_symlink, sha};
+use common::{fake_msi, fake_pe, make_zip, make_zip_with_symlink, pe_with_version, sha};
 use tokenmon_core::BoxFuture;
 use tokenmon_core::update::{
     AppVersion, AssetKind, InstallError, InstallOutcome, InstallRequest, ReleaseAsset,
     ReleaseSource, UpdateInstaller,
 };
 use tokenmon_platform::install::{
-    CommandSpec, DownloadedFile, Downloader, PeHeaderVerifier, ProcessLauncher, SignatureVerifier,
-    WindowsUpdateInstaller,
+    CommandSpec, DownloadedFile, Downloader, PackageVersionReader, PeHeaderVerifier,
+    ProcessLauncher, SignatureVerifier, SystemVersionReader, WindowsUpdateInstaller,
 };
 
 const URL: &str = "https://github.com/gubatron/token_monitor/releases/download/windows-v1.6.0/tokenmon-windows-x64.zip";
@@ -278,7 +278,6 @@ async fn test_same_version_and_downgrade_are_refused() {
 /// header; the fix for #77 decides how the real resource is read). The
 /// installed exe stays untouched and no siblings or work files remain.
 #[tokio::test]
-#[ignore = "blocked on #77: installer never reads the downloaded exe's version"]
 async fn test_downgrade_of_the_downloaded_exe_is_refused() {
     for downloaded in ["1.4.0", "1.5.0"] {
         let body = make_zip(&[("TokenMon.exe", &fake_pe(&format!("version={downloaded}")))]);
@@ -291,6 +290,96 @@ async fn test_downgrade_of_the_downloaded_exe_is_refused() {
         );
         assert_untouched(&r);
         assert!(r.launcher.spawned.lock().unwrap().is_empty());
+    }
+}
+
+/// #77: an exe newer than the running app but not the announced release is
+/// refused, and so is one with no version resource at all (fail closed).
+#[tokio::test]
+async fn test_exe_that_is_not_the_announced_version_is_refused() {
+    let cases = [
+        (
+            fake_pe("version=1.7.0"),
+            "The download is not the version the release announced.",
+        ),
+        (
+            pe_with_version(None, None, "no resource data"),
+            "The download does not declare a readable version.",
+        ),
+    ];
+    for (exe, message) in cases {
+        let body = make_zip(&[("TokenMon.exe", &exe)]);
+        let r = rig(body.clone(), false);
+        assert_eq!(
+            r.installer.install(zip_req(&body)).await.unwrap_err(),
+            InstallError::Verification(message.into())
+        );
+        assert_untouched(&r);
+    }
+}
+
+/// Reads the version of an MSI from a fixed value (stands in for `msi.dll`).
+struct FixedMsiVersion(&'static str);
+impl PackageVersionReader for FixedMsiVersion {
+    fn exe_version(&self, path: &Path) -> Result<AppVersion, InstallError> {
+        SystemVersionReader.exe_version(path)
+    }
+    fn msi_version(&self, _: &Path) -> Result<AppVersion, InstallError> {
+        Ok(AppVersion::parse(self.0).unwrap())
+    }
+}
+
+fn msi_rig(body: &[u8], declared: &'static str) -> (Rig, WindowsUpdateInstaller) {
+    let r = rig(body.to_vec(), false);
+    let installer = WindowsUpdateInstaller::new(
+        ReleaseSource::default(),
+        r.exe.clone(),
+        4242,
+        r.work.clone(),
+        r.downloader.clone(),
+        Arc::new(PeHeaderVerifier),
+        r.launcher.clone(),
+    )
+    .with_version_reader(Arc::new(FixedMsiVersion(declared)));
+    (r, installer)
+}
+
+/// #77: the MSI's own ProductVersion is checked like the exe's.
+#[tokio::test]
+async fn test_msi_product_version_must_be_newer_and_match_the_tag() {
+    let body = fake_msi();
+    let url = URL.replace(".zip", ".msi");
+    for (declared, ok, message) in [
+        ("1.6.0", true, ""),
+        (
+            "1.4.0",
+            false,
+            "The download is not newer than this version.",
+        ),
+        (
+            "1.5.0",
+            false,
+            "The download is not newer than this version.",
+        ),
+        (
+            "1.7.0",
+            false,
+            "The download is not the version the release announced.",
+        ),
+    ] {
+        let (r, installer) = msi_rig(&body, declared);
+        let result = installer
+            .install(request(&body, AssetKind::Msi, &url, "1.5.0", "1.6.0"))
+            .await;
+        if ok {
+            assert_eq!(result.unwrap(), InstallOutcome::Relaunching);
+        } else {
+            assert_eq!(
+                result.unwrap_err(),
+                InstallError::Verification(message.into())
+            );
+            assert!(r.launcher.spawned.lock().unwrap().is_empty(), "{declared}");
+        }
     }
 }
 
@@ -312,11 +401,10 @@ async fn test_not_replaceable_is_refused_without_request() {
 #[tokio::test]
 async fn test_msi_is_verified_and_launched() {
     let body = fake_msi();
-    let r = rig(body.clone(), false);
+    let (r, installer) = msi_rig(&body, "1.6.0");
     fs::remove_file(&r.exe).unwrap(); // MSI path does not need a replaceable exe
     let url = URL.replace(".zip", ".msi");
-    let out = r
-        .installer
+    let out = installer
         .install(request(&body, AssetKind::Msi, &url, "1.5.0", "1.6.0"))
         .await
         .unwrap();
@@ -374,7 +462,8 @@ async fn test_msi_swapped_after_verification_is_not_launched() {
         r.downloader.clone(),
         Arc::new(SwappingVerifier),
         r.launcher.clone(),
-    );
+    )
+    .with_version_reader(Arc::new(FixedMsiVersion("1.6.0")));
     let url = URL.replace(".zip", ".msi");
     let err = installer
         .install(request(&body, AssetKind::Msi, &url, "1.5.0", "1.6.0"))
