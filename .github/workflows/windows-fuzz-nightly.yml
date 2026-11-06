@@ -1,0 +1,256 @@
+name: Windows fuzz (nightly)
+
+# Long fuzzing for windows/fuzz: 10 minutes per target, continuing from the
+# corpus the previous nightly run left (plus the committed seed corpus). The
+# grown corpus is minimized with `cargo fuzz cmin` and uploaded as an artifact
+# for the next run. A crash fails the run, prints the input as hex and base64
+# in the job summary, and opens (or comments on) a GitHub issue labeled
+# windows-port with the same details, so it gets triaged without anyone
+# downloading artifacts.
+#
+# Scheduled workflows only fire from the default branch (master); until this
+# file is there, run it by hand: `gh workflow run windows-fuzz-nightly.yml
+# --ref windows-port`. A push that edits this file runs a 30 s self-test.
+
+on:
+  schedule:
+    - cron: "41 6 * * *" # daily, 06:41 UTC
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: "Seconds to fuzz each target"
+        required: false
+        default: "600"
+  push:
+    branches: [windows-port]
+    paths:
+      - ".github/workflows/windows-fuzz-nightly.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-fuzz-nightly-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_FUZZ_VERSION: "0.13.2"
+  CARGO_FUZZ_SHA256: "b5b704018b63e0f151c17a057ac53b5111e1db545d1b9f72fee79f08a545931c"
+  # 10 minutes on schedule, the input on dispatch, a short self-test on push.
+  FUZZ_SECONDS: ${{ github.event_name == 'push' && '30' || inputs.seconds || '600' }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  targets:
+    name: List fuzz targets
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      targets: ${{ steps.list.outputs.targets }}
+      count: ${{ steps.list.outputs.count }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # A scheduled run starts on master; the port lives on windows-port.
+          ref: ${{ github.event_name == 'schedule' && 'windows-port' || '' }}
+
+      - name: List targets in windows/fuzz
+        id: list
+        run: |
+          set -euo pipefail
+          listing=$(python3 -I windows/scripts/ci/fuzz_targets.py windows/fuzz/Cargo.toml)
+          echo "$listing" | tee -a "$GITHUB_OUTPUT"
+          if grep -qx 'count=0' <<<"$listing"; then
+            {
+              echo "### Nightly fuzz"
+              echo
+              echo "No fuzz targets yet: \`windows/fuzz/Cargo.toml\` is missing or declares no \`[[bin]]\` targets."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  fuzz:
+    name: Fuzz ${{ matrix.target }}
+    needs: targets
+    if: needs.targets.outputs.count != '0'
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJSON(needs.targets.outputs.targets) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      actions: read # download the previous nightly corpus
+    env:
+      # Same pin as the fuzz-smoke job in windows-ci.yml; overrides
+      # windows/rust-toolchain.toml for every cargo call in this job.
+      RUSTUP_TOOLCHAIN: nightly-2026-10-01
+      CORPUS_ARTIFACT: windows-fuzz-corpus-${{ matrix.target }}
+    defaults:
+      run:
+        working-directory: windows
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event_name == 'schedule' && 'windows-port' || '' }}
+
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master (2026-10-16)
+        with:
+          toolchain: ${{ env.RUSTUP_TOOLCHAIN }}
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: windows/fuzz -> target
+          shared-key: fuzz
+
+      - name: Install cargo-fuzz (pinned, checksummed)
+        run: |
+          set -euo pipefail
+          url="https://github.com/rust-fuzz/cargo-fuzz/releases/download/v${CARGO_FUZZ_VERSION}/cargo-fuzz-${CARGO_FUZZ_VERSION}-x86_64-unknown-linux-musl.tar.gz"
+          curl -fsSL --retry 3 "$url" -o "$RUNNER_TEMP/cargo-fuzz.tgz"
+          echo "${CARGO_FUZZ_SHA256}  $RUNNER_TEMP/cargo-fuzz.tgz" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/cargo-fuzz"
+          tar -xzf "$RUNNER_TEMP/cargo-fuzz.tgz" -C "$RUNNER_TEMP/cargo-fuzz"
+          install "$(find "$RUNNER_TEMP/cargo-fuzz" -type f -name cargo-fuzz | head -n 1)" "$HOME/.cargo/bin/cargo-fuzz"
+          cargo fuzz --version | grep -F "$CARGO_FUZZ_VERSION"
+
+      - name: Restore the previous nightly corpus
+        id: corpus
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          # Any branch: scheduled runs are recorded against master, dispatches
+          # against windows-port; the corpus is valid for both.
+          bash scripts/ci/fetch_baseline.sh "$CORPUS_ARTIFACT" "$RUNNER_TEMP/prev-corpus" "*"
+          mkdir -p "fuzz/corpus/$TARGET"
+          committed=$(find "fuzz/corpus/$TARGET" -maxdepth 1 -type f | wc -l)
+          if [ -d "$RUNNER_TEMP/prev-corpus" ]; then
+            # Corpus files are named by content hash: never overwrite a committed seed.
+            find "$RUNNER_TEMP/prev-corpus" -maxdepth 1 -type f ! -name '.*' -exec cp -n {} "fuzz/corpus/$TARGET/" \;
+          fi
+          total=$(find "fuzz/corpus/$TARGET" -maxdepth 1 -type f | wc -l)
+          echo "Corpus for $TARGET: $committed committed + $((total - committed)) from the previous nightly."
+
+      - name: Fuzz ${{ matrix.target }} for ${{ env.FUZZ_SECONDS }} s, then cmin
+        run: bash scripts/ci/fuzz_run.sh --seconds "$FUZZ_SECONDS" --cmin --out "$RUNNER_TEMP/fuzz" "${{ matrix.target }}"
+
+      - name: Fuzz summary
+        if: always()
+        run: |
+          set -uo pipefail
+          shopt -s nullglob
+          rows=("$RUNNER_TEMP"/fuzz/rows/*.json)
+          python3 -I scripts/ci/fuzz_report.py table \
+            --title "Nightly fuzz: ${{ matrix.target }} (${FUZZ_SECONDS} s, $RUSTUP_TOOLCHAIN)" \
+            --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            "${rows[@]}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload minimized corpus (next run's starting point)
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ env.CORPUS_ARTIFACT }}
+          path: windows/fuzz/corpus/${{ matrix.target }}/
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Upload the result row (for the crash issue)
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-fuzz-row-${{ matrix.target }}
+          path: ${{ runner.temp }}/fuzz/rows/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload crash inputs and logs
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-fuzz-crashes-${{ matrix.target }}
+          path: |
+            ${{ runner.temp }}/fuzz/crashes/
+            ${{ runner.temp }}/fuzz/logs/
+          if-no-files-found: ignore
+          retention-days: 30
+
+  report:
+    name: Summary and crash issues
+    needs: [targets, fuzz]
+    if: always() && needs.targets.outputs.count != '0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read # download this run's result rows
+      issues: write # open or update the crash issue
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event_name == 'schedule' && 'windows-port' || '' }}
+          sparse-checkout: windows/scripts/ci
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: windows-fuzz-row-*
+          path: ${{ runner.temp }}/rows
+          merge-multiple: true
+
+      - name: All targets
+        id: table
+        run: |
+          set -uo pipefail
+          shopt -s nullglob
+          rows=("$RUNNER_TEMP"/rows/*.json)
+          python3 -I windows/scripts/ci/fuzz_report.py table \
+            --title "Nightly fuzz: all targets (${FUZZ_SECONDS} s each)" \
+            --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            "${rows[@]}" > "$RUNNER_TEMP/table.md"
+          echo "status=$?" >> "$GITHUB_OUTPUT"
+          # The per-target jobs already show crash details; keep the table only.
+          sed '/^#### /,$d' "$RUNNER_TEMP/table.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Open or update a windows-port issue per crashing target
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          for row in "$RUNNER_TEMP"/rows/*.json; do
+            [ "$(jq -r .status "$row")" = crash ] || continue
+            target=$(jq -r .target "$row")
+            kind=$(jq -r .crash.kind "$row")
+            title="[fuzz] $target: $kind found by nightly fuzzing"
+            body="$RUNNER_TEMP/issue-$target.md"
+            {
+              echo "Nightly fuzzing of \`windows/fuzz\` target \`$target\` found a $kind."
+              echo
+              python3 -I windows/scripts/ci/fuzz_report.py crash-md "$row" --run-url "$RUN_URL"
+              echo
+              echo "Owner: the workstream that owns this parser (windows/docs/IMPLEMENTATION_PLAN.md)."
+            } > "$body"
+            existing=$(gh issue list -R "$GITHUB_REPOSITORY" --state open --label windows-port \
+              --search "\"[fuzz] $target:\" in:title" --json number,title \
+              --jq "[.[] | select(.title == \"$title\")][0].number // empty")
+            if [ -n "$existing" ]; then
+              gh issue comment "$existing" -R "$GITHUB_REPOSITORY" --body-file "$body"
+              echo "- \`$target\`: commented on #$existing" >> "$GITHUB_STEP_SUMMARY"
+            else
+              url=$(gh issue create -R "$GITHUB_REPOSITORY" --title "$title" --label windows-port --body-file "$body")
+              echo "- \`$target\`: opened $url" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+
+      - name: Fail when a target crashed or did not run
+        if: steps.table.outputs.status != '0'
+        run: exit 1
