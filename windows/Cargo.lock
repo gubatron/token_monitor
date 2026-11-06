@@ -1885,7 +1885,7 @@ version = "0.1.0"
 dependencies = [
  "thiserror",
  "tokenmon-core",
- "windows-sys",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
