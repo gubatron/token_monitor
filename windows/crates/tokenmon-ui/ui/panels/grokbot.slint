@@ -1,0 +1,33 @@
+import { PanelShell } from "shell.slint";
+import { PanelHeader, PoolCard, DailyCard, MetricGrid, ModelsCard, FooterBlock, MessageBlock, Card, SectionHeader, Caption, UsageTrack, Palette } from "parts.slint";
+import { TrackData, MetricData, ModelsData, DailyData, FooterData, HeaderData, SegmentData, ChipData, TabRowData } from "types.slint";
+
+// Grokbot panel (spec 02 section 2.6).
+export component GrokbotPanel inherits PanelShell {
+    in property <HeaderData> header;
+    in property <bool> has-usage;
+    in property <string> message;
+    in property <string> button;
+    in property <string> pool-title;
+    in property <string> pool-used;
+    in property <string> entitlement;
+    in property <[TrackData]> tracks;
+    in property <string> no-allowance;
+    in property <DailyData> daily;
+    in property <FooterData> footer;
+    PanelHeader { data: root.header; }
+    if !has-usage: MessageBlock { text: root.message; button: root.button; }
+    if has-usage: Card {
+        HorizontalLayout {
+            spacing: 8px;
+            SectionHeader { text: root.pool-title; }
+            Rectangle { }
+            Text { text: root.pool-used; font-size: 12px; font-weight: 600; color: Palette.primary; }
+        }
+        Caption { text: root.entitlement; }
+        for t in root.tracks: UsageTrack { data: t; }
+        if no-allowance != "": Caption { text: root.no-allowance; }
+    }
+    if has-usage && daily.present: DailyCard { data: root.daily; }
+    if has-usage: FooterBlock { data: root.footer; }
+}

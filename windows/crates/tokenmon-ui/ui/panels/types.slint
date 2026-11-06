@@ -1,0 +1,126 @@
+// Data structs filled by src/panels/bridge.rs from the plain-Rust view models.
+// The .slint panels only lay out these values; every string is decided in Rust.
+
+export struct TrackData {
+    label: string,
+    show-label: bool,
+    used-text: string,
+    fraction: float,
+    color: color,
+    caption: string,
+    caption-warning: bool,
+}
+
+export struct MetricData {
+    title: string,
+    value: string,
+}
+
+export struct ModelRowData {
+    name: string,
+    cost: string,
+    tag: string,
+    share: float,
+    color: color,
+}
+
+export struct ModelsData {
+    present: bool,
+    title: string,
+    collapsible: bool,
+    expanded: bool,
+    toggle: string,
+    rows: [ModelRowData],
+}
+
+export struct BarData {
+    fill-height: length,
+    fill-opacity: float,
+    value-label: string,
+    weekday: string,
+    label-opacity: float,
+    color: color,
+    hover-title: string,
+    hover-usage: string,
+    hover-tokens: string,
+    hover-cost: string,
+}
+
+export struct DailyData {
+    present: bool,
+    title: string,
+    allowance: string,
+    range: string,
+    has-nav: bool,
+    can-next: bool,
+    bars: [BarData],
+    footer: string,
+}
+
+export struct SegmentData {
+    x: length,
+    width: length,
+    color: color,
+    grey: bool,
+}
+
+export struct ChipData {
+    name: string,
+    percent: string,
+    color: color,
+}
+
+export struct FooterData {
+    stale-message: string,
+    stale-age: string,
+    sign-in-again: string,
+    error-text: string,
+    sign-out-confirm: string,
+}
+
+export struct HeaderData {
+    title: string,
+    meta: string,
+    accent: color,
+}
+
+export struct HourBarData {
+    bar-height: length,
+    segments: [HourSegData],
+    axis-label: string,
+    tooltip: string,
+}
+
+export struct HourSegData {
+    height: length,
+    color: color,
+}
+
+export struct LegendData {
+    title: string,
+    color: color,
+}
+
+export struct OverviewCardData {
+    title: string,
+    meta: string,
+    used-text: string,
+    fraction: float,
+    color: color,
+    caption: string,
+    caption-tertiary: bool,
+    sign-in: string,
+    has-sign-out: bool,
+}
+
+export struct TabData {
+    label: string,
+    selected: bool,
+    present: bool,
+    divider: bool,
+}
+
+export struct TabRowData {
+    top-divider: bool,
+    cells: [TabData],
+}

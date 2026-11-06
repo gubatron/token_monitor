@@ -1,0 +1,61 @@
+import { PanelShell } from "shell.slint";
+import { PanelHeader, PoolCard, DailyCard, MetricGrid, ModelsCard, FooterBlock, MessageBlock, Card, SectionHeader, Caption, UsageTrack, Palette } from "parts.slint";
+import { TrackData, MetricData, ModelsData, DailyData, FooterData, HeaderData, SegmentData, ChipData, TabRowData } from "types.slint";
+
+// Grok panel (spec 02 section 1.7).
+export component GrokPanel inherits PanelShell {
+    in property <HeaderData> header;
+    in property <bool> has-usage;
+    in property <string> message;
+    in property <string> button;
+    in property <string> pool-title;
+    in property <string> pool-used;
+    in property <[SegmentData]> segments;
+    in property <string> reset-caption;
+    in property <bool> has-categories;
+    in property <[ChipData]> chips;
+    in property <string> extra-credits;
+    in property <DailyData> daily;
+    in property <FooterData> footer;
+    PanelHeader { data: root.header; }
+    if !has-usage: MessageBlock { text: root.message; button: root.button; }
+    if has-usage: Card {
+        HorizontalLayout {
+            spacing: 8px;
+            SectionHeader { text: root.pool-title; }
+            Rectangle { }
+            Text { text: root.pool-used; font-size: 12px; font-weight: 600; color: Palette.primary; }
+        }
+        Rectangle {
+            height: 8px;
+            for seg in root.segments: Rectangle {
+                x: seg.x;
+                width: seg.width;
+                border-radius: 2px;
+                background: seg.grey ? Palette.track : seg.color;
+            }
+        }
+        if root.reset-caption != "": Caption { text: root.reset-caption; }
+    }
+    if has-usage && has-categories: Card {
+        SectionHeader { text: "CATEGORIES"; }
+        HorizontalLayout {
+            spacing: 12px;
+            for chip in root.chips: HorizontalLayout {
+                spacing: 5px;
+                Rectangle { width: 7px; height: 7px; border-radius: 3.5px; background: chip.color; y: 5px; }
+                Text { text: chip.name; font-size: 12px; font-weight: 600; color: Palette.primary; }
+                Text { text: chip.percent; font-size: 12px; font-weight: 600; color: Palette.primary; }
+            }
+        }
+    }
+    if has-usage && extra-credits != "": Card {
+        HorizontalLayout {
+            SectionHeader { text: "EXTRA CREDITS"; }
+            Rectangle { }
+            Text { text: root.extra-credits; font-size: 12px; font-weight: 600; color: Palette.primary; }
+        }
+    }
+    if has-usage && daily.present: DailyCard { data: root.daily; }
+    if has-usage: FooterBlock { data: root.footer; }
+}
