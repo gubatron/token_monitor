@@ -47,6 +47,46 @@ make test
 make test-core
 ```
 
+## Windows parity (zero drift)
+
+TokenMon also has a Windows port, a Rust app under `windows/`. The two apps must
+not drift apart: every behavior change on macOS needs the same change on
+Windows, or an issue that tracks it. CI enforces this on every push and pull
+request, `master` included (`.github/workflows/windows-parity.yml`):
+
+- **Drift guard.** A change that touches `TokenMon/`, `TokenMonTests/` or
+  `Tests/` must also touch `windows/`, or reference an **open** issue labeled
+  `windows-parity` (for example `Refs #123` in the pull request description, or
+  in the commit message for a direct push). Otherwise the check fails.
+- **Parity ledger.** `windows/docs/PARITY.md` has one row per Swift test (every
+  XCTest method and every `make test-core` check) giving its status (`todo`,
+  `ported` or `n/a` with a reason) and the Rust test that covers it. Adding,
+  renaming or deleting a Swift test without updating the ledger fails CI.
+
+To satisfy it, do one of these:
+
+1. **Port it.** Make the same change under `windows/`, with Rust tests, and
+   update the matching `PARITY.md` rows in the same commit. See
+   `windows/docs/IMPLEMENTATION_PLAN.md`.
+2. **Track it.** If you are not porting it yourself, open an issue labeled
+   `windows-parity` that says what the Windows port must do, and reference it
+   from the pull request. For a new or renamed Swift test, also add its `todo`
+   row: `python3 windows/scripts/parity/check_parity.py --print-missing-rows`
+   prints the rows to paste.
+
+Changes merged from upstream (faulknerpearce/token_monitor) into `master`
+cannot carry a reference, so the guard fails on that push and says so. Open a
+`windows-parity` issue that names the merge commit SHA and the upstream pull
+request, then re-run the failed job; an open `windows-parity` issue that
+mentions the commit satisfies the guard.
+
+Check locally before pushing:
+
+```bash
+python3 windows/scripts/parity/check_parity.py
+python3 -m unittest discover -s windows/scripts/parity/tests
+```
+
 ## Pull requests
 
 1. Branch from `master`.
