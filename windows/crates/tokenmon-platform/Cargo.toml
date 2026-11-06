@@ -44,7 +44,7 @@ tracing = { workspace = true }
 # Wipes decrypted secrets and plaintext vault JSON when dropped.
 zeroize = "1.8"
 reqwest = { workspace = true }
-tokio = { workspace = true, features = ["rt"] }
+tokio = { workspace = true, features = ["rt", "sync"] }
 zip = { workspace = true }
 tempfile = { workspace = true }
 url = { workspace = true }
@@ -52,6 +52,12 @@ url = { workspace = true }
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_NetworkManagement_IpHelper",
+    "Win32_NetworkManagement_Ndis",
+    "Win32_Networking_WinSock",
+    "Win32_System_LibraryLoader",
+    "Win32_UI_WindowsAndMessaging",
     "Win32_Security",
     "Win32_Security_Cryptography",
     "Win32_Storage_FileSystem",
@@ -76,5 +82,5 @@ windows = { version = "0.62", features = [
 
 [dev-dependencies]
 tempfile = { workspace = true }
-tokio = { workspace = true, features = ["rt", "macros"] }
+tokio = { workspace = true, features = ["rt", "macros", "time", "test-util"] }
 wiremock = { workspace = true }
