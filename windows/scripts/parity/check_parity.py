@@ -173,6 +173,10 @@ def check_rust_ref(ref: str, windows_root: Path) -> str | None:
         return f"`{ref}` must be a path inside windows/"
     path = windows_root / rel
     if not path.is_file():
+        if rel.parts[:1] == ("windows",):
+            # Strict on purpose: one canonical form keeps the ledger greppable.
+            return (f"`{ref}`: paths are relative to windows/, so drop the leading "
+                    f"`windows/` (use `{Path(*rel.parts[1:]).as_posix()}`)")
         return f"`{ref}`: file windows/{rel.as_posix()} does not exist"
     source = path.read_text(encoding="utf-8", errors="replace")
     if not re.search(rf"\bfn\s+{re.escape(match.group('fn'))}\s*[(<]", source):
