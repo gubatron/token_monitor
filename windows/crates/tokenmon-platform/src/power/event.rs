@@ -1,5 +1,7 @@
 //! Decoding of `WM_POWERBROADCAST` and connectivity levels into gate events.
 
+use std::time::{Duration, Instant};
+
 /// `PBT_APMSUSPEND`: the system is about to suspend.
 pub const PBT_APMSUSPEND: u32 = 0x0004;
 /// `PBT_APMRESUMESUSPEND`: resumed after a user-visible suspend.
@@ -35,40 +37,60 @@ pub const fn decode_power_broadcast(wparam: u32) -> Option<PowerEvent> {
     }
 }
 
-/// Collapses repeated resume messages: one [`PowerEvent::DidWake`] per sleep.
+/// Resume messages closer together than this are one wake (Windows sends
+/// `PBT_APMRESUMEAUTOMATIC` and `PBT_APMRESUMESUSPEND` within milliseconds, and
+/// registering for suspend/resume notifications can repeat them).
+pub const RESUME_DEDUPE_WINDOW: Duration = Duration::from_secs(5);
+
+/// Collapses the resume messages of one wake into a single
+/// [`PowerEvent::DidWake`].
 ///
-/// Windows sends `PBT_APMRESUMEAUTOMATIC` and `PBT_APMRESUMESUSPEND` together.
-/// A wake is passed once; further wakes are dropped until the next sleep. A
-/// wake with no preceding sleep (Modern Standby without a suspend message)
-/// still passes the first time.
+/// A wake passes unless another wake passed within [`RESUME_DEDUPE_WINDOW`]; a
+/// suspend always passes and forgets the last wake, so every suspend to resume
+/// pair yields one wake. Dedupe is by time, not "until the next suspend",
+/// because Modern Standby can resume repeatedly without any suspend message.
 ///
 /// ```
+/// use std::time::{Duration, Instant};
 /// use tokenmon_platform::power::{PowerEvent, ResumeDeduper};
+/// let t0 = Instant::now();
 /// let mut d = ResumeDeduper::default();
-/// assert_eq!(d.accept(0x12), Some(PowerEvent::DidWake));
-/// assert_eq!(d.accept(0x07), None);
-/// assert_eq!(d.accept(0x04), Some(PowerEvent::WillSleep));
-/// assert_eq!(d.accept(0x07), Some(PowerEvent::DidWake));
+/// assert_eq!(d.accept_at(0x12, t0), Some(PowerEvent::DidWake));
+/// assert_eq!(d.accept_at(0x07, t0 + Duration::from_millis(20)), None);
+/// // A later Modern Standby resume with no suspend message still wakes.
+/// assert_eq!(d.accept_at(0x12, t0 + Duration::from_secs(600)), Some(PowerEvent::DidWake));
 /// ```
 #[derive(Debug, Clone, Copy, Default)]
 pub struct ResumeDeduper {
-    woke_since_sleep: bool,
+    last_wake: Option<Instant>,
 }
 
 impl ResumeDeduper {
-    /// Decodes `wparam` and returns the event to forward, if any.
-    ///
-    /// Mutation is the point of a dedupe filter: it is one bool of state.
+    /// Decodes `wparam` observed now and returns the event to forward, if any.
     pub fn accept(&mut self, wparam: u32) -> Option<PowerEvent> {
+        self.accept_at(wparam, Instant::now())
+    }
+
+    /// As [`accept`](Self::accept) with an explicit observation time, so the
+    /// window logic is testable without sleeping.
+    ///
+    /// Mutation is the point of a dedupe filter: it is one timestamp of state.
+    pub fn accept_at(&mut self, wparam: u32, now: Instant) -> Option<PowerEvent> {
         match decode_power_broadcast(wparam)? {
             PowerEvent::WillSleep => {
-                self.woke_since_sleep = false;
+                self.last_wake = None;
                 Some(PowerEvent::WillSleep)
             }
-            PowerEvent::DidWake if self.woke_since_sleep => None,
             PowerEvent::DidWake => {
-                self.woke_since_sleep = true;
-                Some(PowerEvent::DidWake)
+                let repeat = self
+                    .last_wake
+                    .is_some_and(|last| now.saturating_duration_since(last) < RESUME_DEDUPE_WINDOW);
+                if repeat {
+                    None
+                } else {
+                    self.last_wake = Some(now);
+                    Some(PowerEvent::DidWake)
+                }
             }
         }
     }
