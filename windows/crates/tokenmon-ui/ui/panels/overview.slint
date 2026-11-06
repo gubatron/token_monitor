@@ -1,0 +1,83 @@
+import { PanelShell } from "shell.slint";
+import { PanelHeader, PoolCard, DailyCard, MetricGrid, ModelsCard, FooterBlock, MessageBlock, Card, SectionHeader, Caption, UsageTrack, Palette } from "parts.slint";
+import { TrackData, MetricData, ModelsData, DailyData, FooterData, HeaderData, SegmentData, ChipData, TabRowData, OverviewCardData, HourBarData, LegendData } from "types.slint";
+
+// Overview panel (spec 04 section 3.5).
+export component OverviewPanel inherits PanelShell {
+    in property <string> version;
+    in property <[OverviewCardData]> cards;
+    in property <string> daily-title;
+    in property <bool> has-nav;
+    in property <[HourBarData]> hours;
+    in property <[LegendData]> legend;
+    in property <string> empty-message;
+    HorizontalLayout {
+        spacing: 8px;
+        height: 24px;
+        Rectangle { width: 24px; height: 24px; border-radius: 12px; background: Palette.primary; }
+        Text { text: "TokenMon"; font-size: 13px; font-weight: 600; color: Palette.primary; vertical-alignment: center; }
+        Rectangle { }
+        Text { text: root.version; font-size: 12px; font-weight: 600; color: Palette.tertiary; vertical-alignment: center; }
+        Text { text: "⚙"; font-size: 12px; color: Palette.secondary; vertical-alignment: center; }
+    }
+    for c in root.cards: Card {
+        HorizontalLayout {
+            spacing: 8px;
+            Rectangle { width: 14px; height: 14px; border-radius: 7px; background: c.color; y: 2px; }
+            Text { text: c.title; font-size: 13px; font-weight: 600; color: Palette.primary; }
+            SectionHeader { text: c.meta; vertical-alignment: center; }
+            Rectangle { }
+            Text { text: c.used-text; font-size: 12px; font-weight: 600; color: Palette.primary; }
+        }
+        Rectangle {
+            height: 8px;
+            border-radius: 4px;
+            background: Palette.track;
+            Rectangle { x: 0; width: parent.width * c.fraction; border-radius: 4px; background: c.color; }
+        }
+        if c.caption != "": Caption { text: c.caption; tertiary: c.caption-tertiary; }
+        if c.sign-in != "": Text { text: c.sign-in; font-size: 11px; color: Palette.primary; }
+        if c.has-sign-out: Text { text: "⏏"; font-size: 11px; color: Palette.tertiary; horizontal-alignment: right; }
+    }
+    Card {
+        SectionHeader { text: root.daily-title; }
+        if root.empty-message != "": Caption { text: root.empty-message; tertiary: true; min-height: 48px; }
+        if root.empty-message == "": VerticalLayout {
+            spacing: 8px;
+            HorizontalLayout {
+                alignment: center;
+                spacing: 2px;
+                for h in root.hours: VerticalLayout {
+                    spacing: 5px;
+                    width: 20px;
+                    Rectangle {
+                        height: 68px;
+                        VerticalLayout {
+                            alignment: end;
+                            Rectangle {
+                                width: 12px;
+                                height: h.bar-height > 0px ? h.bar-height : 2px;
+                                border-radius: 5px;
+                                background: h.bar-height > 0px ? transparent : Palette.track;
+                                clip: true;
+                                VerticalLayout {
+                                    alignment: end;
+                                    for s in h.segments: Rectangle { height: s.height; background: s.color; }
+                                }
+                            }
+                        }
+                    }
+                    Text { text: h.axis-label; font-size: 12px; color: Palette.secondary; horizontal-alignment: center; height: 14px; }
+                }
+            }
+            HorizontalLayout {
+                spacing: 10px;
+                for l in root.legend: HorizontalLayout {
+                    spacing: 4px;
+                    Rectangle { width: 8px; height: 10px; border-radius: 2px; background: l.color; y: 2px; }
+                    Text { text: l.title; font-size: 12px; font-weight: 600; color: Palette.secondary; }
+                }
+            }
+        }
+    }
+}

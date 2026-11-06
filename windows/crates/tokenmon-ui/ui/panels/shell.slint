@@ -1,0 +1,67 @@
+// Panel window shell (spec 04 section 3.2): 420 wide, 12 padding, rounded 12,
+// 4-per-row provider switcher, then the selected provider's content.
+import { TabRowData } from "types.slint";
+import { Palette } from "parts.slint";
+
+export component ProviderSwitcher inherits Rectangle {
+    in property <[TabRowData]> rows;
+    callback select(int, int);
+    height: rows.length * 28px;
+    border-radius: 6px;
+    border-width: 1px;
+    border-color: Palette.separator;
+    clip: true;
+    VerticalLayout {
+        for row[ri] in rows: Rectangle {
+            height: 28px;
+            if row.top-divider: Rectangle {
+                y: 0;
+                height: 1px;
+                background: Palette.separator;
+            }
+            HorizontalLayout {
+                for cell[ci] in row.cells: Rectangle {
+                    background: cell.selected ? Palette.primary.with-alpha(0.08) : transparent;
+                    if cell.divider: Rectangle {
+                        x: 0;
+                        width: 1px;
+                        background: Palette.separator;
+                    }
+                    Text {
+                        text: cell.label;
+                        font-size: 11px;
+                        color: cell.selected ? Palette.primary : Palette.secondary;
+                        overflow: elide;
+                    }
+                    TouchArea {
+                        enabled: cell.present;
+                        clicked => { root.select(ri, ci); }
+                    }
+                }
+            }
+        }
+    }
+}
+
+export component PanelShell inherits Window {
+    in property <[TabRowData]> tabs;
+    in property <bool> dark: false;
+    callback select-tab(int, int);
+    out property <length> content-height: layout.preferred-height;
+    width: 420px;
+    height: layout.preferred-height;
+    background: Palette.window-bg;
+    layout := VerticalLayout {
+        padding: 12px;
+        spacing: 0px;
+        ProviderSwitcher {
+            rows: root.tabs;
+            select(r, c) => { root.select-tab(r, c); }
+        }
+        Rectangle { height: 12px; }
+        VerticalLayout {
+            spacing: 10px;
+            @children
+        }
+    }
+}

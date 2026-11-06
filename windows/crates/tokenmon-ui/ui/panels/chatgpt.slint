@@ -1,0 +1,23 @@
+import { PanelShell } from "shell.slint";
+import { PanelHeader, PoolCard, DailyCard, MetricGrid, ModelsCard, FooterBlock, MessageBlock, Card, SectionHeader, Caption, UsageTrack, Palette } from "parts.slint";
+import { TrackData, MetricData, ModelsData, DailyData, FooterData, HeaderData, SegmentData, ChipData, TabRowData } from "types.slint";
+
+// ChatGPT panel (spec 03 section 2.7). No bars, no hover.
+export component ChatGptPanel inherits PanelShell {
+    in property <HeaderData> header;
+    in property <bool> has-usage;
+    in property <string> message;
+    in property <string> button;
+    in property <string> pool-title;
+    in property <[TrackData]> tracks;
+    in property <string> blocked;
+    in property <FooterData> footer;
+    PanelHeader { data: root.header; }
+    if !has-usage: MessageBlock { text: root.message; button: root.button; }
+    if has-usage: PoolCard {
+        title: root.pool-title;
+        tracks: root.tracks;
+    }
+    if has-usage && blocked != "": Caption { text: root.blocked; warning: true; }
+    if has-usage: FooterBlock { data: root.footer; }
+}

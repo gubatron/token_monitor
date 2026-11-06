@@ -1,0 +1,32 @@
+import { PanelShell } from "shell.slint";
+import { PanelHeader, PoolCard, DailyCard, MetricGrid, ModelsCard, FooterBlock, MessageBlock, Card, SectionHeader, Caption, UsageTrack, Palette } from "parts.slint";
+import { TrackData, MetricData, ModelsData, DailyData, FooterData, HeaderData, SegmentData, ChipData, TabRowData } from "types.slint";
+
+// OpenCode Go panel (spec 03 section 3.12).
+export component OpenCodePanel inherits PanelShell {
+    in property <HeaderData> header;
+    in property <bool> has-usage;
+    in property <string> message;
+    in property <string> button;
+    in property <string> pool-title;
+    in property <[TrackData]> tracks;
+    in property <string> estimate-note;
+    in property <DailyData> daily;
+    in property <ModelsData> models;
+    in property <bool> has-metrics;
+    in property <[MetricData]> metrics;
+    in property <string> sign-in;
+    in property <FooterData> footer;
+    PanelHeader { data: root.header; }
+    if !has-usage: MessageBlock { text: root.message; button: root.button; }
+    if has-usage: PoolCard {
+        title: root.pool-title;
+        tracks: root.tracks;
+    }
+    if has-usage && estimate-note != "": Caption { text: root.estimate-note; warning: true; }
+    if has-usage && daily.present: DailyCard { data: root.daily; }
+    if has-usage && models.present: ModelsCard { data: root.models; }
+    if has-usage && has-metrics: MetricGrid { cells: root.metrics; }
+    if has-usage && sign-in != "": MessageBlock { text: ""; button: root.sign-in; }
+    if has-usage: FooterBlock { data: root.footer; }
+}

@@ -1,0 +1,432 @@
+// Layout parts used by the panels. These are local stand-ins for the
+// ws-ui-kit components (PanelCard, SlimUsageTrack, MetricStatGrid, ...);
+// they are swapped for the shared ones once ui/components lands.
+import { TrackData, MetricData, ModelRowData, ModelsData, DailyData, FooterData, HeaderData } from "types.slint";
+
+export global Palette {
+    in-out property <bool> dark: false;
+    out property <color> primary: dark ? #ffffffd9 : #000000d9;
+    out property <color> secondary: dark ? #ffffff8c : #00000080;
+    out property <color> tertiary: dark ? #ffffff40 : #00000042;
+    out property <color> window-bg: dark ? #323232 : #ececec;
+    out property <color> control-bg: dark ? #1e1e1e : #ffffff;
+    out property <color> separator: dark ? #ffffff1a : #0000001a;
+    out property <color> track: dark ? #ffffff1f : #0000001f;
+    out property <color> warning: #ff8c00;
+    out property <color> danger: #ff3b30;
+}
+
+export component PanelCard inherits Rectangle {
+    background: Palette.control-bg;
+    border-radius: 12px;
+    border-width: 1px;
+    border-color: Palette.separator;
+    clip: true;
+    @children
+}
+
+// A card that grows to fit its children (padding 12, spacing 8).
+export component Card inherits Rectangle {
+    background: Palette.control-bg;
+    border-radius: 12px;
+    border-width: 1px;
+    border-color: Palette.separator;
+    clip: true;
+    height: lay.preferred-height;
+    lay := VerticalLayout {
+        padding: 12px;
+        spacing: 8px;
+        @children
+    }
+}
+
+export component SectionHeader inherits Text {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1.6px;
+    color: Palette.secondary;
+}
+
+export component Caption inherits Text {
+    in property <bool> tertiary: false;
+    in property <bool> warning: false;
+    font-size: 12px;
+    wrap: word-wrap;
+    color: warning ? Palette.warning : (tertiary ? Palette.tertiary : Palette.secondary);
+}
+
+export component PanelHeader inherits HorizontalLayout {
+    in property <HeaderData> data;
+    spacing: 8px;
+    height: 22px;
+    Rectangle {
+        width: 14px;
+        height: 14px;
+        border-radius: 7px;
+        background: data.accent;
+        y: (parent.height - self.height) / 2;
+    }
+    Text {
+        text: data.title;
+        font-size: 13px;
+        font-weight: 600;
+        color: Palette.primary;
+        vertical-alignment: center;
+    }
+    Text {
+        text: data.meta;
+        font-size: 10px;
+        font-weight: 600;
+        color: Palette.secondary;
+        vertical-alignment: center;
+    }
+    Rectangle { }
+    Text {
+        text: "⚙";
+        font-size: 12px;
+        color: Palette.secondary;
+        vertical-alignment: center;
+    }
+}
+
+export component UsageTrack inherits VerticalLayout {
+    in property <TrackData> data;
+    spacing: 5px;
+    if data.show-label: HorizontalLayout {
+        spacing: 8px;
+        Text {
+            text: data.label;
+            font-size: 12px;
+            font-weight: 600;
+            color: Palette.primary;
+        }
+        Rectangle { }
+        Text {
+            text: data.used-text;
+            font-size: 12px;
+            font-weight: 600;
+            color: Palette.primary;
+        }
+    }
+    Rectangle {
+        height: 8px;
+        border-radius: 4px;
+        background: Palette.track;
+        Rectangle {
+            x: 0;
+            width: parent.width * data.fraction;
+            border-radius: 4px;
+            background: data.color;
+        }
+    }
+    if data.caption != "": Caption {
+        text: data.caption;
+        warning: data.caption-warning;
+    }
+}
+
+export component MetricGrid inherits PanelCard {
+    in property <[MetricData]> cells;
+    height: 2 * 62px;
+    GridLayout {
+        for cell[i] in cells: VerticalLayout {
+            row: floor(i / 2);
+            col: mod(i, 2);
+            padding: 14px;
+            spacing: 6px;
+            SectionHeader { text: cell.title; }
+            Text {
+                text: cell.value;
+                font-size: 12px;
+                font-weight: 600;
+                color: Palette.primary;
+                overflow: elide;
+            }
+        }
+    }
+    Rectangle {
+        x: parent.width / 2;
+        width: 1px;
+        background: Palette.separator;
+    }
+    Rectangle {
+        y: parent.height / 2;
+        height: 1px;
+        background: Palette.separator;
+    }
+}
+
+export component ModelsCard inherits PanelCard {
+    in property <ModelsData> data;
+    callback toggle-expanded();
+    callback toggle-show-all();
+    height: mlay.preferred-height;
+    mlay := VerticalLayout {
+        padding: 12px;
+        spacing: 8px;
+        HorizontalLayout {
+            SectionHeader { text: data.title; }
+            Rectangle { }
+            if data.collapsible: Text {
+                text: data.expanded ? "⌄" : "›";
+                color: Palette.secondary;
+                font-size: 11px;
+            }
+        }
+        for row in data.rows: VerticalLayout {
+            spacing: 4px;
+            HorizontalLayout {
+                spacing: 6px;
+                Text {
+                    text: row.name;
+                    font-size: 12px;
+                    font-weight: 600;
+                    color: Palette.primary;
+                    overflow: elide;
+                }
+                if row.tag != "": Text {
+                    text: row.tag;
+                    font-size: 10px;
+                    color: Palette.secondary;
+                }
+                Rectangle { }
+                Text {
+                    text: row.cost;
+                    font-size: 12px;
+                    font-weight: 600;
+                    color: Palette.primary;
+                }
+            }
+            Rectangle {
+                height: 6px;
+                border-radius: 3px;
+                background: Palette.track;
+                Rectangle {
+                    x: 0;
+                    width: parent.width * row.share;
+                    border-radius: 3px;
+                    background: row.color;
+                }
+            }
+        }
+        if data.toggle != "": Text {
+            text: data.toggle;
+            font-size: 11px;
+            color: Palette.secondary;
+        }
+    }
+}
+
+export component DailyBars inherits VerticalLayout {
+    in property <DailyData> data;
+    callback previous-week();
+    callback next-week();
+    in-out property <int> hovered: -1;
+    spacing: 8px;
+    HorizontalLayout {
+        spacing: 8px;
+        SectionHeader { text: data.title; }
+        Text {
+            text: data.allowance;
+            font-size: 12px;
+            font-weight: 600;
+            color: Palette.primary;
+        }
+        Rectangle { }
+        Text {
+            text: data.range;
+            font-size: 12px;
+            font-weight: 600;
+            color: Palette.primary;
+        }
+    }
+    if data.has-nav: HorizontalLayout {
+        Rectangle {
+            width: 22px;
+            height: 22px;
+            border-radius: 5px;
+            background: Palette.separator;
+            Text { text: "‹"; color: Palette.secondary; }
+        }
+        Rectangle { }
+        Rectangle {
+            width: 22px;
+            height: 22px;
+            border-radius: 5px;
+            background: Palette.separator;
+            Text { text: "›"; color: data.can-next ? Palette.secondary : Palette.tertiary; }
+        }
+    }
+    Rectangle {
+        height: 110px;
+        HorizontalLayout {
+            for bar[i] in data.bars: VerticalLayout {
+                spacing: 4px;
+                alignment: start;
+                Rectangle {
+                    height: 68px;
+                    Rectangle {
+                        width: 12px;
+                        height: 68px;
+                        border-radius: 5px;
+                        background: Palette.track;
+                        border-width: root.hovered == i ? 1px : 0px;
+                        border-color: Palette.primary;
+                        Rectangle {
+                            y: parent.height - self.height;
+                            height: bar.fill-height;
+                            border-radius: 5px;
+                            background: bar.color;
+                            opacity: bar.fill-opacity;
+                        }
+                    }
+                }
+                VerticalLayout {
+                    height: 32px;
+                    spacing: 1px;
+                    opacity: bar.label-opacity;
+                    Text {
+                        text: bar.value-label;
+                        font-size: 10px;
+                        font-weight: 600;
+                        color: Palette.primary;
+                        horizontal-alignment: center;
+                    }
+                    Text {
+                        text: bar.weekday;
+                        font-size: 10px;
+                        font-weight: 600;
+                        color: Palette.secondary;
+                        horizontal-alignment: center;
+                    }
+                }
+            }
+        }
+        TouchArea {
+            moved => {
+                root.hovered = Math.min(data.bars.length - 1, Math.max(0, Math.floor(self.mouse-x / (self.width / Math.max(1, data.bars.length)))));
+            }
+            changed has-hover => {
+                if !self.has-hover { root.hovered = -1; }
+            }
+        }
+        if root.hovered >= 0 && root.hovered < data.bars.length: Rectangle {
+            x: Math.max(0px, parent.width * (root.hovered + 0.5) / data.bars.length - 140px);
+            y: 8px;
+            width: 190px;
+            background: Palette.window-bg;
+            border-radius: 8px;
+            border-width: 1px;
+            border-color: Palette.separator;
+            VerticalLayout {
+                padding-left: 10px;
+                padding-right: 10px;
+                padding-top: 8px;
+                padding-bottom: 8px;
+                spacing: 4px;
+                Text {
+                    text: data.bars[root.hovered].hover-title;
+                    font-size: 11px;
+                    font-weight: 600;
+                    color: Palette.primary;
+                }
+                Caption { text: data.bars[root.hovered].hover-usage; }
+                if data.bars[root.hovered].hover-tokens != "": Text {
+                    text: data.bars[root.hovered].hover-tokens + " tokens " + data.bars[root.hovered].hover-cost;
+                    font-size: 12px;
+                    font-weight: 600;
+                    color: Palette.primary;
+                }
+            }
+        }
+    }
+    if data.footer != "": Caption { text: data.footer; }
+}
+
+export component FooterBlock inherits VerticalLayout {
+    in property <FooterData> data;
+    callback sign-in-again();
+    callback sign-out();
+    in-out property <bool> confirming: false;
+    spacing: 6px;
+    if data.stale-message != "": VerticalLayout {
+        spacing: 2px;
+        Caption { text: data.stale-message; }
+        if data.stale-age != "": Caption { text: data.stale-age; }
+    }
+    if data.error-text != "": Caption { text: data.error-text; }
+    if data.sign-in-again != "": Rectangle {
+        height: 24px;
+        border-radius: 5px;
+        background: Palette.control-bg;
+        border-width: 1px;
+        border-color: Palette.separator;
+        Text {
+            text: data.sign-in-again;
+            font-size: 11px;
+            color: Palette.primary;
+        }
+    }
+    if data.sign-out-confirm != "": HorizontalLayout {
+        spacing: 6px;
+        Rectangle { }
+        if confirming: Text {
+            text: data.sign-out-confirm;
+            font-size: 11px;
+            color: Palette.secondary;
+        }
+        if confirming: Text { text: "✓"; color: Palette.danger; font-size: 12px; }
+        if confirming: Text { text: "✕"; color: Palette.secondary; font-size: 12px; }
+        if !confirming: Text { text: "⏏"; color: Palette.tertiary; font-size: 11px; }
+    }
+}
+
+export component MessageBlock inherits VerticalLayout {
+    in property <string> text;
+    in property <string> button;
+    spacing: 10px;
+    Caption { text: root.text; }
+    if button != "": Rectangle {
+        height: 24px;
+        width: 160px;
+        border-radius: 5px;
+        background: Palette.control-bg;
+        border-width: 1px;
+        border-color: Palette.separator;
+        Text {
+            text: button;
+            font-size: 11px;
+            color: Palette.primary;
+        }
+    }
+}
+
+// Pool header row plus tracks: "Usage Pool Weekly ........ 36% Used".
+export component PoolCard inherits Card {
+    in property <string> title;
+    in property <string> trailing;
+    in property <[TrackData]> tracks;
+    HorizontalLayout {
+        spacing: 8px;
+        SectionHeader { text: root.title; }
+        Rectangle { }
+        Text {
+            text: root.trailing;
+            font-size: 12px;
+            font-weight: 600;
+            color: Palette.primary;
+        }
+    }
+    for t in tracks: UsageTrack { data: t; }
+}
+
+export component DailyCard inherits Card {
+    in property <DailyData> data;
+    callback previous-week();
+    callback next-week();
+    DailyBars {
+        data: root.data;
+        previous-week => { root.previous-week(); }
+        next-week => { root.next-week(); }
+    }
+}

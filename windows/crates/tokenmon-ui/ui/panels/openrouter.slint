@@ -1,0 +1,64 @@
+import { PanelShell } from "shell.slint";
+import { PanelHeader, PoolCard, DailyCard, MetricGrid, ModelsCard, FooterBlock, MessageBlock, Card, SectionHeader, Caption, UsageTrack, Palette } from "parts.slint";
+import { TrackData, MetricData, ModelsData, DailyData, FooterData, HeaderData, SegmentData, ChipData, TabRowData } from "types.slint";
+
+// OpenRouter panel (spec 03 section 4.6): API key entry instead of a sign-in window.
+export component OpenRouterPanel inherits PanelShell {
+    in property <HeaderData> header;
+    in property <bool> has-usage;
+    in property <string> message;
+    in property <string> budget-title;
+    in property <string> used-text;
+    in property <[TrackData]> tracks;
+    in property <string> no-limit;
+    in property <[MetricData]> stats;
+    in property <ModelsData> models;
+    in property <bool> has-key-entry;
+    in property <string> key-placeholder;
+    in property <string> key-button;
+    in property <bool> key-button-enabled;
+    in property <string> key-error;
+    in property <string> replace-link;
+    in property <FooterData> footer;
+    PanelHeader { data: root.header; }
+    if !has-usage: Caption { text: root.message; }
+    if has-usage: PoolCard {
+        title: root.budget-title;
+        trailing: root.used-text;
+        tracks: root.tracks;
+    }
+    if has-usage && no-limit != "": Caption { text: root.no-limit; }
+    if has-usage: VerticalLayout {
+        spacing: 8px;
+        SectionHeader { text: "STATS"; }
+        MetricGrid { cells: root.stats; }
+    }
+    if has-usage && models.present: ModelsCard { data: root.models; }
+    if has-key-entry: VerticalLayout {
+        spacing: 6px;
+        HorizontalLayout {
+            spacing: 8px;
+            Rectangle {
+                height: 24px;
+                border-radius: 5px;
+                background: Palette.control-bg;
+                border-width: 1px;
+                border-color: Palette.separator;
+                Text { x: 8px; text: root.key-placeholder; font-size: 12px; color: Palette.tertiary; }
+            }
+            Rectangle {
+                width: 72px;
+                height: 24px;
+                border-radius: 5px;
+                background: Palette.control-bg;
+                border-width: 1px;
+                border-color: Palette.separator;
+                opacity: root.key-button-enabled ? 1.0 : 0.4;
+                Text { text: root.key-button; font-size: 11px; color: Palette.primary; }
+            }
+        }
+        if key-error != "": Text { text: root.key-error; font-size: 11px; color: Palette.danger; }
+    }
+    if replace-link != "": Text { text: root.replace-link; font-size: 11px; color: Palette.secondary; }
+    if has-usage: FooterBlock { data: root.footer; }
+}
