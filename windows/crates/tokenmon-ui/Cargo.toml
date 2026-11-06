@@ -14,3 +14,4 @@ workspace = true
 [dependencies]
 tokenmon-core = { workspace = true }
 tiny-skia = { workspace = true }
+chrono = { workspace = true }
