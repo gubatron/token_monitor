@@ -245,3 +245,16 @@ fn test_return_page_and_auth_cookie_heuristic() {
     ));
     assert!(!CursorSignIn::looks_like_auth_cookie("_ga"));
 }
+
+/// #50: Cursor responses are capped at 4 MiB, not the shared 16 MiB default.
+#[tokio::test]
+async fn test_cursor_body_over_its_cap_is_refused() {
+    let big = vec![b' '; tokenmon_provider_cursor::MAX_RESPONSE_BYTES + 1];
+    let e = get_x(
+        ProviderErrorContext::Cursor,
+        ResponseTemplate::new(200).set_body_bytes(big),
+    )
+    .await
+    .unwrap_err();
+    assert!(format!("{e:?}").contains("Response too large"), "{e:?}");
+}

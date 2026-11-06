@@ -210,3 +210,11 @@ async fn test_transport_status_mapping() {
     let cf = status_of(ResponseTemplate::new(200).insert_header("cf-mitigated", "challenge")).await;
     assert!(cf.to_string().contains("bot-protection"));
 }
+
+/// #50: OpenRouter responses are capped at 2 MiB, not the shared 16 MiB default.
+#[tokio::test]
+async fn test_transport_body_over_its_cap_is_refused() {
+    let big = vec![b' '; tokenmon_provider_openrouter::client::MAX_RESPONSE_BYTES + 1];
+    let e = status_of(ResponseTemplate::new(200).set_body_bytes(big)).await;
+    assert!(format!("{e:?}").contains("Response too large"), "{e:?}");
+}

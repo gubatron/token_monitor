@@ -451,3 +451,18 @@ fn test_scan_protobuf_path_length_is_bounded() {
     assert!(scan.fixed32.iter().all(|f| f.path.len() <= 5));
     assert!(scan.varints.iter().all(|v| v.path.len() <= 5));
 }
+
+/// #50: a body of two-byte varint fields collects at most `MAX_SCAN_FIELDS`.
+#[test]
+fn test_scan_protobuf_field_count_is_capped() {
+    use tokenmon_provider_grok::grpc::MAX_SCAN_FIELDS;
+    // key = field 1, wire type 0; value 1.
+    let body: Vec<u8> = std::iter::repeat_n([0x08u8, 0x01], MAX_SCAN_FIELDS * 3)
+        .flatten()
+        .collect();
+    let scan = scan_protobuf(&body, 0);
+    assert_eq!(scan.varints.len(), MAX_SCAN_FIELDS);
+    assert!(scan.fixed32.is_empty());
+    let few = scan_protobuf(&[0x08, 0x01, 0x08, 0x02], 0);
+    assert_eq!(few.varints.len(), 2);
+}

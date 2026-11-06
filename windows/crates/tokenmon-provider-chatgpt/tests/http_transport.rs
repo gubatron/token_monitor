@@ -90,3 +90,26 @@ async fn test_session_401_is_unauthorized() {
         .unwrap();
     assert_eq!(err.to_string(), "ChatGPT session expired. Sign in again.");
 }
+
+/// #50: a session body past the provider's own cap is refused.
+#[tokio::test]
+async fn test_session_body_over_the_chatgpt_cap_is_refused() {
+    let server = MockServer::start().await;
+    Mock::given(path("/api/auth/session"))
+        .respond_with(ResponseTemplate::new(200).set_body_bytes(vec![
+            b' ';
+            tokenmon_provider_chatgpt::client::MAX_RESPONSE_BYTES
+                + 1
+        ]))
+        .mount(&server)
+        .await;
+    let http = ProviderHttp::new(C::ChatGpt, None, Arc::new(SystemClock)).unwrap();
+    let transport = Arc::new(HttpTransport::with_base_url(http, &server.uri()));
+    let client = ChatGptUsageClient::new("sess=1", transport, None, "1");
+    let err = client
+        .fetch_usage(Utc.timestamp_opt(1_790_000_000, 0).unwrap())
+        .await
+        .err()
+        .unwrap();
+    assert!(format!("{err:?}").contains("Response too large"), "{err:?}");
+}

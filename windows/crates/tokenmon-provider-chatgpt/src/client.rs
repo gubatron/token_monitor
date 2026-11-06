@@ -20,6 +20,9 @@ pub const BASE_URL: &str = "https://chatgpt.com";
 const REFERER: &str = "https://chatgpt.com/";
 const CTX: ProviderErrorContext = ProviderErrorContext::ChatGpt;
 
+/// Largest session or usage body accepted (both are a few KB of JSON).
+pub const MAX_RESPONSE_BYTES: usize = 512 * 1024;
+
 /// One usage refresh: the parsed payload plus every `Set-Cookie` returned
 /// (NextAuth renews the session cookie on `/api/auth/session`).
 #[derive(Clone, PartialEq)]
@@ -107,6 +110,7 @@ impl ChatGptTransport for HttpTransport {
         let options = RequestOptions {
             cookie_header: Some(cookie_header),
             referer: Some(REFERER),
+            max_response_bytes: Some(MAX_RESPONSE_BYTES),
             ..RequestOptions::default()
         };
         let r = self
@@ -134,6 +138,7 @@ impl ChatGptTransport for HttpTransport {
             bearer_token: Some(access_token),
             referer: Some(REFERER),
             headers: &extra,
+            max_response_bytes: Some(MAX_RESPONSE_BYTES),
             ..RequestOptions::default()
         };
         let r = self

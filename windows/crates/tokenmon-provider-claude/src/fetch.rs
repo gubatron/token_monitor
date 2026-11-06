@@ -13,6 +13,9 @@ use crate::usage::{ClaudeUsageResponse, parse_usage_body, usage_request};
 /// Production origin of the usage endpoint.
 pub const DEFAULT_BASE_URL: &str = "https://claude.ai";
 
+/// Largest usage body accepted (a few KB of JSON).
+pub const MAX_RESPONSE_BYTES: usize = 512 * 1024;
+
 /// One completed fetch: the parsed payload and when it was taken.
 pub type FetchedUsage = (ClaudeUsageResponse, DateTime<Utc>);
 
@@ -56,6 +59,7 @@ impl ClaudeUsageClient {
                 RequestOptions {
                     cookie_header: Some(&request.cookie_header),
                     referer: Some(request.referer),
+                    max_response_bytes: Some(MAX_RESPONSE_BYTES),
                     ..RequestOptions::default()
                 },
             )
