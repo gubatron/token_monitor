@@ -53,6 +53,7 @@ sha2 = "0.10"
 zip = { version = "2", default-features = false, features = ["deflate"] }
 rusqlite = { version = "0.41", features = ["bundled"] }
 slint = { version = "1.18", default-features = false }
+tiny-skia = { version = "0.12", default-features = false, features = ["std", "simd", "png-format"] }
 
 # Dev
 wiremock = "0.6"
