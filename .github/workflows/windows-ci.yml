@@ -497,6 +497,16 @@ jobs:
           # shellcheck disable=SC2086 # LOCKED is empty or one flag
           cargo build $LOCKED --release --workspace --target x86_64-pc-windows-msvc
 
+      - name: TokenMon.exe --smoke
+        # Starts the real binary headless against a temp data dir, runs one
+        # refresh cycle (nothing is signed in, so no network) and must exit 0.
+        run: |
+          set -euo pipefail
+          exe=target/x86_64-pc-windows-msvc/release/TokenMon.exe
+          test -f "$exe"
+          "$exe" --smoke
+          echo "smoke exit code: $?"
+
       - name: Build summary
         if: always()
         env:
