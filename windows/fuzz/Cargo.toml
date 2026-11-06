@@ -246,3 +246,31 @@ path = "fuzz_targets/grok_week_bounds.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "update_app_version"
+path = "fuzz_targets/update_app_version.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "update_release_feed"
+path = "fuzz_targets/update_release_feed.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "update_trust"
+path = "fuzz_targets/update_trust.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "update_archive"
+path = "fuzz_targets/update_archive.rs"
+test = false
+doc = false
+bench = false

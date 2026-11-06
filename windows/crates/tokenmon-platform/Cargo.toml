@@ -43,6 +43,10 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 # Wipes decrypted secrets and plaintext vault JSON when dropped.
 zeroize = "1.8"
+reqwest = { workspace = true }
+tokio = { workspace = true, features = ["rt"] }
+zip = { workspace = true }
+tempfile = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = [
@@ -58,3 +62,5 @@ windows-sys = { version = "0.61", features = [
 
 [dev-dependencies]
 tempfile = { workspace = true }
+tokio = { workspace = true, features = ["rt", "macros"] }
+wiremock = { workspace = true }
