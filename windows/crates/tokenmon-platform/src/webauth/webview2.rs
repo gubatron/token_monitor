@@ -259,6 +259,32 @@ fn delete_profile(dir: &std::path::Path) {
 // Window thread
 // ---------------------------------------------------------------------------
 
+/// Creates a controller in InPrivate mode so cookies, storage and cache live
+/// in memory only (the user-data folder keeps just the browser's scratch
+/// files); `CookieManager` capture works on an InPrivate profile. Runtimes
+/// without `ICoreWebView2Environment10` fall back to a regular profile whose
+/// folder is deleted after the session and purged at startup.
+///
+/// # Safety
+///
+/// `parent` must be a live window handle of the calling thread.
+unsafe fn create_controller(
+    env: &ICoreWebView2Environment,
+    parent: HWND,
+    handler: &ICoreWebView2CreateCoreWebView2ControllerCompletedHandler,
+) -> windows::core::Result<()> {
+    // SAFETY: forwarded from the caller's contract.
+    unsafe {
+        if let Ok(env10) = env.cast::<ICoreWebView2Environment10>()
+            && let Ok(options) = env10.CreateCoreWebView2ControllerOptions()
+            && options.SetIsInPrivateModeEnabled(true).is_ok()
+        {
+            return env10.CreateCoreWebView2ControllerWithOptions(parent, &options, handler);
+        }
+        env.CreateCoreWebView2Controller(parent, handler)
+    }
+}
+
 struct Controls {
     title: HWND,
     status: HWND,
@@ -906,7 +932,7 @@ impl Ctx {
             Box::new(move |handler| {
                 // SAFETY: `parent` is our live window.
                 unsafe {
-                    env.CreateCoreWebView2Controller(parent, &handler)
+                    create_controller(&env, parent, &handler)
                         .map_err(webview2_com::Error::WindowsError)
                 }
             }),
@@ -1155,7 +1181,7 @@ impl Ctx {
                     Ok(())
                 },
             ));
-            env.CreateCoreWebView2Controller(self.hwnd.get(), &handler)
+            create_controller(&env, self.hwnd.get(), &handler)
         }
     }
 

@@ -55,8 +55,51 @@ impl ProfileStore {
         Ok(self.provider_dir(provider)?.join(token))
     }
 
-    /// Deletes one provider's folders; a missing folder is fine.
+    /// Refuses roots that are not the dedicated sign-in folder
+    /// (`<LOCALAPPDATA>\\TokenMon\\signin`): the final component must be
+    /// `signin` under a `TokenMon` parent, so a wiring mistake (the TokenMon
+    /// data dir, a drive root, the user profile) can never be deleted
+    /// recursively, and the root itself must not be a symlink or junction
+    /// that redirects the purge elsewhere.
+    pub fn check_root(&self) -> io::Result<()> {
+        let refuse = |why: &str| {
+            Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                format!("refusing to purge {}: {why}", self.root.display()),
+            ))
+        };
+        let name_is = |p: Option<&std::ffi::OsStr>, want: &str| {
+            p.and_then(|n| n.to_str())
+                .is_some_and(|n| n.eq_ignore_ascii_case(want))
+        };
+        if !name_is(self.root.file_name(), "signin") {
+            return refuse("the final component is not `signin`");
+        }
+        if !name_is(self.root.parent().and_then(Path::file_name), "TokenMon") {
+            return refuse("the parent is not `TokenMon`");
+        }
+        if self
+            .root
+            .components()
+            .any(|c| matches!(c, std::path::Component::ParentDir))
+        {
+            return refuse("the path contains `..`");
+        }
+        match std::fs::symlink_metadata(&self.root) {
+            // `is_symlink` is also true for junctions (name-surrogate
+            // reparse points) on Windows.
+            Ok(m) if m.file_type().is_symlink() => refuse("the root is a symlink or junction"),
+            Ok(m) if !m.is_dir() => refuse("the root is not a directory"),
+            Ok(_) => Ok(()),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Deletes one provider's folders; a missing folder is fine. Refused
+    /// unless [`check_root`](Self::check_root) passes.
     pub fn purge_provider(&self, provider: &str) -> io::Result<()> {
+        self.check_root()?;
         let dir = self
             .provider_dir(provider)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
@@ -64,7 +107,9 @@ impl ProfileStore {
     }
 
     /// Deletes every provider's folders (startup purge of crash leftovers).
+    /// Refused unless [`check_root`](Self::check_root) passes.
     pub fn purge_all(&self) -> io::Result<()> {
+        self.check_root()?;
         remove_dir_if_exists(&self.root)
     }
 }
