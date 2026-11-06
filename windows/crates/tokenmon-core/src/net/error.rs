@@ -178,6 +178,42 @@ pub enum ProviderError {
 }
 
 impl ProviderError {
+    /// Wraps a generic [`UsageError`] in the wording of `context` (spec
+    /// `ProviderError.init(usageError:context:)`).
+    ///
+    /// `RateLimited` becomes [`ProviderError::Custom`] with the message
+    /// `"<name> is rate limiting requests. Retrying later."`, keeping the
+    /// original [`UsageError`] so `retry_after` survives. Every other case maps
+    /// one to one.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tokenmon_core::{ProviderError, ProviderErrorContext, UsageError};
+    ///
+    /// let e = ProviderError::from_usage(
+    ///     UsageError::RateLimited { retry_after: Some(30.0) },
+    ///     ProviderErrorContext::Cursor,
+    /// );
+    /// assert_eq!(e.to_string(), "Cursor is rate limiting requests. Retrying later.");
+    /// assert_eq!(e.usage_error().retry_after().unwrap().as_secs(), 30);
+    /// ```
+    pub fn from_usage(usage: UsageError, context: ProviderErrorContext) -> Self {
+        match usage {
+            UsageError::NotSignedIn => Self::NotSignedIn(context),
+            UsageError::Unauthorized => Self::Unauthorized(context),
+            UsageError::Network(m) => Self::Network(context, m),
+            UsageError::BadResponse(m) => Self::BadResponse(context, m),
+            UsageError::RateLimited { .. } => Self::Custom {
+                message: format!(
+                    "{} is rate limiting requests. Retrying later.",
+                    context.display_name()
+                ),
+                usage,
+            },
+        }
+    }
+
     /// The generic [`UsageError`] this error corresponds to (spec
     /// `ProviderUsageError.usageError`), for backoff and `Retry-After`.
     pub fn usage_error(&self) -> UsageError {
