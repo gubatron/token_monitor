@@ -44,10 +44,9 @@ export component ProviderSwitcher inherits Rectangle {
 }
 
 export component PanelShell inherits Window {
-    in property <[TabRowData]> tabs;
-    in property <bool> dark: false;
-    callback select-tab(int, int);
-    out property <length> content-height: layout.preferred-height;
+    in property <[TabRowData]> shell-tabs;
+    callback shell-select-tab(int, int);
+    out property <length> shell-content-height: layout.preferred-height;
     width: 420px;
     height: layout.preferred-height;
     background: Palette.window-bg;
@@ -55,8 +54,8 @@ export component PanelShell inherits Window {
         padding: 12px;
         spacing: 0px;
         ProviderSwitcher {
-            rows: root.tabs;
-            select(r, c) => { root.select-tab(r, c); }
+            rows: root.shell-tabs;
+            select(r, c) => { root.shell-select-tab(r, c); }
         }
         Rectangle { height: 12px; }
         VerticalLayout {

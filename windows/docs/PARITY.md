@@ -903,7 +903,7 @@ specs do not list the test.
 
 | Swift test | Behavior | Workstream | Status | Rust test | Notes |
 |---|---|---|---|---|---|
-| `TokenMonTests/Providers/Registry/ProviderSwitcherLayoutTests.swift::ProviderSwitcherLayoutTests::testRowsPadTheLastRowToFullWidth` | For 1..8 tabs, every row from `rows(for:)` has exactly 4 cells; flattening non-nil cells reproduces the input order. | ws-ui-panels | todo | |  |
+| `TokenMonTests/Providers/Registry/ProviderSwitcherLayoutTests.swift::ProviderSwitcherLayoutTests::testRowsPadTheLastRowToFullWidth` | For 1..8 tabs, every row from `rows(for:)` has exactly 4 cells; flattening non-nil cells reproduces the input order. | ws-ui-panels | ported | `crates/tokenmon-ui/tests/panels_overview_switcher.rs::test_rows_pad_the_last_row_to_full_width` |  |
 | `TokenMonTests/Providers/Registry/ProviderSwitcherLayoutTests.swift::ProviderSwitcherLayoutTests::testGridEdgesMatchCardEdgesForEveryProviderCount` | At width 396 and scales 1x/2x (light), the switcher's leftmost/rightmost drawn pixel (alpha > 0.02) equals a PanelCard's within 0.01pt for 1..8 tabs. | ws-ui-panels | todo | | Windows: render the Slint switcher and PanelCard offscreen (software renderer) and compare edge pixels. |
 
 ### ws-tray (#28)

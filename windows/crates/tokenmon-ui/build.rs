@@ -19,4 +19,7 @@ fn main() {
     compile("ui/components/entry.slint", "kit.rs");
     println!("cargo:rerun-if-changed=ui/components");
     println!("cargo:rerun-if-changed=ui/assets");
+    // Panels (ws-ui-panels).
+    compile("ui/panels/panels.slint", "panels.rs");
+    println!("cargo:rerun-if-changed=ui/panels");
 }

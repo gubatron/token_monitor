@@ -4,6 +4,10 @@ import { TrackData, MetricData, ModelsData, DailyData, FooterData, HeaderData, S
 
 // OpenRouter panel (spec 03 section 4.6): API key entry instead of a sign-in window.
 export component OpenRouterPanel inherits PanelShell {
+    in property <[TabRowData]> tabs <=> root.shell-tabs;
+    out property <length> content-height: root.shell-content-height;
+    callback select-tab(int, int);
+    shell-select-tab(r, c) => { root.select-tab(r, c); }
     in property <HeaderData> header;
     in property <bool> has-usage;
     in property <string> message;
