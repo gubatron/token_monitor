@@ -100,3 +100,137 @@ impl SignatureVerifier for PeHeaderVerifier {
         }
     }
 }
+
+/// How strictly downloaded builds are checked for a publisher signature.
+///
+/// The application chooses this in exactly one place (see
+/// [`verifier_for_policy`]); switching policy is a one-line change.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SignaturePolicy {
+    /// Accept an unsigned build when its SHA-256 matches the digest GitHub
+    /// publishes for the same release and the file is structurally a PE/MSI.
+    /// This is the default until releases are Authenticode-signed.
+    #[default]
+    AcceptUnsignedWithDigest,
+    /// Additionally require a valid Authenticode signature (`WinVerifyTrust`).
+    /// Unsigned builds are refused. Fails closed on non-Windows hosts.
+    RequireAuthenticode,
+}
+
+/// Builds the verifier that enforces `policy`.
+///
+/// # Examples
+///
+/// ```
+/// use tokenmon_platform::install::verify::{SignaturePolicy, verifier_for_policy};
+///
+/// let lenient = verifier_for_policy(SignaturePolicy::AcceptUnsignedWithDigest);
+/// // Not a PE file: rejected under every policy.
+/// assert!(lenient.verify_exe(std::path::Path::new("missing.exe")).is_err());
+/// ```
+pub fn verifier_for_policy(policy: SignaturePolicy) -> std::sync::Arc<dyn SignatureVerifier> {
+    match policy {
+        SignaturePolicy::AcceptUnsignedWithDigest => std::sync::Arc::new(PeHeaderVerifier),
+        SignaturePolicy::RequireAuthenticode => std::sync::Arc::new(AuthenticodeVerifier),
+    }
+}
+
+/// Structural checks plus a mandatory Authenticode signature check.
+///
+/// On Windows the trust check is `WinVerifyTrust` with
+/// `WINTRUST_ACTION_GENERIC_VERIFY_V2` (revocation checks on the whole chain,
+/// no UI). Elsewhere there is no verifier, so every file is refused.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct AuthenticodeVerifier;
+
+impl SignatureVerifier for AuthenticodeVerifier {
+    fn verify_exe(&self, path: &Path) -> Result<(), InstallError> {
+        PeHeaderVerifier.verify_exe(path)?;
+        authenticode::verify_file(path)
+    }
+
+    fn verify_msi(&self, path: &Path) -> Result<(), InstallError> {
+        PeHeaderVerifier.verify_msi(path)?;
+        authenticode::verify_file(path)
+    }
+}
+
+#[cfg(windows)]
+mod authenticode {
+    use std::os::windows::ffi::OsStrExt;
+    use std::path::Path;
+
+    use tokenmon_core::update::InstallError;
+    use windows_sys::Win32::Security::WinTrust::{
+        WINTRUST_ACTION_GENERIC_VERIFY_V2, WINTRUST_DATA, WINTRUST_DATA_0, WINTRUST_FILE_INFO,
+        WTD_CHOICE_FILE, WTD_REVOKE_WHOLECHAIN, WTD_STATEACTION_CLOSE, WTD_STATEACTION_VERIFY,
+        WTD_UI_NONE, WinVerifyTrust,
+    };
+
+    /// Verifies the Authenticode signature of `path`; any non-zero
+    /// `WinVerifyTrust` result (including "not signed") is a refusal.
+    pub fn verify_file(path: &Path) -> Result<(), InstallError> {
+        let wide: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+        let mut file = WINTRUST_FILE_INFO {
+            cbStruct: std::mem::size_of::<WINTRUST_FILE_INFO>() as u32,
+            pcwszFilePath: wide.as_ptr(),
+            hFile: std::ptr::null_mut(),
+            pgKnownSubject: std::ptr::null_mut(),
+        };
+        let mut data = WINTRUST_DATA {
+            cbStruct: std::mem::size_of::<WINTRUST_DATA>() as u32,
+            pPolicyCallbackData: std::ptr::null_mut(),
+            pSIPClientData: std::ptr::null_mut(),
+            dwUIChoice: WTD_UI_NONE,
+            fdwRevocationChecks: WTD_REVOKE_WHOLECHAIN,
+            dwUnionChoice: WTD_CHOICE_FILE,
+            Anonymous: WINTRUST_DATA_0 {
+                pFile: &raw mut file,
+            },
+            dwStateAction: WTD_STATEACTION_VERIFY,
+            hWVTStateData: std::ptr::null_mut(),
+            pwszURLReference: std::ptr::null_mut(),
+            dwProvFlags: 0,
+            dwUIContext: 0,
+            pSignatureSettings: std::ptr::null_mut(),
+        };
+        let mut action = WINTRUST_ACTION_GENERIC_VERIFY_V2;
+        // SAFETY: `data`, `file` and `wide` outlive both calls; the structs
+        // are fully initialised; the CLOSE call releases the state handle.
+        let status = unsafe {
+            let status = WinVerifyTrust(
+                std::ptr::null_mut(),
+                &raw mut action,
+                (&raw mut data).cast(),
+            );
+            data.dwStateAction = WTD_STATEACTION_CLOSE;
+            WinVerifyTrust(
+                std::ptr::null_mut(),
+                &raw mut action,
+                (&raw mut data).cast(),
+            );
+            status
+        };
+        if status == 0 {
+            Ok(())
+        } else {
+            Err(InstallError::Verification(
+                "The download is not signed by a trusted publisher.".to_owned(),
+            ))
+        }
+    }
+}
+
+#[cfg(not(windows))]
+mod authenticode {
+    use std::path::Path;
+
+    use tokenmon_core::update::InstallError;
+
+    /// No Authenticode on this host: fail closed.
+    pub fn verify_file(_path: &Path) -> Result<(), InstallError> {
+        Err(InstallError::Verification(
+            "Signature verification is only available on Windows.".to_owned(),
+        ))
+    }
+}

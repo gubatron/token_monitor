@@ -44,7 +44,12 @@ impl AppVersion {
             .split('.')
             .map(|p| p.parse::<u64>().ok())
             .collect::<Option<Vec<_>>>()?;
-        let prerelease = suffix.filter(|s| !s.is_empty()).map(str::to_owned);
+        // Trim so the suffix survives `Display` -> `parse` (which trims the whole
+        // string): `1- ` must not keep a lone-space prerelease.
+        let prerelease = suffix
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_owned);
         Some(Self {
             components,
             prerelease,

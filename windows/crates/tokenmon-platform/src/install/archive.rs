@@ -52,7 +52,8 @@ pub fn extract_zip(zip_path: &Path, dest: &Path, max_total: u64) -> Result<(), I
         if entry.is_symlink() || is_link_mode(entry.unix_mode()) {
             return Err(archive_err("The release zip contains a symbolic link."));
         }
-        let relative = safe_relative_path(entry.name(), entry.enclosed_name())?;
+        // Raw bytes: zip 9 may normalise separators in `name()`.
+        let relative = safe_relative_path(entry.name_raw(), entry.enclosed_name())?;
         let target = dest.join(relative);
         if entry.is_dir() {
             fs::create_dir_all(&target)
@@ -83,9 +84,10 @@ fn is_link_mode(mode: Option<u32>) -> bool {
 }
 
 /// Accepts only plain relative names (no drive letters, streams or backslashes).
-fn safe_relative_path(raw_name: &str, enclosed: Option<PathBuf>) -> Result<PathBuf, InstallError> {
+fn safe_relative_path(raw_name: &[u8], enclosed: Option<PathBuf>) -> Result<PathBuf, InstallError> {
     let unsafe_name = || archive_err("The release zip contains an unsafe path.");
-    if raw_name.contains(['\\', ':']) {
+    // zip 9 turns a leading `/` into a relative path; refuse it outright.
+    if raw_name.first() == Some(&b'/') || raw_name.iter().any(|b| matches!(b, b'\\' | b':')) {
         return Err(unsafe_name());
     }
     enclosed.ok_or_else(unsafe_name)
