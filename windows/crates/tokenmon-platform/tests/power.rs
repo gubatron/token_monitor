@@ -278,6 +278,37 @@ fn test_modern_standby_resume_without_suspend_wakes_once() {
     assert_eq!(d.accept(0x12), None);
 }
 
+/// Repeated suspend/resume cycles: every cycle delivers exactly one sleep and
+/// one wake, whichever resume message (or both) Windows sends.
+#[test]
+fn test_repeated_suspend_resume_cycles_each_deliver_one_wake() {
+    let mut d = ResumeDeduper::default();
+    for resume_messages in [&[0x12, 0x07][..], &[0x07, 0x12], &[0x12], &[0x07]] {
+        assert_eq!(d.accept(0x04), Some(PowerEvent::WillSleep));
+        let wakes = resume_messages
+            .iter()
+            .filter_map(|m| d.accept(*m))
+            .filter(|e| *e == PowerEvent::DidWake)
+            .count();
+        assert_eq!(wakes, 1, "one wake for resume messages {resume_messages:?}");
+    }
+}
+
+/// Modern Standby sends resumes with no suspend message in between: each wake
+/// must still be delivered, not just the first one of the process.
+#[test]
+#[ignore = "blocked on #67: ResumeDeduper drops every wake after the first until PBT_APMSUSPEND"]
+fn test_repeated_modern_standby_wakes_are_each_delivered() {
+    let mut d = ResumeDeduper::default();
+    for cycle in 0..4 {
+        assert_eq!(
+            d.accept(0x12),
+            Some(PowerEvent::DidWake),
+            "modern standby wake {cycle} was dropped"
+        );
+    }
+}
+
 /// FEAT-power-network-satisfied: only IPv4/IPv6 internet counts.
 #[test]
 fn test_network_satisfied_means_internet_connectivity() {
