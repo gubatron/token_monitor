@@ -169,7 +169,7 @@ fn hash_file(path: &Path) -> Result<String, InstallError> {
     let io = |e: std::io::Error| InstallError::Install(e.to_string());
     let mut file = std::fs::File::open(path).map_err(io)?;
     let mut hasher = Sha256Stream::new();
-    let mut buf = [0u8; 64 * 1024];
+    let mut buf = [0u8; 16 * 1024];
     loop {
         let n = file.read(&mut buf).map_err(io)?;
         if n == 0 {

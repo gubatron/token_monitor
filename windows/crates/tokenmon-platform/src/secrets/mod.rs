@@ -40,5 +40,8 @@ pub use routing::{
 };
 #[cfg(windows)]
 pub(crate) use secure_file::current_user_sid;
-pub use secure_file::{create_new_owner_only, owner_only_sddl};
+pub use secure_file::{
+    WindowsOwnerOnly, create_new_owner_only, owner_only_directory_sddl, owner_only_sddl,
+    register_owner_only_permissions,
+};
 pub use vault::{PENDING_FILE_NAME, VAULT_FILE_NAME, Vault};
