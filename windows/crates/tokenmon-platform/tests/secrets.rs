@@ -261,6 +261,26 @@ fn pending_removals_survive_a_failed_rewrite() {
 }
 
 #[test]
+fn set_after_failed_removal_cancels_the_queued_removal() {
+    let dir = TempDir::new().unwrap();
+    let enc = Arc::new(FakeEncryptor::default());
+    assert!(vault_in(dir.path(), &enc).set("old", "a_session"));
+
+    // Sign out while the rewrite fails: the removal is queued on disk.
+    enc.set_fail_protect(true);
+    let v = vault_in(dir.path(), &enc);
+    v.remove("a_session");
+    assert!(dir.path().join(PENDING_FILE_NAME).exists());
+
+    // Sign in again in the same run: the new secret must win after restart.
+    enc.set_fail_protect(false);
+    assert!(v.set("new", "a_session"));
+    assert!(!dir.path().join(PENDING_FILE_NAME).exists());
+    let restarted = vault_in(dir.path(), &enc);
+    assert_eq!(restarted.value("a_session").as_deref(), Some("new"));
+}
+
+#[test]
 fn failed_write_is_reported() {
     let dir = TempDir::new().unwrap();
     let enc = Arc::new(FakeEncryptor::default());
