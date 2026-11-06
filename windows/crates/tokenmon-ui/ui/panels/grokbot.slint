@@ -1,6 +1,7 @@
 import { PanelShell } from "shell.slint";
-import { PanelHeader, PoolCard, DailyCard, MetricGrid, ModelsCard, FooterBlock, MessageBlock, Card, SectionHeader, Caption, UsageTrack, Palette } from "parts.slint";
-import { TrackData, MetricData, ModelsData, DailyData, FooterData, HeaderData, SegmentData, ChipData, TabRowData } from "types.slint";
+import { PanelHeader, PoolCard, DailyCard, ModelsCard, FooterBlock, MessageBlock, Caption, ActionButton } from "parts.slint";
+import { Theme, Typo, PanelCard, PanelSectionHeader, DigitText, ResetCaption, SegmentedUsageBar, CategoryRow, MetricStatGrid } from "../components/kit.slint";
+import { TrackData, ModelsData, DailyData, FooterData, HeaderData, TabRowData, BarSegment, CategoryItem, MetricItem } from "types.slint";
 
 // Grokbot panel (spec 02 section 2.6).
 export component GrokbotPanel inherits PanelShell {
@@ -8,10 +9,16 @@ export component GrokbotPanel inherits PanelShell {
     out property <length> content-height: root.shell-content-height;
     callback select-tab(int, int);
     shell-select-tab(r, c) => { root.select-tab(r, c); }
+    callback open-settings();
+    callback sign-in();
+    callback sign-in-again();
+    callback sign-out();
     in property <HeaderData> header;
     in property <bool> has-usage;
     in property <string> message;
     in property <string> button;
+    callback previous-week();
+    callback next-week();
     in property <string> pool-title;
     in property <string> pool-used;
     in property <string> entitlement;
@@ -19,19 +26,27 @@ export component GrokbotPanel inherits PanelShell {
     in property <string> no-allowance;
     in property <DailyData> daily;
     in property <FooterData> footer;
-    PanelHeader { data: root.header; }
-    if !has-usage: MessageBlock { text: root.message; button: root.button; }
-    if has-usage: Card {
-        HorizontalLayout {
-            spacing: 8px;
-            SectionHeader { text: root.pool-title; }
-            Rectangle { }
-            Text { text: root.pool-used; font-size: 12px; font-weight: 600; color: Palette.primary; }
-        }
-        Caption { text: root.entitlement; }
-        for t in root.tracks: UsageTrack { data: t; }
-        if no-allowance != "": Caption { text: root.no-allowance; }
+    PanelHeader { data: root.header; open-settings => { root.open-settings(); } }
+    if !root.has-usage: MessageBlock {
+        text: root.message;
+        button: root.button;
+        clicked => { root.sign-in(); }
     }
-    if has-usage && daily.present: DailyCard { data: root.daily; }
-    if has-usage: FooterBlock { data: root.footer; }
+    if root.has-usage: PoolCard {
+        title: root.pool-title;
+        trailing: root.pool-used;
+        tracks: root.tracks;
+        if root.entitlement != "": Caption { text: root.entitlement; }
+        if root.no-allowance != "": Caption { text: root.no-allowance; }
+    }
+    if root.has-usage && root.daily.present: DailyCard {
+        data: root.daily;
+        previous-week => { root.previous-week(); }
+        next-week => { root.next-week(); }
+    }
+    if root.has-usage: FooterBlock {
+        data: root.footer;
+        sign-in-again => { root.sign-in-again(); }
+        sign-out => { root.sign-out(); }
+    }
 }

@@ -20,11 +20,14 @@ mod panels_common;
 use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use panels_common::{at, ctx, daily, signed_out, status, week};
+use slint::fontique_011::{fontique, shared_collection};
 use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
 use slint::platform::{Platform, WindowAdapter};
 use slint::{ComponentHandle, PhysicalSize, Rgb8Pixel};
+use tokenmon_core::usage::PaceHeadroom;
 use tokenmon_core::{ProviderId, Srgb};
 use tokenmon_ui::panels::bridge::*;
 use tokenmon_ui::panels::claude_chatgpt::*;
@@ -35,6 +38,24 @@ use tokenmon_ui::panels::opencode_openrouter::*;
 use tokenmon_ui::panels::overview::*;
 use tokenmon_ui::panels::switcher::build_switcher;
 use tokenmon_ui::panels::ui;
+
+/// Registers the bundled Inter fonts so text renders the same everywhere.
+fn register_fonts() {
+    let mut collection = shared_collection();
+    for bytes in [
+        &include_bytes!("fonts/Inter-Regular.ttf")[..],
+        &include_bytes!("fonts/Inter-SemiBold.ttf")[..],
+    ] {
+        collection.register_fonts(fontique::Blob::new(Arc::new(bytes.to_vec())), None);
+    }
+}
+
+/// Pins the font family of a panel window's `Typo` global.
+macro_rules! font {
+    ($w:expr) => {
+        $w.global::<ui::Typo>().set_family("Inter".into())
+    };
+}
 
 struct TestPlatform {
     last: Rc<RefCell<Option<Rc<MinimalSoftwareWindow>>>>,
@@ -132,7 +153,13 @@ fn refreshing() -> ProviderStatus {
 
 fn days() -> Option<DailyBudgetInput> {
     let mut d = daily(week([2.0, 5.0, 14.0, 20.0, 0.0, 9.0, 3.0]));
-    d.pace_caption = Some("4.0% usage left today".into());
+    d.pace = Some(PaceHeadroom {
+        daily_budget: 100.0 / 7.0,
+        earned: 30.0,
+        period_consumed: 26.0,
+        headroom_today: 4.0,
+        resets_at: None,
+    });
     Some(d)
 }
 
@@ -144,6 +171,7 @@ fn win(w: &impl ComponentHandle, name: &str) {
 fn test_every_panel_state_renders_offscreen() {
     let last = Rc::new(RefCell::new(None));
     slint::platform::set_platform(Box::new(TestPlatform { last: last.clone() })).unwrap();
+    register_fonts();
     let c = ctx();
     let tabs = tab_rows(&build_switcher(
         &ProviderId::USAGE_PROVIDERS,
@@ -215,6 +243,7 @@ fn test_every_panel_state_renders_offscreen() {
     ];
     for (name, input) in grok_cases {
         let w = ui::GrokPanel::new().unwrap();
+        font!(w);
         w.set_tabs(tabs.clone());
         apply_grok(&w, &grok::build(&input, &c));
         let (buf, h) = render(&w, &last, |w| w.get_content_height());
@@ -266,6 +295,7 @@ fn test_every_panel_state_renders_offscreen() {
     ];
     for (name, input) in bot_cases {
         let w = ui::GrokbotPanel::new().unwrap();
+        font!(w);
         w.set_tabs(tabs.clone());
         apply_grokbot(&w, &build_grokbot(&input, &c));
         let (buf, h) = render(&w, &last, |w| w.get_content_height());
@@ -322,6 +352,7 @@ fn test_every_panel_state_renders_offscreen() {
     ];
     for (name, input) in cursor_cases {
         let w = ui::CursorPanel::new().unwrap();
+        font!(w);
         w.set_tabs(tabs.clone());
         apply_cursor(&w, &build_cursor(&input, &c));
         let (buf, h) = render(&w, &last, |w| w.get_content_height());
@@ -401,6 +432,7 @@ fn test_every_panel_state_renders_offscreen() {
     ];
     for (name, input) in claude_cases {
         let w = ui::ClaudePanel::new().unwrap();
+        font!(w);
         w.set_tabs(tabs.clone());
         apply_claude(&w, &build_claude(&input, &c));
         let (buf, h) = render(&w, &last, |w| w.get_content_height());
@@ -442,6 +474,7 @@ fn test_every_panel_state_renders_offscreen() {
         ),
     ] {
         let w = ui::ChatGptPanel::new().unwrap();
+        font!(w);
         w.set_tabs(tabs.clone());
         apply_chatgpt(&w, &build_chatgpt(&input, &c));
         let (buf, h) = render(&w, &last, |w| w.get_content_height());
@@ -521,6 +554,7 @@ fn test_every_panel_state_renders_offscreen() {
         ),
     ] {
         let w = ui::OpenCodePanel::new().unwrap();
+        font!(w);
         w.set_tabs(tabs.clone());
         apply_opencode(&w, &build_opencode(&input, &c));
         let (buf, h) = render(&w, &last, |w| w.get_content_height());
@@ -584,6 +618,7 @@ fn test_every_panel_state_renders_offscreen() {
         ),
     ] {
         let w = ui::OpenRouterPanel::new().unwrap();
+        font!(w);
         w.set_tabs(tabs.clone());
         apply_openrouter(&w, &build_openrouter(&input, &c));
         let (buf, h) = render(&w, &last, |w| w.get_content_height());
@@ -642,6 +677,7 @@ fn test_every_panel_state_renders_offscreen() {
             },
         };
         let w = ui::OverviewPanel::new().unwrap();
+        font!(w);
         w.set_tabs(overview_tabs.clone());
         apply_overview(&w, &build_overview(&input, &c));
         let (buf, h) = render(&w, &last, |w| w.get_content_height());

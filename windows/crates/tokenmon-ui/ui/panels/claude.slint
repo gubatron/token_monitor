@@ -1,6 +1,7 @@
 import { PanelShell } from "shell.slint";
-import { PanelHeader, PoolCard, DailyCard, MetricGrid, ModelsCard, FooterBlock, MessageBlock, Card, SectionHeader, Caption, UsageTrack, Palette } from "parts.slint";
-import { TrackData, MetricData, ModelsData, DailyData, FooterData, HeaderData, SegmentData, ChipData, TabRowData } from "types.slint";
+import { PanelHeader, PoolCard, DailyCard, ModelsCard, FooterBlock, MessageBlock, Caption, ActionButton } from "parts.slint";
+import { Theme, Typo, PanelCard, PanelSectionHeader, DigitText, ResetCaption, SegmentedUsageBar, CategoryRow, MetricStatGrid } from "../components/kit.slint";
+import { TrackData, ModelsData, DailyData, FooterData, HeaderData, TabRowData, BarSegment, CategoryItem, MetricItem } from "types.slint";
 
 // Claude panel (spec 03 section 1.7), including the Claude Code section.
 export component ClaudePanel inherits PanelShell {
@@ -8,22 +9,46 @@ export component ClaudePanel inherits PanelShell {
     out property <length> content-height: root.shell-content-height;
     callback select-tab(int, int);
     shell-select-tab(r, c) => { root.select-tab(r, c); }
+    callback open-settings();
+    callback sign-in();
+    callback sign-in-again();
+    callback sign-out();
     in property <HeaderData> header;
     in property <bool> has-usage;
     in property <string> message;
     in property <string> button;
+    callback previous-week();
+    callback next-week();
+    callback toggle-code-models();
+    callback toggle-show-all-models();
     in property <string> pool-title;
     in property <[TrackData]> tracks;
     in property <DailyData> daily;
     in property <bool> has-code;
-    in property <[MetricData]> code-metrics;
+    in property <[MetricItem]> code-metrics;
     in property <ModelsData> code-models;
     in property <FooterData> footer;
-    PanelHeader { data: root.header; }
-    if !has-usage: MessageBlock { text: root.message; button: root.button; }
-    if has-usage: PoolCard { title: root.pool-title; tracks: root.tracks; }
-    if has-usage && daily.present: DailyCard { data: root.daily; }
-    if has-code: MetricGrid { cells: root.code-metrics; }
-    if has-code && code-models.present: ModelsCard { data: root.code-models; }
-    if has-usage: FooterBlock { data: root.footer; }
+    PanelHeader { data: root.header; open-settings => { root.open-settings(); } }
+    if !root.has-usage: MessageBlock {
+        text: root.message;
+        button: root.button;
+        clicked => { root.sign-in(); }
+    }
+    if root.has-usage: PoolCard { title: root.pool-title; tracks: root.tracks; }
+    if root.has-usage && root.daily.present: DailyCard {
+        data: root.daily;
+        previous-week => { root.previous-week(); }
+        next-week => { root.next-week(); }
+    }
+    if root.has-code: MetricStatGrid { items: root.code-metrics; }
+    if root.has-code && root.code-models.present: ModelsCard {
+        data: root.code-models;
+        toggle-expanded => { root.toggle-code-models(); }
+        toggle-show-all => { root.toggle-show-all-models(); }
+    }
+    if root.has-usage: FooterBlock {
+        data: root.footer;
+        sign-in-again => { root.sign-in-again(); }
+        sign-out => { root.sign-out(); }
+    }
 }

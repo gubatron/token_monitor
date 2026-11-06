@@ -6,7 +6,9 @@ use slint::{Color, ModelRc, SharedString, VecModel};
 use tokenmon_core::Srgb;
 
 use super::claude_chatgpt::{ChatGptUsage, ClaudePanelVm, ClaudeUsage};
-use super::common::{DailyBudgetVm, FooterVm, HeaderVm, MetricVm, ModelsCardVm, PanelVm, TrackVm};
+use super::common::{
+    DailyBudgetVm, DayBarVm, FooterVm, HeaderVm, MetricVm, ModelsCardVm, PanelVm, TrackVm, geometry,
+};
 use super::grok::GrokUsage;
 use super::grokbot_cursor::{CursorUsage, GrokbotUsage};
 use super::opencode_openrouter::{OpenCodeUsage, OpenRouterPanelVm};
@@ -38,6 +40,7 @@ fn model<T: Clone + 'static>(v: Vec<T>) -> ModelRc<T> {
 
 fn header(h: &HeaderVm) -> ui::HeaderData {
     ui::HeaderData {
+        logo_key: opt(h.provider.logo_asset_key()),
         title: text(&h.title),
         meta: opt(h.meta.as_deref()),
         accent: color(h.provider.accent()),
@@ -48,8 +51,7 @@ fn track(t: &TrackVm) -> ui::TrackData {
     ui::TrackData {
         label: text(&t.label),
         show_label: t.show_label,
-        used_text: text(&t.used_text),
-        fraction: t.fraction as f32,
+        percent: (t.fraction * 100.0) as f32,
         color: color(t.color),
         caption: opt(t.caption.as_deref()),
         caption_warning: t.caption_is_warning,
@@ -60,15 +62,46 @@ fn tracks(v: &[TrackVm]) -> ModelRc<ui::TrackData> {
     model(v.iter().map(track).collect())
 }
 
-fn metrics(v: &[MetricVm]) -> ModelRc<ui::MetricData> {
+fn metrics(v: &[MetricVm]) -> ModelRc<ui::MetricItem> {
     model(
         v.iter()
-            .map(|m| ui::MetricData {
-                title: upper(&m.title),
+            .map(|m| ui::MetricItem {
+                title: text(&m.title),
                 value: text(&m.value),
             })
             .collect(),
     )
+}
+
+/// Kit `DayBar` for one rendered column: the percent is recovered from the
+/// fill height (`min(68, max(6, 68 * pct / 100))` is its own inverse).
+fn day_bar(b: &DayBarVm) -> ui::DayBar {
+    let rows = |pairs: &[(String, String)]| -> ModelRc<ui::LabelValue> {
+        model(
+            pairs
+                .iter()
+                .map(|(l, v)| ui::LabelValue {
+                    label: text(l),
+                    value: text(v),
+                })
+                .collect(),
+        )
+    };
+    let tokens = b.hover.tokens.as_ref();
+    ui::DayBar {
+        fill_percent: (b.fill_height / geometry::STEM_HEIGHT * 100.0) as f32,
+        show_fill: b.fill_height > 0.0,
+        prior_window: b.fill_opacity < 1.0,
+        future: b.label_opacity < 1.0,
+        label_percent: text(&b.value_label),
+        label_weekday: text(&b.weekday),
+        hover_title: text(&b.hover.title),
+        hover_usage: opt(b.hover.usage_line.as_deref()),
+        tokens_total: opt(tokens.map(|t| t.total_text.as_str())),
+        tokens_cost: opt(tokens.and_then(|t| t.cost_text.as_deref())),
+        token_rows: rows(tokens.map_or(&[][..], |t| &t.rows)),
+        model_rows: rows(tokens.map_or(&[][..], |t| &t.models)),
+    }
 }
 
 fn models(m: Option<&ModelsCardVm>) -> ui::ModelsData {
@@ -112,6 +145,7 @@ fn daily(d: Option<&DailyBudgetVm>) -> ui::DailyData {
             range: SharedString::new(),
             has_nav: false,
             can_next: false,
+            accent: Color::default(),
             bars: model(Vec::new()),
             footer: SharedString::new(),
         };
@@ -123,23 +157,8 @@ fn daily(d: Option<&DailyBudgetVm>) -> ui::DailyData {
         range: text(&d.range_label),
         has_nav: d.has_navigation,
         can_next: d.can_go_next,
-        bars: model(
-            d.bars
-                .iter()
-                .map(|b| ui::BarData {
-                    fill_height: b.fill_height as f32,
-                    fill_opacity: b.fill_opacity as f32,
-                    value_label: text(&b.value_label),
-                    weekday: text(&b.weekday),
-                    label_opacity: b.label_opacity as f32,
-                    color: color(b.color),
-                    hover_title: text(&b.hover.title),
-                    hover_usage: opt(b.hover.usage_line.as_deref()),
-                    hover_tokens: opt(b.hover.tokens.as_ref().map(|t| t.total_text.as_str())),
-                    hover_cost: opt(b.hover.tokens.as_ref().and_then(|t| t.cost_text.as_deref())),
-                })
-                .collect(),
-        ),
+        accent: d.bars.first().map_or(Color::default(), |b| color(b.color)),
+        bars: model(d.bars.iter().map(day_bar).collect()),
         footer: opt(d.footer.as_deref()),
     }
 }
@@ -172,6 +191,7 @@ pub fn tab_rows(rows: &[RowVm]) -> ModelRc<ui::TabRowData> {
                         .iter()
                         .map(|c| ui::TabData {
                             label: opt(c.tab.as_ref().map(|t| t.label)),
+                            logo_key: opt(c.tab.as_ref().and_then(|t| t.logo)),
                             selected: c.tab.as_ref().is_some_and(|t| t.selected),
                             present: c.tab.is_some(),
                             divider: c.leading_divider,
@@ -196,11 +216,10 @@ pub fn apply_grok(w: &ui::GrokPanel, p: &PanelVm<GrokUsage>) {
         w.set_segments(model(
             u.segments
                 .iter()
-                .map(|s| ui::SegmentData {
-                    x: s.x as f32,
+                .map(|s| ui::BarSegment {
                     width: s.width as f32,
                     color: s.color.map_or(Color::default(), color),
-                    grey: s.color.is_none(),
+                    remainder: s.color.is_none(),
                 })
                 .collect(),
         ));
@@ -210,9 +229,9 @@ pub fn apply_grok(w: &ui::GrokPanel, p: &PanelVm<GrokUsage>) {
             u.categories
                 .iter()
                 .flatten()
-                .map(|c| ui::ChipData {
+                .map(|c| ui::CategoryItem {
                     name: text(&c.name),
-                    percent: text(&c.percent_text),
+                    percent_text: text(&c.percent_text),
                     color: color(c.color),
                 })
                 .collect(),
@@ -309,7 +328,7 @@ pub fn apply_opencode(w: &ui::OpenCodePanel, p: &PanelVm<OpenCodeUsage>) {
         w.set_models(models(u.models.as_ref()));
         w.set_has_metrics(u.metrics.is_some());
         w.set_metrics(metrics(u.metrics.as_deref().unwrap_or(&[])));
-        w.set_sign_in(opt(u.sign_in.as_ref().map(|a| a.label.as_str())));
+        w.set_sign_in_label(opt(u.sign_in.as_ref().map(|a| a.label.as_str())));
         w.set_footer(footer(&u.footer, u.error_text.as_deref()));
     }
 }
@@ -321,6 +340,7 @@ pub fn apply_openrouter(w: &ui::OpenRouterPanel, v: &OpenRouterPanelVm) {
     w.set_has_usage(p.usage.is_some());
     w.set_message(opt(p.message.as_deref()));
     w.set_has_key_entry(v.key_entry.is_some());
+    w.set_key_draft(text(&v.key_draft));
     if let Some(e) = &v.key_entry {
         w.set_key_placeholder(text(e.placeholder));
         w.set_key_button(text(e.button_label));
@@ -355,10 +375,11 @@ pub fn apply_overview(w: &ui::OverviewPanel, v: &OverviewPanelVm) {
         v.cards
             .iter()
             .map(|c| ui::OverviewCardData {
+                logo_key: opt(c.provider.logo_asset_key()),
                 title: text(&c.title),
                 meta: text(&c.meta.to_uppercase()),
                 used_text: text(&c.used_text),
-                fraction: c.fraction as f32,
+                percent: (c.fraction * 100.0) as f32,
                 color: color(c.color),
                 caption: opt(c.caption.as_deref()),
                 caption_tertiary: c.caption_is_tertiary,
@@ -369,6 +390,8 @@ pub fn apply_overview(w: &ui::OverviewPanel, v: &OverviewPanelVm) {
     ));
     w.set_daily_title(upper(&v.daily.title));
     w.set_has_nav(v.daily.has_navigation);
+    w.set_can_back(v.daily.can_go_back);
+    w.set_can_forward(v.daily.can_go_forward);
     w.set_empty_message(opt(v.daily.chart.empty_message));
     w.set_hours(model(
         v.daily

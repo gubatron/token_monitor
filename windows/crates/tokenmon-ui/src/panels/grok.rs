@@ -8,6 +8,7 @@ use super::common::{
     ProviderStatus, SignInAction, build_daily_budget, geometry, waiting_message,
 };
 use super::format;
+use crate::kit::segments::{ProductShare, SEGMENT_GAP, layout_segments};
 
 /// A Grok product percentage (already filtered by the visibility settings).
 #[derive(Debug, Clone, PartialEq)]
@@ -91,60 +92,32 @@ pub struct GrokUsage {
     pub footer: FooterVm,
 }
 
-/// `segmentWidths(percents, usable, minWidth)` from `SegmentedUsageBar`.
-///
-/// ```
-/// use tokenmon_ui::panels::grok::segment_widths;
-/// assert_eq!(segment_widths(&[50.0, 25.0, 25.0], 100.0, 3.0), vec![50.0, 25.0, 25.0]);
-/// assert_eq!(segment_widths(&[50.0, 50.0], 0.0, 3.0), vec![3.0, 3.0]);
-/// ```
-pub fn segment_widths(percents: &[f64], usable: f64, min_width: f64) -> Vec<f64> {
-    let mut widths: Vec<f64> = percents
-        .iter()
-        .map(|p| min_width.max(usable * p.max(0.0) / 100.0))
-        .collect();
-    let sum: f64 = widths.iter().sum();
-    if usable > 0.0 && sum > usable {
-        let k = usable / sum;
-        for w in &mut widths {
-            *w *= k;
-        }
-    }
-    widths
-}
+/// `segmentWidths(percents, usable, minWidth)`: shared with the kit's `SegmentedUsageBar`.
+pub use crate::kit::segments::segment_widths;
 
 /// Lays out the pool bar for `width` px (visible products > 0.05, remainder > 0.5).
+///
+/// Delegates to [`layout_segments`]; `x` is the running left edge including the 2px gaps.
 pub fn pool_segments(products: &[ProductInput], width: f64) -> Vec<SegmentVm> {
-    let visible: Vec<&ProductInput> = products.iter().filter(|p| p.percent > 0.05).collect();
-    let used = visible
+    let shares: Vec<ProductShare> = products
         .iter()
-        .map(|p| p.percent.max(0.0))
-        .sum::<f64>()
-        .min(100.0);
-    let remainder = (100.0 - used).max(0.0);
-    let has_rest = remainder > 0.5;
-    let slots = visible.len() + usize::from(has_rest);
-    if slots == 0 {
-        return Vec::new();
-    }
-    let gap = 2.0;
-    let usable = width - gap * (slots as f64 - 1.0);
-    let mut pcts: Vec<f64> = visible.iter().map(|p| p.percent).collect();
-    if has_rest {
-        pcts.push(remainder);
-    }
-    let widths = segment_widths(&pcts, usable, 3.0);
+        .map(|p| ProductShare {
+            name: p.short_name.clone(),
+            percent_of_pool: p.percent,
+            color: p.color,
+        })
+        .collect();
+    let specs = layout_segments(&shares, width, Srgb::rgb(0.5, 0.5, 0.5));
     let mut x = 0.0;
-    widths
+    specs
         .iter()
-        .enumerate()
-        .map(|(i, w)| {
+        .map(|s| {
             let seg = SegmentVm {
                 x,
-                width: *w,
-                color: visible.get(i).map(|p| p.color),
+                width: s.width,
+                color: (!s.remainder).then_some(s.color),
             };
-            x += w + gap;
+            x += s.width + SEGMENT_GAP;
             seg
         })
         .collect()

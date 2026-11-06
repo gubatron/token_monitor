@@ -1,7 +1,7 @@
 // Panel window shell (spec 04 section 3.2): 420 wide, 12 padding, rounded 12,
 // 4-per-row provider switcher, then the selected provider's content.
 import { TabRowData } from "types.slint";
-import { Palette } from "parts.slint";
+import { Theme, Typo, Logos } from "../components/kit.slint";
 
 export component ProviderSwitcher inherits Rectangle {
     in property <[TabRowData]> rows;
@@ -9,7 +9,7 @@ export component ProviderSwitcher inherits Rectangle {
     height: rows.length * 28px;
     border-radius: 6px;
     border-width: 1px;
-    border-color: Palette.separator;
+    border-color: Theme.separator;
     clip: true;
     VerticalLayout {
         for row[ri] in rows: Rectangle {
@@ -17,21 +17,37 @@ export component ProviderSwitcher inherits Rectangle {
             if row.top-divider: Rectangle {
                 y: 0;
                 height: 1px;
-                background: Palette.separator;
+                background: Theme.separator;
             }
             HorizontalLayout {
                 for cell[ci] in row.cells: Rectangle {
-                    background: cell.selected ? Palette.primary.with-alpha(0.08) : transparent;
+                    background: cell.selected ? Theme.primary.with-alpha(0.08) : transparent;
                     if cell.divider: Rectangle {
                         x: 0;
                         width: 1px;
-                        background: Palette.separator;
+                        background: Theme.separator;
                     }
-                    Text {
-                        text: cell.label;
-                        font-size: 11px;
-                        color: cell.selected ? Palette.primary : Palette.secondary;
-                        overflow: elide;
+                    HorizontalLayout {
+                        alignment: center;
+                        spacing: 4px;
+                        padding-left: 4px;
+                        padding-right: 4px;
+                        if cell.present && cell.logo-key != "": Image {
+                            source: Logos.image(cell.logo-key);
+                            colorize: cell.selected ? Theme.primary : Theme.secondary;
+                            width: 12px;
+                            height: 12px;
+                            y: (parent.height - 12px) / 2;
+                        }
+                        Text {
+                            text: cell.label;
+                            font-family: Typo.family;
+                            font-size: 11px;
+                            font-weight: cell.selected ? Typo.semibold : Typo.regular;
+                            color: cell.selected ? Theme.primary : Theme.secondary;
+                            vertical-alignment: center;
+                            overflow: elide;
+                        }
                     }
                     TouchArea {
                         enabled: cell.present;
@@ -47,9 +63,10 @@ export component PanelShell inherits Window {
     in property <[TabRowData]> shell-tabs;
     callback shell-select-tab(int, int);
     out property <length> shell-content-height: layout.preferred-height;
+    default-font-family: Typo.family;
     width: 420px;
     height: layout.preferred-height;
-    background: Palette.window-bg;
+    background: Theme.window-background;
     layout := VerticalLayout {
         padding: 12px;
         spacing: 0px;

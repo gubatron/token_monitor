@@ -1,432 +1,228 @@
-// Layout parts used by the panels. These are local stand-ins for the
-// ws-ui-kit components (PanelCard, SlimUsageTrack, MetricStatGrid, ...);
-// they are swapped for the shared ones once ui/components lands.
-import { TrackData, MetricData, ModelRowData, ModelsData, DailyData, FooterData, HeaderData } from "types.slint";
+// Panel building blocks composed from the ws-ui-kit components. Every string
+// is decided in Rust (src/panels); these only lay out what they are given.
+import { Theme, Typo, PanelCard, PanelSectionHeader, DigitText, SlimUsageTrack, MetricStatGrid, ProviderHeaderRow, StaleDataCaption, CollapsibleSectionHeader, DailyBudgetBars } from "../components/kit.slint";
+import { TrackData, ModelsData, DailyData, FooterData, HeaderData } from "types.slint";
 
-export global Palette {
-    in-out property <bool> dark: false;
-    out property <color> primary: dark ? #ffffffd9 : #000000d9;
-    out property <color> secondary: dark ? #ffffff8c : #00000080;
-    out property <color> tertiary: dark ? #ffffff40 : #00000042;
-    out property <color> window-bg: dark ? #323232 : #ececec;
-    out property <color> control-bg: dark ? #1e1e1e : #ffffff;
-    out property <color> separator: dark ? #ffffff1a : #0000001a;
-    out property <color> track: dark ? #ffffff1f : #0000001f;
-    out property <color> warning: #ff8c00;
-    out property <color> danger: #ff3b30;
+/// Plain 12pt caption (secondary, or warning orange).
+export component Caption inherits Text {
+    in property <bool> warning: false;
+    font-family: Typo.family;
+    font-size: Typo.body-size;
+    wrap: word-wrap;
+    color: root.warning ? #ff8c00 : Theme.secondary;
 }
 
-export component PanelCard inherits Rectangle {
-    background: Palette.control-bg;
-    border-radius: 12px;
+/// A small bordered action button ("Sign In to Grok…").
+export component ActionButton inherits Rectangle {
+    in property <string> text;
+    in property <bool> enabled: true;
+    callback clicked();
+    height: 24px;
+    min-width: label.preferred-width + 24px;
+    border-radius: 5px;
+    background: Theme.control-background;
     border-width: 1px;
-    border-color: Palette.separator;
-    clip: true;
+    border-color: Theme.separator;
+    opacity: root.enabled ? 1.0 : 0.4;
+    accessible-role: button;
+    accessible-label: root.text;
+    label := Text {
+        text: root.text;
+        font-family: Typo.family;
+        font-size: Typo.caption-size;
+        color: Theme.primary;
+    }
+    TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+/// Provider header row (logo, title, meta, settings cog).
+export component PanelHeader inherits ProviderHeaderRow {
+    in property <HeaderData> data;
+    logo-key: root.data.logo-key;
+    title: root.data.title;
+    trailing: root.data.meta;
+}
+
+/// Slim track from view-model data.
+export component UsageTrack inherits SlimUsageTrack {
+    in property <TrackData> data;
+    label: root.data.label;
+    shows-label: root.data.show-label;
+    percent: root.data.percent;
+    fill: root.data.color;
+    caption: root.data.caption-warning ? "" : root.data.caption;
+}
+
+/// Pool header row plus tracks: "Usage Pool Weekly ........ 36% Used".
+export component PoolCard inherits PanelCard {
+    in property <string> title;
+    in property <string> trailing;
+    in property <[TrackData]> tracks;
+    HorizontalLayout {
+        spacing: 8px;
+        PanelSectionHeader { title: root.title; horizontal-stretch: 1; }
+        if root.trailing != "": DigitText { text: root.trailing; }
+    }
+    for t in root.tracks: VerticalLayout {
+        spacing: 5px;
+        UsageTrack { data: t; }
+        if t.caption-warning && t.caption != "": Caption { text: t.caption; warning: true; }
+    }
     @children
 }
 
-// A card that grows to fit its children (padding 12, spacing 8).
-export component Card inherits Rectangle {
-    background: Palette.control-bg;
-    border-radius: 12px;
-    border-width: 1px;
-    border-color: Palette.separator;
-    clip: true;
-    height: lay.preferred-height;
-    lay := VerticalLayout {
-        padding: 12px;
-        spacing: 8px;
-        @children
-    }
-}
-
-export component SectionHeader inherits Text {
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 1.6px;
-    color: Palette.secondary;
-}
-
-export component Caption inherits Text {
-    in property <bool> tertiary: false;
-    in property <bool> warning: false;
-    font-size: 12px;
-    wrap: word-wrap;
-    color: warning ? Palette.warning : (tertiary ? Palette.tertiary : Palette.secondary);
-}
-
-export component PanelHeader inherits HorizontalLayout {
-    in property <HeaderData> data;
-    spacing: 8px;
-    height: 22px;
-    Rectangle {
-        width: 14px;
-        height: 14px;
-        border-radius: 7px;
-        background: data.accent;
-        y: (parent.height - self.height) / 2;
-    }
-    Text {
-        text: data.title;
-        font-size: 13px;
-        font-weight: 600;
-        color: Palette.primary;
-        vertical-alignment: center;
-    }
-    Text {
-        text: data.meta;
-        font-size: 10px;
-        font-weight: 600;
-        color: Palette.secondary;
-        vertical-alignment: center;
-    }
-    Rectangle { }
-    Text {
-        text: "⚙";
-        font-size: 12px;
-        color: Palette.secondary;
-        vertical-alignment: center;
-    }
-}
-
-export component UsageTrack inherits VerticalLayout {
-    in property <TrackData> data;
-    spacing: 5px;
-    if data.show-label: HorizontalLayout {
-        spacing: 8px;
-        Text {
-            text: data.label;
-            font-size: 12px;
-            font-weight: 600;
-            color: Palette.primary;
-        }
-        Rectangle { }
-        Text {
-            text: data.used-text;
-            font-size: 12px;
-            font-weight: 600;
-            color: Palette.primary;
-        }
-    }
-    Rectangle {
-        height: 8px;
-        border-radius: 4px;
-        background: Palette.track;
-        Rectangle {
-            x: 0;
-            width: parent.width * data.fraction;
-            border-radius: 4px;
-            background: data.color;
-        }
-    }
-    if data.caption != "": Caption {
-        text: data.caption;
-        warning: data.caption-warning;
-    }
-}
-
-export component MetricGrid inherits PanelCard {
-    in property <[MetricData]> cells;
-    height: 2 * 62px;
-    GridLayout {
-        for cell[i] in cells: VerticalLayout {
-            row: floor(i / 2);
-            col: mod(i, 2);
-            padding: 14px;
-            spacing: 6px;
-            SectionHeader { text: cell.title; }
-            Text {
-                text: cell.value;
-                font-size: 12px;
-                font-weight: 600;
-                color: Palette.primary;
-                overflow: elide;
-            }
-        }
-    }
-    Rectangle {
-        x: parent.width / 2;
-        width: 1px;
-        background: Palette.separator;
-    }
-    Rectangle {
-        y: parent.height / 2;
-        height: 1px;
-        background: Palette.separator;
-    }
-}
-
+/// Models card: collapsible header, rows with share bars, View all toggle.
 export component ModelsCard inherits PanelCard {
     in property <ModelsData> data;
     callback toggle-expanded();
     callback toggle-show-all();
-    height: mlay.preferred-height;
-    mlay := VerticalLayout {
-        padding: 12px;
-        spacing: 8px;
+    if root.data.collapsible: CollapsibleSectionHeader {
+        title: root.data.title;
+        expanded: root.data.expanded;
+        height: 16px;
+        toggled => { root.toggle-expanded(); }
+    }
+    if !root.data.collapsible: PanelSectionHeader { title: root.data.title; }
+    for row in root.data.rows: VerticalLayout {
+        spacing: 4px;
         HorizontalLayout {
-            SectionHeader { text: data.title; }
-            Rectangle { }
-            if data.collapsible: Text {
-                text: data.expanded ? "⌄" : "›";
-                color: Palette.secondary;
-                font-size: 11px;
+            spacing: 6px;
+            DigitText { text: row.name; overflow: elide; }
+            if row.tag != "": Text {
+                text: row.tag;
+                font-family: Typo.family;
+                font-size: Typo.micro-size;
+                color: Theme.secondary;
+                vertical-alignment: center;
             }
+            Rectangle { horizontal-stretch: 1; }
+            DigitText { text: row.cost; }
         }
-        for row in data.rows: VerticalLayout {
-            spacing: 4px;
-            HorizontalLayout {
-                spacing: 6px;
-                Text {
-                    text: row.name;
-                    font-size: 12px;
-                    font-weight: 600;
-                    color: Palette.primary;
-                    overflow: elide;
-                }
-                if row.tag != "": Text {
-                    text: row.tag;
-                    font-size: 10px;
-                    color: Palette.secondary;
-                }
-                Rectangle { }
-                Text {
-                    text: row.cost;
-                    font-size: 12px;
-                    font-weight: 600;
-                    color: Palette.primary;
-                }
-            }
+        Rectangle {
+            height: 6px;
+            border-radius: 3px;
+            background: Theme.usage-remaining-track;
             Rectangle {
-                height: 6px;
+                x: 0;
+                width: parent.width * row.share;
                 border-radius: 3px;
-                background: Palette.track;
-                Rectangle {
-                    x: 0;
-                    width: parent.width * row.share;
-                    border-radius: 3px;
-                    background: row.color;
-                }
+                background: row.color;
             }
         }
-        if data.toggle != "": Text {
-            text: data.toggle;
-            font-size: 11px;
-            color: Palette.secondary;
+    }
+    if root.data.toggle != "": Rectangle {
+        height: 16px;
+        accessible-role: button;
+        accessible-label: root.data.toggle;
+        Text {
+            text: root.data.toggle;
+            font-family: Typo.family;
+            font-size: Typo.caption-size;
+            color: Theme.secondary;
+            horizontal-alignment: left;
+        }
+        TouchArea {
+            mouse-cursor: pointer;
+            clicked => { root.toggle-show-all(); }
         }
     }
 }
 
-export component DailyBars inherits VerticalLayout {
+/// Daily budget card with week paging.
+export component DailyCard inherits PanelCard {
     in property <DailyData> data;
     callback previous-week();
     callback next-week();
-    in-out property <int> hovered: -1;
-    spacing: 8px;
-    HorizontalLayout {
-        spacing: 8px;
-        SectionHeader { text: data.title; }
-        Text {
-            text: data.allowance;
-            font-size: 12px;
-            font-weight: 600;
-            color: Palette.primary;
-        }
-        Rectangle { }
-        Text {
-            text: data.range;
-            font-size: 12px;
-            font-weight: 600;
-            color: Palette.primary;
-        }
+    DailyBudgetBars {
+        days: root.data.bars;
+        accent: root.data.accent;
+        header-percent: root.data.allowance;
+        range-label: root.data.range;
+        footer: root.data.footer;
+        show-navigation: root.data.has-nav;
+        can-previous: true;
+        can-next: root.data.can-next;
+        previous-week => { root.previous-week(); }
+        next-week => { root.next-week(); }
     }
-    if data.has-nav: HorizontalLayout {
-        Rectangle {
-            width: 22px;
-            height: 22px;
-            border-radius: 5px;
-            background: Palette.separator;
-            Text { text: "‹"; color: Palette.secondary; }
-        }
-        Rectangle { }
-        Rectangle {
-            width: 22px;
-            height: 22px;
-            border-radius: 5px;
-            background: Palette.separator;
-            Text { text: "›"; color: data.can-next ? Palette.secondary : Palette.tertiary; }
-        }
-    }
-    Rectangle {
-        height: 110px;
-        HorizontalLayout {
-            for bar[i] in data.bars: VerticalLayout {
-                spacing: 4px;
-                alignment: start;
-                Rectangle {
-                    height: 68px;
-                    Rectangle {
-                        width: 12px;
-                        height: 68px;
-                        border-radius: 5px;
-                        background: Palette.track;
-                        border-width: root.hovered == i ? 1px : 0px;
-                        border-color: Palette.primary;
-                        Rectangle {
-                            y: parent.height - self.height;
-                            height: bar.fill-height;
-                            border-radius: 5px;
-                            background: bar.color;
-                            opacity: bar.fill-opacity;
-                        }
-                    }
-                }
-                VerticalLayout {
-                    height: 32px;
-                    spacing: 1px;
-                    opacity: bar.label-opacity;
-                    Text {
-                        text: bar.value-label;
-                        font-size: 10px;
-                        font-weight: 600;
-                        color: Palette.primary;
-                        horizontal-alignment: center;
-                    }
-                    Text {
-                        text: bar.weekday;
-                        font-size: 10px;
-                        font-weight: 600;
-                        color: Palette.secondary;
-                        horizontal-alignment: center;
-                    }
-                }
-            }
-        }
-        TouchArea {
-            moved => {
-                root.hovered = Math.min(data.bars.length - 1, Math.max(0, Math.floor(self.mouse-x / (self.width / Math.max(1, data.bars.length)))));
-            }
-            changed has-hover => {
-                if !self.has-hover { root.hovered = -1; }
-            }
-        }
-        if root.hovered >= 0 && root.hovered < data.bars.length: Rectangle {
-            x: Math.max(0px, parent.width * (root.hovered + 0.5) / data.bars.length - 140px);
-            y: 8px;
-            width: 190px;
-            background: Palette.window-bg;
-            border-radius: 8px;
-            border-width: 1px;
-            border-color: Palette.separator;
-            VerticalLayout {
-                padding-left: 10px;
-                padding-right: 10px;
-                padding-top: 8px;
-                padding-bottom: 8px;
-                spacing: 4px;
-                Text {
-                    text: data.bars[root.hovered].hover-title;
-                    font-size: 11px;
-                    font-weight: 600;
-                    color: Palette.primary;
-                }
-                Caption { text: data.bars[root.hovered].hover-usage; }
-                if data.bars[root.hovered].hover-tokens != "": Text {
-                    text: data.bars[root.hovered].hover-tokens + " tokens " + data.bars[root.hovered].hover-cost;
-                    font-size: 12px;
-                    font-weight: 600;
-                    color: Palette.primary;
-                }
-            }
-        }
-    }
-    if data.footer != "": Caption { text: data.footer; }
 }
 
+/// Stale caption, sign-in-again button and the sign-out control.
 export component FooterBlock inherits VerticalLayout {
     in property <FooterData> data;
     callback sign-in-again();
     callback sign-out();
     in-out property <bool> confirming: false;
     spacing: 6px;
-    if data.stale-message != "": VerticalLayout {
-        spacing: 2px;
-        Caption { text: data.stale-message; }
-        if data.stale-age != "": Caption { text: data.stale-age; }
+    if root.data.stale-message != "": StaleDataCaption {
+        message: root.data.stale-message;
+        detail: root.data.stale-age;
     }
-    if data.error-text != "": Caption { text: data.error-text; }
-    if data.sign-in-again != "": Rectangle {
-        height: 24px;
-        border-radius: 5px;
-        background: Palette.control-bg;
-        border-width: 1px;
-        border-color: Palette.separator;
-        Text {
-            text: data.sign-in-again;
-            font-size: 11px;
-            color: Palette.primary;
-        }
+    if root.data.error-text != "": Caption { text: root.data.error-text; }
+    if root.data.sign-in-again != "": ActionButton {
+        text: root.data.sign-in-again;
+        clicked => { root.sign-in-again(); }
     }
-    if data.sign-out-confirm != "": HorizontalLayout {
-        spacing: 6px;
-        Rectangle { }
-        if confirming: Text {
-            text: data.sign-out-confirm;
-            font-size: 11px;
-            color: Palette.secondary;
+    if root.data.sign-out-confirm != "": HorizontalLayout {
+        spacing: 8px;
+        alignment: end;
+        if root.confirming: Text {
+            text: root.data.sign-out-confirm;
+            font-family: Typo.family;
+            font-size: Typo.caption-size;
+            color: Theme.secondary;
+            vertical-alignment: center;
         }
-        if confirming: Text { text: "✓"; color: Palette.danger; font-size: 12px; }
-        if confirming: Text { text: "✕"; color: Palette.secondary; font-size: 12px; }
-        if !confirming: Text { text: "⏏"; color: Palette.tertiary; font-size: 11px; }
+        if root.confirming: Rectangle {
+            width: 20px;
+            height: 20px;
+            accessible-role: button;
+            accessible-label: "Confirm sign out";
+            Text { text: "✓"; color: Theme.destructive; font-size: 12px; }
+            TouchArea {
+                mouse-cursor: pointer;
+                clicked => { root.confirming = false; root.sign-out(); }
+            }
+        }
+        if root.confirming: Rectangle {
+            width: 20px;
+            height: 20px;
+            accessible-role: button;
+            accessible-label: "Cancel";
+            Text { text: "✕"; color: Theme.secondary; font-size: 12px; }
+            TouchArea {
+                mouse-cursor: pointer;
+                clicked => { root.confirming = false; }
+            }
+        }
+        if !root.confirming: Rectangle {
+            width: 20px;
+            height: 20px;
+            accessible-role: button;
+            accessible-label: "Sign out";
+            Text { text: "⏏"; color: Theme.tertiary; font-size: 11px; }
+            TouchArea {
+                mouse-cursor: pointer;
+                clicked => { root.confirming = true; }
+            }
+        }
     }
 }
 
+/// Explanatory text with an optional primary button (non-usage states).
 export component MessageBlock inherits VerticalLayout {
     in property <string> text;
     in property <string> button;
+    callback clicked();
     spacing: 10px;
-    Caption { text: root.text; }
-    if button != "": Rectangle {
-        height: 24px;
+    if root.text != "": Caption { text: root.text; }
+    if root.button != "": ActionButton {
+        text: root.button;
         width: 160px;
-        border-radius: 5px;
-        background: Palette.control-bg;
-        border-width: 1px;
-        border-color: Palette.separator;
-        Text {
-            text: button;
-            font-size: 11px;
-            color: Palette.primary;
-        }
-    }
-}
-
-// Pool header row plus tracks: "Usage Pool Weekly ........ 36% Used".
-export component PoolCard inherits Card {
-    in property <string> title;
-    in property <string> trailing;
-    in property <[TrackData]> tracks;
-    HorizontalLayout {
-        spacing: 8px;
-        SectionHeader { text: root.title; }
-        Rectangle { }
-        Text {
-            text: root.trailing;
-            font-size: 12px;
-            font-weight: 600;
-            color: Palette.primary;
-        }
-    }
-    for t in tracks: UsageTrack { data: t; }
-}
-
-export component DailyCard inherits Card {
-    in property <DailyData> data;
-    callback previous-week();
-    callback next-week();
-    DailyBars {
-        data: root.data;
-        previous-week => { root.previous-week(); }
-        next-week => { root.next-week(); }
+        clicked => { root.clicked(); }
     }
 }

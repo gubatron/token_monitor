@@ -1,19 +1,18 @@
 // Data structs filled by src/panels/bridge.rs from the plain-Rust view models.
 // The .slint panels only lay out these values; every string is decided in Rust.
+// The kit structs are re-exported so the bridge builds them from this compile
+// unit (generated Slint structs are per compile unit).
+import { DayBar } from "../components/kit.slint";
+export { DayBar, BarSegment, CategoryItem, MetricItem, LabelValue } from "../components/kit.slint";
 
 export struct TrackData {
     label: string,
     show-label: bool,
-    used-text: string,
-    fraction: float,
+    /// 0...100.
+    percent: float,
     color: color,
     caption: string,
     caption-warning: bool,
-}
-
-export struct MetricData {
-    title: string,
-    value: string,
 }
 
 export struct ModelRowData {
@@ -33,19 +32,6 @@ export struct ModelsData {
     rows: [ModelRowData],
 }
 
-export struct BarData {
-    fill-height: length,
-    fill-opacity: float,
-    value-label: string,
-    weekday: string,
-    label-opacity: float,
-    color: color,
-    hover-title: string,
-    hover-usage: string,
-    hover-tokens: string,
-    hover-cost: string,
-}
-
 export struct DailyData {
     present: bool,
     title: string,
@@ -53,21 +39,9 @@ export struct DailyData {
     range: string,
     has-nav: bool,
     can-next: bool,
-    bars: [BarData],
+    accent: color,
+    bars: [DayBar],
     footer: string,
-}
-
-export struct SegmentData {
-    x: length,
-    width: length,
-    color: color,
-    grey: bool,
-}
-
-export struct ChipData {
-    name: string,
-    percent: string,
-    color: color,
 }
 
 export struct FooterData {
@@ -79,6 +53,8 @@ export struct FooterData {
 }
 
 export struct HeaderData {
+    /// `ProviderId::logo_asset_key()`.
+    logo-key: string,
     title: string,
     meta: string,
     accent: color,
@@ -102,10 +78,11 @@ export struct LegendData {
 }
 
 export struct OverviewCardData {
+    logo-key: string,
     title: string,
     meta: string,
     used-text: string,
-    fraction: float,
+    percent: float,
     color: color,
     caption: string,
     caption-tertiary: bool,
@@ -115,6 +92,7 @@ export struct OverviewCardData {
 
 export struct TabData {
     label: string,
+    logo-key: string,
     selected: bool,
     present: bool,
     divider: bool,

@@ -355,6 +355,20 @@ pub struct OpenRouterPanelVm {
     pub key_entry: Option<KeyEntryVm>,
     /// Sign-out control (usage state only).
     pub sign_out: Option<super::common::SignOutVm>,
+    /// Current text of the key field (seeds the UI field).
+    pub key_draft: String,
+}
+
+/// Whether the key button is enabled for a draft (`!draft.trim().isEmpty`);
+/// the UI re-evaluates this on every edit.
+///
+/// ```
+/// use tokenmon_ui::panels::opencode_openrouter::key_button_enabled;
+/// assert!(key_button_enabled("sk-or-v1-x"));
+/// assert!(!key_button_enabled("   "));
+/// ```
+pub fn key_button_enabled(draft: &str) -> bool {
+    !draft.trim().is_empty()
 }
 
 /// Builds the OpenRouter panel.
@@ -368,7 +382,7 @@ pub fn build_openrouter(input: &OpenRouterInput, ctx: &PanelContext) -> OpenRout
         } else {
             "Add Key"
         },
-        button_enabled: !input.key_draft.trim().is_empty(),
+        button_enabled: key_button_enabled(&input.key_draft),
         error: input.auth_error.clone(),
     };
     let Some(snap) = &input.snapshot else {
@@ -385,6 +399,7 @@ pub fn build_openrouter(input: &OpenRouterInput, ctx: &PanelContext) -> OpenRout
             panel: PanelVm::frame(header, kind, Some(text), None),
             key_entry: Some(entry),
             sign_out: None,
+            key_draft: input.key_draft.clone(),
         };
     };
     let accent = ProviderId::OpenRouter.panel_accent();
@@ -458,5 +473,6 @@ pub fn build_openrouter(input: &OpenRouterInput, ctx: &PanelContext) -> OpenRout
         ),
         key_entry: show_entry.then_some(entry),
         sign_out: Some(super::common::SignOutVm::new(ProviderId::OpenRouter)),
+        key_draft: input.key_draft.clone(),
     }
 }

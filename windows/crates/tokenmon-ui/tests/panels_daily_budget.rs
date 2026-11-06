@@ -5,6 +5,7 @@ mod panels_common;
 
 use panels_common::*;
 use tokenmon_core::ProviderId;
+use tokenmon_core::usage::PaceHeadroom;
 use tokenmon_ui::panels::common::*;
 
 /// Range label for one month and across months.
@@ -93,7 +94,13 @@ fn test_footer_rules() {
             .as_deref(),
         Some("No usage yet · 14.3%/day")
     );
-    input.pace_caption = Some("On pace for today".to_owned());
+    input.pace = Some(PaceHeadroom {
+        daily_budget: 100.0 / 7.0,
+        earned: 10.0,
+        period_consumed: 10.0,
+        headroom_today: 0.0,
+        resets_at: None,
+    });
     assert_eq!(
         build_daily_budget(&input, &ctx())
             .unwrap()

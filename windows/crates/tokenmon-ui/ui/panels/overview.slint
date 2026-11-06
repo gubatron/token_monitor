@@ -1,6 +1,7 @@
 import { PanelShell } from "shell.slint";
-import { PanelHeader, PoolCard, DailyCard, MetricGrid, ModelsCard, FooterBlock, MessageBlock, Card, SectionHeader, Caption, UsageTrack, Palette } from "parts.slint";
-import { TrackData, MetricData, ModelsData, DailyData, FooterData, HeaderData, SegmentData, ChipData, TabRowData, OverviewCardData, HourBarData, LegendData } from "types.slint";
+import { PanelHeader, Caption, ActionButton } from "parts.slint";
+import { Theme, Typo, PanelCard, PanelSectionHeader, PanelMetaLabel, DigitText, SlimUsageTrack, ResetCaption, WeekChartNavigation, ProviderHeaderRow, Logos } from "../components/kit.slint";
+import { TabRowData, OverviewCardData, HourBarData, LegendData } from "types.slint";
 
 // Overview panel (spec 04 section 3.5).
 export component OverviewPanel inherits PanelShell {
@@ -8,78 +9,175 @@ export component OverviewPanel inherits PanelShell {
     out property <length> content-height: root.shell-content-height;
     callback select-tab(int, int);
     shell-select-tab(r, c) => { root.select-tab(r, c); }
+    callback open-settings();
+    /// A card's sign-in button (argument: card index).
+    callback card-sign-in(int);
+    /// A card's sign-out control (argument: card index).
+    callback card-sign-out(int);
+    callback previous-day();
+    callback next-day();
     in property <string> version;
     in property <[OverviewCardData]> cards;
     in property <string> daily-title;
     in property <bool> has-nav;
+    in property <bool> can-back;
+    in property <bool> can-forward;
     in property <[HourBarData]> hours;
     in property <[LegendData]> legend;
     in property <string> empty-message;
-    HorizontalLayout {
-        spacing: 8px;
-        height: 24px;
-        Rectangle { width: 24px; height: 24px; border-radius: 12px; background: Palette.primary; }
-        Text { text: "TokenMon"; font-size: 13px; font-weight: 600; color: Palette.primary; vertical-alignment: center; }
-        Rectangle { }
-        Text { text: root.version; font-size: 12px; font-weight: 600; color: Palette.tertiary; vertical-alignment: center; }
-        Text { text: "⚙"; font-size: 12px; color: Palette.secondary; vertical-alignment: center; }
+    ProviderHeaderRow {
+        logo-key: "tokenmon-mark";
+        title: "TokenMon";
+        trailing: root.version;
+        open-settings => { root.open-settings(); }
     }
-    for c in root.cards: Card {
+    for c[i] in root.cards: PanelCard {
         HorizontalLayout {
             spacing: 8px;
-            Rectangle { width: 14px; height: 14px; border-radius: 7px; background: c.color; y: 2px; }
-            Text { text: c.title; font-size: 13px; font-weight: 600; color: Palette.primary; }
-            SectionHeader { text: c.meta; vertical-alignment: center; }
-            Rectangle { }
-            Text { text: c.used-text; font-size: 12px; font-weight: 600; color: Palette.primary; }
+            Image {
+                source: Logos.image(c.logo-key);
+                colorize: c.color;
+                width: 14px;
+                height: 14px;
+                y: (parent.height - 14px) / 2;
+            }
+            Text {
+                text: c.title;
+                font-family: Typo.family;
+                font-size: Typo.title-size;
+                font-weight: Typo.semibold;
+                color: Theme.primary;
+                vertical-alignment: center;
+            }
+            PanelMetaLabel { label: c.meta; uppercased: true; vertical-alignment: center; }
+            Rectangle { horizontal-stretch: 1; }
+            DigitText { text: c.used-text; vertical-alignment: center; }
         }
-        Rectangle {
-            height: 8px;
-            border-radius: 4px;
-            background: Palette.track;
-            Rectangle { x: 0; width: parent.width * c.fraction; border-radius: 4px; background: c.color; }
+        SlimUsageTrack {
+            shows-label: false;
+            percent: c.percent;
+            fill: c.color;
         }
-        if c.caption != "": Caption { text: c.caption; tertiary: c.caption-tertiary; }
-        if c.sign-in != "": Text { text: c.sign-in; font-size: 11px; color: Palette.primary; }
-        if c.has-sign-out: Text { text: "⏏"; font-size: 11px; color: Palette.tertiary; horizontal-alignment: right; }
+        if c.caption != "": Text {
+            text: c.caption;
+            font-family: Typo.family;
+            font-size: Typo.body-size;
+            color: c.caption-tertiary ? Theme.tertiary : Theme.secondary;
+            wrap: word-wrap;
+        }
+        if c.sign-in != "": ActionButton {
+            text: c.sign-in;
+            width: 160px;
+            clicked => { root.card-sign-in(i); }
+        }
+        if c.has-sign-out: Rectangle {
+            height: 16px;
+            accessible-role: button;
+            accessible-label: "Sign out";
+            Text {
+                text: "⏏";
+                font-size: Typo.caption-size;
+                color: Theme.tertiary;
+                horizontal-alignment: right;
+            }
+            TouchArea {
+                mouse-cursor: pointer;
+                clicked => { root.card-sign-out(i); }
+            }
+        }
     }
-    Card {
-        SectionHeader { text: root.daily-title; }
-        if root.empty-message != "": Caption { text: root.empty-message; tertiary: true; min-height: 48px; }
+    PanelCard {
+        PanelSectionHeader { title: root.daily-title; }
+        if root.has-nav: WeekChartNavigation {
+            can-previous: root.can-back;
+            can-next: root.can-forward;
+            previous-week => { root.previous-day(); }
+            next-week => { root.next-day(); }
+        }
+        if root.empty-message != "": Text {
+            text: root.empty-message;
+            font-family: Typo.family;
+            font-size: Typo.body-size;
+            color: Theme.tertiary;
+            wrap: word-wrap;
+            min-height: 48px;
+        }
         if root.empty-message == "": VerticalLayout {
             spacing: 8px;
-            HorizontalLayout {
-                alignment: center;
-                spacing: 2px;
-                for h in root.hours: VerticalLayout {
-                    spacing: 5px;
-                    width: 20px;
-                    Rectangle {
-                        height: 68px;
-                        VerticalLayout {
-                            alignment: end;
-                            Rectangle {
-                                width: 12px;
-                                height: h.bar-height > 0px ? h.bar-height : 2px;
-                                border-radius: 5px;
-                                background: h.bar-height > 0px ? transparent : Palette.track;
-                                clip: true;
-                                VerticalLayout {
-                                    alignment: end;
-                                    for s in h.segments: Rectangle { height: s.height; background: s.color; }
+            chart := Rectangle {
+                height: 68px + 5px + 14px;
+                private property <int> hovered: touch.has-hover ? Math.min(root.hours.length - 1, Math.floor(touch.mouse-x / (hlay.width / max(1, root.hours.length)))) : -1;
+                hlay := HorizontalLayout {
+                    alignment: center;
+                    spacing: 2px;
+                    for h[hi] in root.hours: VerticalLayout {
+                        spacing: 5px;
+                        width: 20px;
+                        Rectangle {
+                            height: 68px;
+                            VerticalLayout {
+                                alignment: end;
+                                Rectangle {
+                                    width: 12px;
+                                    height: h.bar-height > 0px ? h.bar-height : 2px;
+                                    border-radius: 5px;
+                                    background: h.bar-height > 0px ? transparent : Theme.usage-remaining-track;
+                                    border-width: chart.hovered == hi ? 1px : 0px;
+                                    border-color: Theme.stem-hover-outline;
+                                    clip: true;
+                                    VerticalLayout {
+                                        alignment: end;
+                                        for s in h.segments: Rectangle { height: s.height; background: s.color; }
+                                    }
                                 }
                             }
                         }
+                        Text {
+                            text: h.axis-label;
+                            font-family: Typo.family;
+                            font-size: Typo.body-size;
+                            color: Theme.secondary;
+                            horizontal-alignment: center;
+                            height: 14px;
+                        }
                     }
-                    Text { text: h.axis-label; font-size: 12px; color: Palette.secondary; horizontal-alignment: center; height: 14px; }
+                }
+                touch := TouchArea { }
+                if chart.hovered >= 0 && chart.hovered < root.hours.length && root.hours[chart.hovered].tooltip != "": Rectangle {
+                    z: 100;
+                    x: max(0px, min(touch.mouse-x - self.width / 2, chart.width - self.width));
+                    y: 0px;
+                    width: min(chart.width, tip.preferred-width + 20px);
+                    height: tip.preferred-height + 12px;
+                    background: Theme.window-background;
+                    border-radius: 8px;
+                    border-width: 1px;
+                    border-color: Theme.separator;
+                    tip := Text {
+                        x: 10px;
+                        y: 6px;
+                        width: parent.width - 20px;
+                        text: root.hours[chart.hovered].tooltip;
+                        font-family: Typo.family;
+                        font-size: Typo.caption-size;
+                        color: Theme.primary;
+                        wrap: word-wrap;
+                    }
                 }
             }
             HorizontalLayout {
                 spacing: 10px;
+                alignment: start;
                 for l in root.legend: HorizontalLayout {
                     spacing: 4px;
                     Rectangle { width: 8px; height: 10px; border-radius: 2px; background: l.color; y: 2px; }
-                    Text { text: l.title; font-size: 12px; font-weight: 600; color: Palette.secondary; }
+                    Text {
+                        text: l.title;
+                        font-family: Typo.family;
+                        font-size: Typo.body-size;
+                        font-weight: Typo.semibold;
+                        color: Theme.secondary;
+                    }
                 }
             }
         }

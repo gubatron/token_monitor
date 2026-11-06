@@ -33,7 +33,8 @@ fn test_usd_formats_like_en_us_currency() {
     assert_eq!(usd(410.0), "$410.00");
     assert_eq!(usd(1_234_567.891), "$1,234,567.89");
     assert_eq!(usd(62.02), "$62.02");
-    assert_eq!(usd(f64::NAN), "$0.00");
+    // Core `Format.usd` renders non-finite amounts as "$0" (no decimals).
+    assert_eq!(usd(f64::NAN), "$0");
     assert_eq!(usd(-3.5), "-$3.50");
 }
 
