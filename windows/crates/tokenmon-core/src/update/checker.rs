@@ -54,6 +54,12 @@ pub struct InstallRequest {
 pub trait UpdateInstaller: Send + Sync {
     /// Whether the running executable can be replaced in place from where it lives.
     fn can_replace_running_app(&self) -> bool;
+    /// Whether the running app was put there by the MSI. An MSI install must be
+    /// updated through the MSI so Windows Installer's records stay correct; an
+    /// in-place zip swap would leave them pointing at a replaced binary.
+    fn installed_by_msi(&self) -> bool {
+        false
+    }
     /// Downloads, verifies and installs, then schedules the relaunch.
     fn install(
         &self,
@@ -277,16 +283,11 @@ impl UpdateChecker {
         release: &AvailableRelease,
         installer: &dyn UpdateInstaller,
     ) -> bool {
-        let can_replace = installer.can_replace_running_app();
-        let chosen = if can_replace {
-            release
-                .archive
-                .as_ref()
-                .map(|a| (a, AssetKind::Zip))
-                .or(release.installer.as_ref().map(|a| (a, AssetKind::Msi)))
-        } else {
-            release.installer.as_ref().map(|a| (a, AssetKind::Msi))
-        };
+        let chosen = choose_asset(
+            release,
+            installer.can_replace_running_app(),
+            installer.installed_by_msi(),
+        );
         let Some((asset, kind)) = chosen else {
             let message = if release.archive.is_some() {
                 "TokenMon cannot replace itself from this folder."
@@ -334,6 +335,26 @@ impl UpdateChecker {
                 false
             }
         }
+    }
+}
+
+/// Picks the asset to install (spec 3.5): an MSI install updates through the
+/// MSI whenever one is published; otherwise the zip when the running exe can be
+/// replaced in place, with the MSI as the fallback.
+#[must_use]
+pub fn choose_asset(
+    release: &AvailableRelease,
+    can_replace: bool,
+    installed_by_msi: bool,
+) -> Option<(&ReleaseAsset, AssetKind)> {
+    let msi = release.installer.as_ref().map(|a| (a, AssetKind::Msi));
+    let zip = release.archive.as_ref().map(|a| (a, AssetKind::Zip));
+    if installed_by_msi {
+        msi.or(zip.filter(|_| can_replace))
+    } else if can_replace {
+        zip.or(msi)
+    } else {
+        msi
     }
 }
 

@@ -364,12 +364,19 @@ jobs:
           cp "$RUNNER_TEMP/lcov.info" "$RUNNER_TEMP/cov.json" "$RUNNER_TEMP/coverage.md" "$RUNNER_TEMP/coverage-out/"
           exit $status
 
-      # Only a run that passed the gates becomes the next baseline.
+      # Every run that measured coverage becomes the next baseline, including
+      # one that failed the gates: if only passing runs were uploaded, a drop
+      # would leave the baseline pinned to an old high value and every later
+      # run would be compared against it forever. `always()` also covers the
+      # gate step exiting non-zero; a run with no coverage data uploads
+      # nothing (if-no-files-found: ignore) and keeps the previous baseline.
       - name: Upload coverage summary (next run's baseline)
+        if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ env.SUMMARY_ARTIFACT }}
           path: ${{ runner.temp }}/coverage-out/
+          if-no-files-found: ignore
           retention-days: 90
 
   fuzz-smoke:

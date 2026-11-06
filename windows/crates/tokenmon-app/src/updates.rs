@@ -65,6 +65,11 @@ impl UpdateService {
             verifier_for_policy(SignaturePolicy::AcceptUnsignedWithDigest),
             Arc::new(StdLauncher),
         );
+        // The MSI records its folder in HKCU; without the registry (non-Windows
+        // builds) the app is never treated as MSI-installed.
+        #[cfg(windows)]
+        let installer =
+            installer.with_registry(Arc::new(tokenmon_platform::shell::windows::WinRegistry));
         Ok(Self {
             checker: Arc::new(UpdateChecker::new(
                 source,
