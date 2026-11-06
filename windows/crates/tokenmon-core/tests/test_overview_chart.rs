@@ -260,3 +260,23 @@ fn test_midnight_schedule_handles_a_midnight_dst_gap() {
     assert_eq!(gap_day.date_naive(), d(2026, 3, 8));
     assert_eq!(gap_day.hour(), 1);
 }
+
+/// Regression: when the lifted thin slices need more than the tallest slice's
+/// headroom, the old code drove the tallest slice negative. Found by
+/// `prop_segment_heights_fill_the_bar`; every slice must stay at least the
+/// minimum and the bar must still fill exactly.
+#[test]
+fn test_segment_heights_never_go_negative_when_lifts_exceed_tallest() {
+    let acts = [
+        42.8211712331521,
+        40.28291457642475,
+        32.654015650705595,
+        4.469217151640815,
+        1.5218200797617147,
+        1.508952050937067,
+    ];
+    let total = 6.744692441820654;
+    let h = tokenmon_core::overview::segment_heights(&acts, total, 1.0);
+    assert!(h.iter().all(|v| *v >= 1.0 - 1e-9), "{h:?}");
+    assert!((h.iter().sum::<f64>() - total).abs() < 1e-9, "{h:?}");
+}

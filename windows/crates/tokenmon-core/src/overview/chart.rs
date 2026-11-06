@@ -144,14 +144,36 @@ pub fn segment_heights(acts: &[f64], total: f64, minimum: f64) -> Vec<f64> {
                 h[i] = minimum;
             }
         }
-        let tallest = shown
-            .iter()
-            .copied()
-            .reduce(|best, i| if h[i] > h[best] { i } else { best })
-            .expect("shown has more than one element");
-        h[tallest] -= lifted;
+        take_from_surplus(&mut h, &shown, minimum, lifted);
     }
     h
+}
+
+/// Removes `lifted` from the slices in `shown`, never taking any below
+/// `minimum`.
+///
+/// The tallest slice pays alone when it can (Swift's behaviour). When the
+/// lifts are larger than its headroom, every slice above `minimum` pays in
+/// proportion to its headroom instead. The headroom always covers `lifted`
+/// because the minimums fit in the total, so no slice goes negative.
+fn take_from_surplus(h: &mut [f64], shown: &[usize], minimum: f64, lifted: f64) {
+    let tallest = shown
+        .iter()
+        .copied()
+        .reduce(|best, i| if h[i] > h[best] { i } else { best })
+        .expect("shown is not empty");
+    if h[tallest] - lifted >= minimum {
+        h[tallest] -= lifted;
+        return;
+    }
+    let surplus: f64 = shown.iter().map(|&i| (h[i] - minimum).max(0.0)).sum();
+    if surplus <= 0.0 {
+        return;
+    }
+    let keep = (1.0 - lifted / surplus).max(0.0);
+    for &i in shown {
+        h[i] = minimum + (h[i] - minimum).max(0.0) * keep;
+    }
 }
 
 /// Hours that get an axis label: both ends plus every multiple of 3 that is at
