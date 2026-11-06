@@ -48,6 +48,7 @@ chrono = { version = "0.4", default-features = false, features = ["std", "clock"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 url = "2.5"
+rust_decimal = { version = "1", default-features = false, features = ["std"] }
 rusqlite = { version = "0.41", features = ["bundled"] }
 slint = { version = "1.18", default-features = false }
 
