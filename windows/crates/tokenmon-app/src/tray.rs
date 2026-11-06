@@ -10,8 +10,8 @@ use std::sync::Arc;
 use tokenmon_core::ProviderId;
 use tokenmon_core::settings::Settings;
 use tokenmon_ui::tray_icon::{
-    MenuAction, MenuEntry, MenuInputs, TaskbarTheme, TooltipEntry, TrayBitmap, TrayContent,
-    TrayIconCache, TrayIconRequest, TrayIconSize, TrayInputs, build_menu, build_tooltip,
+    MenuAction, MenuEntry, MenuInputs, TaskbarTheme, TrayBitmap, TrayContent, TrayIconCache,
+    TrayIconRequest, TrayIconSize, TrayInputs, build_menu, tooltip_for_content,
 };
 
 /// What the controller drives: the OS tray icon.
@@ -90,26 +90,14 @@ impl<B: TrayBackend> TrayController<B> {
             enabled: &enabled,
             grok_signed_in: (data.signed_in)(ProviderId::Grok),
         });
+        // One entry per composite segment, as the icon draws them (#61): a
+        // percent shown in the icon is never replaced by a bare name.
+        let tooltip = tooltip_for_content(&content, (data.signed_in)(ProviderId::Grok));
         let request = TrayIconRequest {
             content,
             size,
             theme,
         };
-        let tooltip = build_tooltip(
-            &order
-                .iter()
-                .filter(|p| enabled.contains(p))
-                .map(|p| TooltipEntry {
-                    provider: *p,
-                    used: data
-                        .used_percent
-                        .iter()
-                        .find(|(q, _)| q == p)
-                        .map(|(_, v)| *v),
-                    signed_out: !(data.signed_in)(*p),
-                })
-                .collect::<Vec<_>>(),
-        );
         let key = request.key();
         if self.last_key.as_deref() == Some(&key) && self.last_tooltip.as_deref() == Some(&tooltip)
         {

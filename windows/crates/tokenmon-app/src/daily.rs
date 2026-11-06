@@ -160,7 +160,8 @@ pub fn grok_week_input(week: &DailyUsageWeek, ctx: &ChartContext<'_>) -> Option<
         show_live_footer: current,
         has_navigation: true,
         can_go_next: !current,
-        fill_threshold: 0.0,
+        // Unused for `GrokWeek`: the chart applies Swift's > 0.05% rule itself.
+        fill_threshold: GENERIC_FILL_THRESHOLD,
     })
 }
 

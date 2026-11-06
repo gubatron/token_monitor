@@ -236,3 +236,26 @@ fn test_failed_icon_update_is_retried() {
     assert!(!go(&mut c), "settled once it succeeded");
     assert_eq!(c.backend().updates.len(), 3);
 }
+
+/// #61: the tooltip describes the icon's own segments. A selected provider
+/// whose icon shows a percent (an OpenCode local estimate while signed out)
+/// never degrades to a bare name.
+#[test]
+fn test_tooltip_follows_the_icon_content_not_the_sign_in_state() {
+    let s = Settings {
+        selected_provider: ProviderId::OpenCode,
+        show_selected_provider_in_menu_bar: true,
+        ..Settings::default()
+    };
+    let mut c = TrayController::new(Recorder::default());
+    c.refresh(
+        &TrayData {
+            settings: &s,
+            used_percent: &[(ProviderId::OpenCode, 12.0), (ProviderId::Grok, 40.0)],
+            signed_in: &|p| p != ProviderId::OpenCode,
+        },
+        TrayIconSize::Px16,
+        TaskbarTheme::Dark,
+    );
+    assert_eq!(c.backend().updates, ["OpenCode 12%"]);
+}
