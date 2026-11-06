@@ -261,6 +261,22 @@ class CiSummaryTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0)
         self.assertIn("skipped: no workspace yet", r.stdout)
 
+    def test_superseded_heavy_jobs_pass_and_commit_is_named(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            r = run("render_ci_summary.py", "--supersedable", "coverage,windows-build", "--sha", "a" * 40,
+                    "--ref", "windows-port", "--event", "push", "--repo", "o/r",
+                    env={"NEEDS_JSON": json.dumps({"test": {"result": "success"},
+                                                   "coverage": {"result": "cancelled"}}),
+                         "COMMIT_SUBJECT": "feat(x): thing\n\nbody"})
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn("Tested commit [`aaaaaaa`](https://github.com/o/r/commit/" + "a" * 40 + "): feat(x): thing "
+                      "`windows-port` (push)", r.stdout)
+        self.assertIn("Superseded by a newer push (only the newest commit runs them): `coverage`.", r.stdout)
+
+    def test_cancelled_lint_still_fails(self):
+        r = self.summary({"lint": {"result": "cancelled"}})
+        self.assertEqual(r.returncode, 1)
+
     def test_jobs_api_rows_with_links_and_durations(self):
         jobs = {"jobs": [
             {"name": "Tests (windows-latest)", "conclusion": "success", "html_url": "https://x/j/2",

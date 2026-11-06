@@ -10,7 +10,13 @@ duration and a link to it. ``NEEDS_JSON`` is the `needs` context; it decides
 the exit status, so this job can be the single required check:
 
 * exit 1 when any needed job failed or was cancelled,
-* skipped jobs pass (they are skipped when there is nothing to check yet).
+* skipped jobs pass (they are skipped when there is nothing to check yet),
+* jobs named in ``--supersedable`` pass when cancelled: on windows-port a
+  newer push cancels them (job-level concurrency) so only the newest commit
+  pays for coverage, fuzzing and the release build.
+
+The header names the commit that was tested (``--sha`` and the
+COMMIT_SUBJECT environment variable), since many runs are in flight at once.
 
 Standard library only.
 """
@@ -52,9 +58,29 @@ def duration(job: dict) -> str:
     return f"{secs // 60}m {secs % 60:02d}s" if secs >= 60 else f"{secs}s"
 
 
-def render(needs: dict, jobs: list[dict], run_url: str, self_name: str, skip_note: str) -> tuple[str, bool]:
-    failed = sorted(name for name, job in needs.items() if job.get("result") in ("failure", "cancelled"))
+def commit_line(args) -> str:
+    if not args.sha:
+        return ""
+    short = args.sha[:7]
+    link = f"[`{short}`]({args.server_url}/{args.repo}/commit/{args.sha})" if args.repo else f"`{short}`"
+    subject = (os.environ.get("COMMIT_SUBJECT") or "").strip().splitlines()
+    subject_text = f": {subject[0][:120]}" if subject else ""
+    where = " ".join(x for x in (f"`{args.ref}`" if args.ref else "", f"({args.event})" if args.event else "") if x)
+    return f"Tested commit {link}{subject_text} {where}".rstrip()
+
+
+def render(needs: dict, jobs: list[dict], run_url: str, self_name: str, skip_note: str,
+           supersedable: set[str] | None = None, header: str = "") -> tuple[str, bool]:
+    supersedable = supersedable or set()
+    failed = sorted(
+        name for name, job in needs.items()
+        if job.get("result") == "failure"
+        or (job.get("result") == "cancelled" and name not in supersedable)
+    )
+    superseded = sorted(n for n, j in needs.items() if j.get("result") == "cancelled" and n in supersedable)
     out = ["## Windows CI summary", ""]
+    if header:
+        out += [header, ""]
     if failed:
         out.append(f"**{len(failed)} job(s) need attention:** " + ", ".join(f"`{n}`" for n in failed))
     else:
@@ -77,6 +103,9 @@ def render(needs: dict, jobs: list[dict], run_url: str, self_name: str, skip_not
             result = needs[name].get("result", "unknown")
             out.append(f"| {name} | {ICON.get(result, result)} |")
 
+    if superseded:
+        out += ["", "Superseded by a newer push (only the newest commit runs them): "
+                + ", ".join(f"`{n}`" for n in superseded) + "."]
     if skip_note and any(j.get("result") == "skipped" for j in needs.values()):
         out += ["", skip_note]
     out += ["", f"Each job's own summary (tests, coverage, fuzzing, build size) is further down this page: {run_url}"]
@@ -89,6 +118,12 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--run-url", default="")
     parser.add_argument("--self", dest="self_name", default="Summary")
     parser.add_argument("--skip-note", default="")
+    parser.add_argument("--supersedable", default="", help="comma-separated job ids whose cancellation passes")
+    parser.add_argument("--sha", default="")
+    parser.add_argument("--ref", default="")
+    parser.add_argument("--event", default="")
+    parser.add_argument("--server-url", default="https://github.com")
+    parser.add_argument("--repo", default="")
     args = parser.parse_args(argv)
 
     needs = json.loads(os.environ.get("NEEDS_JSON") or "{}")
@@ -98,7 +133,9 @@ def main(argv: list[str]) -> int:
             jobs = json.loads(args.jobs.read_text(encoding="utf-8")).get("jobs", [])
         except ValueError:
             jobs = []
-    markdown, failed = render(needs, jobs, args.run_url, args.self_name, args.skip_note)
+    supersedable = {x.strip() for x in args.supersedable.split(",") if x.strip()}
+    markdown, failed = render(needs, jobs, args.run_url, args.self_name, args.skip_note,
+                              supersedable, commit_line(args))
     sys.stdout.write(markdown)
     return 1 if failed else 0
 
