@@ -57,3 +57,25 @@ async fn test_overview_cards_follow_visible_providers() {
     assert_eq!(vm.cards.len(), visible.len());
     assert_eq!(vm.version_text, "v1.2.3");
 }
+
+/// #55 audit: an OpenRouter key without a credit limit has a snapshot but no
+/// percent; the card still counts as having a snapshot (it shows the key's
+/// spend, not "No OpenRouter data yet"), and every other provider's card keeps
+/// its "no snapshot" state until its poller publishes one.
+#[tokio::test]
+async fn test_openrouter_snapshot_without_percent_still_has_a_snapshot() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app = build(dir.path());
+    let facts = Some((Some(4.5), false, None));
+    let cards = tokenmon_app::panel::card_inputs(&app.model, &app.sessions, facts);
+    let by = |p| {
+        cards
+            .iter()
+            .find(|c| c.provider == p)
+            .map(|c| c.has_snapshot)
+    };
+    assert_eq!(by(tokenmon_core::ProviderId::OpenRouter), Some(true));
+    assert_eq!(by(tokenmon_core::ProviderId::Grok), Some(false));
+    let none = tokenmon_app::panel::card_inputs(&app.model, &app.sessions, None);
+    assert!(none.iter().all(|c| !c.has_snapshot));
+}
