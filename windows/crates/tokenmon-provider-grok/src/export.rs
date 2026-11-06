@@ -44,7 +44,10 @@ pub const CSV_HEADER: &str =
 /// # Errors
 ///
 /// [`ExportError::Encode`] when JSON encoding fails.
-pub fn export(snapshots: &[WeeklyUsageSnapshot], format: ExportFormat) -> Result<Vec<u8>, ExportError> {
+pub fn export(
+    snapshots: &[WeeklyUsageSnapshot],
+    format: ExportFormat,
+) -> Result<Vec<u8>, ExportError> {
     match format {
         ExportFormat::Csv => Ok(export_csv(snapshots).into_bytes()),
         ExportFormat::Json => export_json(snapshots),
@@ -81,7 +84,11 @@ pub fn swift_double_description(value: f64) -> String {
         };
     }
     let text = format!("{value}");
-    if text.contains('.') { text } else { format!("{text}.0") }
+    if text.contains('.') {
+        text
+    } else {
+        format!("{text}.0")
+    }
 }
 
 /// The CSV text for `snapshots`: header plus one line per row, joined with

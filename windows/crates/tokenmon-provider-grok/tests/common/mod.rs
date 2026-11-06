@@ -1,4 +1,9 @@
 //! Shared helpers for the Grok integration tests.
+#![allow(
+    clippy::unwrap_used,
+    clippy::assert_is_empty,
+    clippy::needless_pass_by_value
+)]
 #![allow(dead_code)]
 
 use std::sync::Arc;

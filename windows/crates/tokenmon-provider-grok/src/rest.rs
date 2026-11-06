@@ -12,7 +12,14 @@ use crate::models::{
     synthesize_products,
 };
 
-const WRAPPER_KEYS: [&str; 6] = ["usage", "data", "subscription", "billing", "credits", "result"];
+const WRAPPER_KEYS: [&str; 6] = [
+    "usage",
+    "data",
+    "subscription",
+    "billing",
+    "credits",
+    "result",
+];
 
 /// Deepest wrapper nesting followed. The Swift parser is unbounded; the JSON
 /// parser itself limits depth to 128, and this caps the work at a level no real
@@ -42,7 +49,11 @@ pub fn json_number(value: &Value) -> Option<f64> {
 fn number_at(value: &Value, depth: usize) -> Option<f64> {
     match value {
         Value::Number(n) => n.as_f64().filter(|v| v.is_finite()),
-        Value::String(s) => s.trim_matches(' ').parse::<f64>().ok().filter(|v| v.is_finite()),
+        Value::String(s) => s
+            .trim_matches(' ')
+            .parse::<f64>()
+            .ok()
+            .filter(|v| v.is_finite()),
         Value::Object(map) if depth < MAX_NUMBER_WRAPPER_DEPTH => ["val", "value"]
             .iter()
             .find_map(|k| map.get(*k))
@@ -52,8 +63,7 @@ fn number_at(value: &Value, depth: usize) -> Option<f64> {
 }
 
 fn first_double(map: &Map<String, Value>, keys: &[&str]) -> Option<f64> {
-    keys.iter()
-        .find_map(|k| map.get(*k).and_then(json_number))
+    keys.iter().find_map(|k| map.get(*k).and_then(json_number))
 }
 
 fn first_string<'a>(map: &'a Map<String, Value>, keys: &[&str]) -> Option<&'a str> {
@@ -197,7 +207,10 @@ fn parse_products(dict: &Map<String, Value>) -> Vec<ProductUsage> {
         .iter()
         .find_map(|k| dict.get(*k).and_then(array_of_objects));
     if let Some(items) = array {
-        return items.iter().filter_map(|item| array_product(item)).collect();
+        return items
+            .iter()
+            .filter_map(|item| array_product(item))
+            .collect();
     }
     ["byProduct", "productUsage"]
         .iter()

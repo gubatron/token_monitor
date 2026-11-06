@@ -124,8 +124,7 @@ impl GrokUsagePoller {
         let _guard = RefreshGuard(&self.refreshing);
         let session = self.auth.state();
         let cookie = self.auth.cookie_header();
-        let Some(cookie) = cookie.filter(|_| session.is_signed_in && !session.needs_sign_in)
-        else {
+        let Some(cookie) = cookie.filter(|_| session.is_signed_in && !session.needs_sign_in) else {
             lock(&self.state).last_error =
                 Some(ProviderError::NotSignedIn(ProviderErrorContext::Grok));
             return RefreshOutcome::Skipped;
@@ -234,10 +233,10 @@ impl GrokUsagePoller {
 impl AuthEventListener for GrokUsagePoller {
     fn on_auth_event(&self, event: AuthEvent) {
         self.clear_snapshot();
-        if event == AuthEvent::AccountReset {
-            if let Some(hourly) = &self.hourly {
-                hourly.clear();
-            }
+        if event == AuthEvent::AccountReset
+            && let Some(hourly) = &self.hourly
+        {
+            hourly.clear();
         }
     }
 }

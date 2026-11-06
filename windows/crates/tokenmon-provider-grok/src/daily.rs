@@ -197,7 +197,7 @@ fn latest_mid_period_recalibration_day(
             let dropped = day.used_percent + REBASE_DROP < prev.used_percent;
             (dropped && !period_advanced(prev.resets_at, day.resets_at)).then_some(pair[1])
         })
-        .last()
+        .next_back()
 }
 
 struct WeekSamples<'a> {
@@ -230,8 +230,11 @@ pub fn week(
     let merged = merged_samples(history, current, cal);
     let end_of_day = end_of_day_samples(&merged, cal);
     let sorted_days: Vec<DateTime<Utc>> = end_of_day.keys().copied().collect();
-    let through_week_end: Vec<DateTime<Utc>> =
-        sorted_days.iter().copied().filter(|d| *d <= week_end).collect();
+    let through_week_end: Vec<DateTime<Utc>> = sorted_days
+        .iter()
+        .copied()
+        .filter(|d| *d <= week_end)
+        .collect();
     let in_week: Vec<DateTime<Utc>> = through_week_end
         .iter()
         .copied()
@@ -241,9 +244,7 @@ pub fn week(
     let anchor = period_anchor_resets(
         week_offset,
         week_end,
-        current
-            .and_then(|c| c.resets_at)
-            .or(effective_resets_at),
+        current.and_then(|c| c.resets_at).or(effective_resets_at),
         &in_week,
         &end_of_day,
         cal,
@@ -255,7 +256,11 @@ pub fn week(
         .collect();
     let tracking_start_day = latest_mid_period_recalibration_day(&same_period, &end_of_day);
     let valid_sample_days: Vec<DateTime<Utc>> = match tracking_start_day {
-        Some(start) => same_period.iter().copied().filter(|d| *d >= start).collect(),
+        Some(start) => same_period
+            .iter()
+            .copied()
+            .filter(|d| *d >= start)
+            .collect(),
         None => same_period,
     };
 
@@ -362,9 +367,7 @@ fn day_bar(day_start: DateTime<Utc>, samples: &WeekSamples<'_>, cal: &dyn DayCal
             bar.is_after_reset = true;
         }
         bar.segments = segments_from_products(products, Some(day_cumulative));
-    } else if day_cumulative > NOISE_FLOOR
-        && rolled_over(prior_any(Some(samples.week_start)))
-    {
+    } else if day_cumulative > NOISE_FLOOR && rolled_over(prior_any(Some(samples.week_start))) {
         // Rollover observed between two days of this window: paint the
         // post-reset week-to-date only.
         bar.is_after_reset = true;
@@ -482,7 +485,10 @@ fn product_delta_segments(
     let mut deltas: Vec<ProductUsage> = current
         .iter()
         .filter_map(|p| {
-            let before = previous_by_id.get(&p.id.to_lowercase()).copied().unwrap_or(0.0);
+            let before = previous_by_id
+                .get(&p.id.to_lowercase())
+                .copied()
+                .unwrap_or(0.0);
             let delta = (p.percent_of_pool - before).max(0.0);
             (delta > NOISE_FLOOR).then(|| {
                 ProductUsage::new(&p.id, p.display_name.clone(), delta).with_color(p.color_token)
@@ -516,6 +522,17 @@ fn distribute(total: f64, products: &[ProductUsage]) -> Vec<DailyUsageSegment> {
         .collect()
 }
 
+/// Per-day `(build, api, chat)` percents of [`preview`], period start first.
+const PREVIEW_PATTERN: [(f64, f64, f64); 7] = [
+    (5.0, 1.0, 0.0),
+    (7.0, 2.0, 1.0),
+    (2.0, 1.0, 0.0),
+    (0.0, 0.0, 0.0),
+    (18.0, 5.0, 1.0),
+    (4.0, 1.0, 0.0),
+    (3.0, 0.0, 0.0),
+];
+
 /// Synthetic Thursday-to-Wednesday week with sample product bars, for UI
 /// previews.
 pub fn preview(cal: &dyn DayCalendar) -> DailyUsageWeek {
@@ -525,16 +542,7 @@ pub fn preview(cal: &dyn DayCalendar) -> DailyUsageWeek {
     let Some((week_start, week_end)) = billing_period_week_bounds(Some(reset), 0, cal, now) else {
         return finalize(now, now, Vec::new(), true);
     };
-    const PATTERN: [(f64, f64, f64); 7] = [
-        (5.0, 1.0, 0.0),
-        (7.0, 2.0, 1.0),
-        (2.0, 1.0, 0.0),
-        (0.0, 0.0, 0.0),
-        (18.0, 5.0, 1.0),
-        (4.0, 1.0, 0.0),
-        (3.0, 0.0, 0.0),
-    ];
-    let days = PATTERN
+    let days = PREVIEW_PATTERN
         .iter()
         .zip(0i64..)
         .map(|((build, api, chat), offset)| {
@@ -542,7 +550,11 @@ pub fn preview(cal: &dyn DayCalendar) -> DailyUsageWeek {
                 .into_iter()
                 .filter(|(_, pct)| *pct > 0.0)
                 .map(|(id, pct)| {
-                    to_segment(&ProductUsage::new(id, ProductCatalog::display_name(id), pct))
+                    to_segment(&ProductUsage::new(
+                        id,
+                        ProductCatalog::display_name(id),
+                        pct,
+                    ))
                 })
                 .collect();
             let bar = Bar {

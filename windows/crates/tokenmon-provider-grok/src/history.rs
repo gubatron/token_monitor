@@ -77,7 +77,9 @@ impl FileBacking {
 impl HistoryBacking for FileBacking {
     fn read(&self) -> BackingRead {
         match fs::read(&self.path) {
-            Ok(bytes) => String::from_utf8(bytes).map_or(BackingRead::Unreadable, BackingRead::Text),
+            Ok(bytes) => {
+                String::from_utf8(bytes).map_or(BackingRead::Unreadable, BackingRead::Text)
+            }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => BackingRead::Missing,
             Err(_) => BackingRead::Unreadable,
         }

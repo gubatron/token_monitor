@@ -21,7 +21,13 @@ pub const SIGN_IN_START_URL: &str =
 
 /// Identity hosts allowed to load during sign-in; their cookies are never
 /// captured.
-pub const AUTH_HOSTS: [&str; 5] = ["accounts.x.ai", "auth.x.ai", "api.x.com", "twitter.com", "x.com"];
+pub const AUTH_HOSTS: [&str; 5] = [
+    "accounts.x.ai",
+    "auth.x.ai",
+    "api.x.com",
+    "twitter.com",
+    "x.com",
+];
 
 /// Session/cookie hosts, also the sign-out hosts.
 pub const GROK_HOSTS: [&str; 2] = ["grok.com", "x.ai"];
@@ -147,7 +153,10 @@ pub fn select_session_cookies(jar: &[CookieRecord]) -> Option<String> {
         .filter(|c| is_grok_domain(&c.domain))
         .filter(|c| ESSENTIAL_COOKIES.contains(&c.name.to_lowercase().as_str()))
         .collect();
-    if !essential.iter().any(|c| is_preferred_session_cookie(&c.name)) {
+    if !essential
+        .iter()
+        .any(|c| is_preferred_session_cookie(&c.name))
+    {
         return None;
     }
     Some(

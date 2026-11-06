@@ -1,6 +1,11 @@
 //! Client tests over a fake transport (stubbed HTTP by path; unknown paths
 //! answer 404) plus one end-to-end check of the reqwest transport against a
 //! local mock server.
+#![allow(
+    clippy::unwrap_used,
+    clippy::assert_is_empty,
+    clippy::needless_pass_by_value
+)]
 
 mod common;
 
@@ -57,12 +62,15 @@ impl HttpTransport for FakeTransport {
             }
             let url = request.url.clone();
             self.requests.lock().unwrap().push(request);
-            self.routes.lock().unwrap().get(&url).cloned().unwrap_or(Ok(
-                HttpResponse {
+            self.routes
+                .lock()
+                .unwrap()
+                .get(&url)
+                .cloned()
+                .unwrap_or(Ok(HttpResponse {
                     status: 404,
                     ..HttpResponse::default()
-                },
-            ))
+                }))
         })
     }
 }

@@ -259,10 +259,10 @@ pub fn trailer_fields(data: &[u8]) -> HashMap<String, String> {
         let Some((flags, payload, next)) = frame_at(data, index) else {
             break;
         };
-        if flags & 0x80 != 0 {
-            if let Ok(text) = std::str::from_utf8(payload) {
-                collect_trailer_lines(text, &mut fields);
-            }
+        if flags & 0x80 != 0
+            && let Ok(text) = std::str::from_utf8(payload)
+        {
+            collect_trailer_lines(text, &mut fields);
         }
         index = next;
     }
@@ -639,12 +639,12 @@ pub fn parse_usage(data: &[u8], now: DateTime<Utc>) -> Result<Parsed, ProviderEr
     let percent = percent_from_fixed32(&all.fixed32);
     let products = merge_products(&payloads);
     let resets_at = reset_from_varints(&all.varints, now);
-    let has_period = all.varints.iter().any(|v| {
-        v.path.starts_with(&[1, 5]) || (v.path == [1, 8, 1] && matches!(v.value, 1 | 2))
-    });
-    let used = percent.or_else(|| {
-        (resets_at.is_some() && has_period && all.fixed32.is_empty()).then_some(0.0)
-    });
+    let has_period = all
+        .varints
+        .iter()
+        .any(|v| v.path.starts_with(&[1, 5]) || (v.path == [1, 8, 1] && matches!(v.value, 1 | 2)));
+    let used = percent
+        .or_else(|| (resets_at.is_some() && has_period && all.fixed32.is_empty()).then_some(0.0));
     let used_percent = used.ok_or_else(|| decoding_error("gRPC usage percent missing"))?;
     Ok(Parsed {
         used_percent,
