@@ -353,6 +353,10 @@ pub trait HistoryAccess: Send + Sync {
     fn clear(&self);
     /// Whether the history file could not be read or written.
     fn store_failed(&self) -> bool;
+    /// Whether rows changed since the last successful write.
+    fn is_dirty(&self) -> bool;
+    /// Writes the rows when they changed; a no-op when clean.
+    fn flush(&self);
 }
 
 struct GrokHistory(Arc<GrokProviderPoller>);
@@ -368,6 +372,14 @@ impl HistoryAccess for GrokHistory {
     }
     fn store_failed(&self) -> bool {
         self.0.usage().with_history(|h| h.store_failed())
+    }
+    fn is_dirty(&self) -> bool {
+        self.0.usage().with_history(|h| h.is_dirty())
+    }
+    fn flush(&self) {
+        self.0
+            .usage()
+            .with_history(tokenmon_provider_grok::history::GrokHistoryStore::flush);
     }
 }
 
@@ -388,4 +400,8 @@ impl HistoryAccess for NoHistory {
     fn store_failed(&self) -> bool {
         false
     }
+    fn is_dirty(&self) -> bool {
+        false
+    }
+    fn flush(&self) {}
 }

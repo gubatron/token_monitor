@@ -43,6 +43,10 @@ impl HistoryAccess for FakeHistory {
     fn store_failed(&self) -> bool {
         false
     }
+    fn is_dirty(&self) -> bool {
+        false
+    }
+    fn flush(&self) {}
 }
 
 const EXE: &str = r"C:\Program Files\TokenMon\TokenMon.exe";
@@ -285,7 +289,7 @@ impl UpdateInstaller for FakeInstaller {
         &self,
         _request: InstallRequest,
     ) -> BoxFuture<'_, Result<InstallOutcome, InstallError>> {
-        let outcome = self.0.clone();
+        let outcome = self.0;
         Box::pin(async move { Ok(outcome) })
     }
 }

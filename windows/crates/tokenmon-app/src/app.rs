@@ -17,6 +17,7 @@ use tokio::runtime::Handle;
 use tokio::task::JoinHandle;
 
 use crate::alerts::AlertWatcher;
+use crate::flush::{flush_on_quit, spawn_history_flusher};
 use crate::model::AppModel;
 use crate::providers::{BuildError, ProviderDeps, build_registry};
 use crate::sessions::{HostBrowserCleaner, Sessions};
@@ -100,6 +101,8 @@ impl App {
             opencode_env: inputs.opencode_env,
         })?;
         let model = AppModel::new(registry, Arc::clone(&settings), handle.clone());
+        // Rows appended since the last debounced flush must survive a quit.
+        flush_on_quit(&model, model.registry().history());
 
         // Sign-in completion refreshes the pollers sharing the session; the
         // model exists only after the sessions, hence the late binding.
@@ -138,6 +141,7 @@ impl App {
         vec![
             self.model.watch_settings(),
             self.alerts.clone().spawn(&self.handle),
+            spawn_history_flusher(&self.handle, self.model.registry().history()),
         ]
     }
 
