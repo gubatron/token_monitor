@@ -43,3 +43,9 @@ XWIN_ACCEPT_LICENSE=1 cargo xwin check --target x86_64-pc-windows-msvc -p tokenm
 * `cargo deny check` (config in `deny.toml`): licenses compatible with an MIT app, advisories, duplicate versions (warn). Slint is used under its royalty-free desktop license; see the note in `deny.toml`.
 * Shared dependency versions and lints live in the workspace `Cargo.toml`. Crates use `dep = { workspace = true }`.
 * Tests live in each crate's `tests/` directory, never in `src/`.
+
+## Updates: repository and signature policy
+
+* **Release repository.** The update feed repository is chosen in one place, `tokenmon_core::update::feed::configured_repository`. It reads the build-time environment variable `TOKENMON_UPDATE_REPO` (`owner/repo`, validated as a plain GitHub slug; invalid values fall back) and defaults to `gubatron/token_monitor`. Example: `TOKENMON_UPDATE_REPO=owner/fork cargo build --release`.
+* **Signature policy.** `tokenmon_platform::install::SignaturePolicy` has `AcceptUnsignedWithDigest` (default: SHA-256 from the same GitHub release plus PE/MSI structure and Mark-of-the-Web checks) and `RequireAuthenticode` (additionally `WinVerifyTrust`, fails closed off Windows). The app picks one with `verifier_for_policy(policy)`; switching is a one-line change.
+* **Startup helpers for the app.** Call `tokenmon_platform::install::handle_startup_args(std::env::args(), &current_exe)` first thing in `main`: it honours `--wait-for-pid <pid>` (bounded 30 s wait for the old process) and then runs `swap::cleanup_leftovers`.

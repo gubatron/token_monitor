@@ -75,7 +75,8 @@ fn check_trust(data: &[u8]) {
             segs.iter()
                 .all(|s| !s.is_empty() && *s != "." && *s != "..")
         );
-        assert!(!url.contains(['@', '\\', '?', '#']));
+        assert!(!url.contains(['\\', '?', '#']));
+        assert!(!rest.split('/').next().unwrap_or("").contains('@'));
     }
 }
 
@@ -125,4 +126,36 @@ proptest! {
     fn prop_urlish_text(s in "https://github\\.com/(gubatron|x)/(token_monitor|y)/releases/download/[a-z.%0-9/]{0,20}") {
         check_trust(s.as_bytes());
     }
+}
+
+/// Fuzz crash (issue #34): `1- +` kept a lone-space prerelease whose `Display`
+/// (`1- `) reparsed with no prerelease.
+#[test]
+fn test_fuzz_regression_whitespace_prerelease_roundtrips() {
+    use tokenmon_core::update::AppVersion;
+    let v = AppVersion::parse("1- +").expect("parses");
+    assert_eq!(v.prerelease(), None);
+    assert_eq!(AppVersion::parse(&v.to_string()), Some(v));
+    let w = AppVersion::parse("1- 0 .1\u{b}\t").expect("parses");
+    assert_eq!(w.prerelease(), Some("0 .1"));
+    assert_eq!(AppVersion::parse(&w.to_string()), Some(w));
+}
+
+/// Fuzz crash (issue #35): `@` in a release tag is legal and harmless; only an
+/// `@` in the authority (userinfo) must be refused.
+#[test]
+fn test_fuzz_regression_at_sign_in_tag_is_not_userinfo() {
+    use tokenmon_core::update::is_repository_release_download;
+    let ok = "https://github.com/gubatron/token_monitor/releases/download/a~@~/top";
+    assert!(is_repository_release_download(
+        ok,
+        "gubatron",
+        "token_monitor"
+    ));
+    let userinfo = "https://github.com@evil.com/gubatron/token_monitor/releases/download/t/f";
+    assert!(!is_repository_release_download(
+        userinfo,
+        "gubatron",
+        "token_monitor"
+    ));
 }

@@ -37,11 +37,51 @@ pub struct ReleaseSource {
     pub asset_prefix: String,
 }
 
+/// Repository used when no build-time override is given.
+pub const DEFAULT_REPOSITORY: &str = "gubatron/token_monitor";
+
+/// Splits an `owner/repository` string, rejecting anything that is not a
+/// plain GitHub slug (so a bad build-time value can never smuggle a path or
+/// another host into the feed URL).
+///
+/// # Examples
+///
+/// ```
+/// use tokenmon_core::update::feed::parse_repository;
+///
+/// assert_eq!(parse_repository("a/b-c.d"), Some(("a", "b-c.d")));
+/// assert_eq!(parse_repository("a/b/c"), None);
+/// assert_eq!(parse_repository("a"), None);
+/// assert_eq!(parse_repository("../x"), None);
+/// ```
+pub fn parse_repository(value: &str) -> Option<(&str, &str)> {
+    let (owner, repo) = value.split_once('/')?;
+    let ok = |p: &str| {
+        !p.is_empty()
+            && p != "."
+            && p != ".."
+            && p.chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+    };
+    (ok(owner) && ok(repo)).then_some((owner, repo))
+}
+
+/// The single place the release repository is chosen: the build-time
+/// environment variable `TOKENMON_UPDATE_REPO` (`owner/repo`), else
+/// [`DEFAULT_REPOSITORY`]. An invalid override falls back to the default.
+pub fn configured_repository() -> (&'static str, &'static str) {
+    option_env!("TOKENMON_UPDATE_REPO")
+        .and_then(parse_repository)
+        .or_else(|| parse_repository(DEFAULT_REPOSITORY))
+        .unwrap_or(("gubatron", "token_monitor"))
+}
+
 impl Default for ReleaseSource {
     fn default() -> Self {
+        let (owner, repository) = configured_repository();
         Self {
-            owner: "gubatron".to_owned(),
-            repository: "token_monitor".to_owned(),
+            owner: owner.to_owned(),
+            repository: repository.to_owned(),
             tag_prefix: "windows-v".to_owned(),
             asset_prefix: "tokenmon-windows-".to_owned(),
         }

@@ -23,8 +23,13 @@ pub mod verify;
 pub use download::{DownloadedFile, Downloader, HttpDownloader, TrustPolicy};
 pub use feed::HttpFeedFetcher;
 pub use installer::WindowsUpdateInstaller;
-pub use relaunch::{CommandSpec, ProcessLauncher, StdLauncher};
-pub use verify::{PeHeaderVerifier, SignatureVerifier};
+pub use relaunch::{
+    CommandSpec, ProcessLauncher, StdLauncher, handle_startup_args, parse_wait_for_pid,
+    wait_for_pid_exit,
+};
+pub use verify::{
+    AuthenticodeVerifier, PeHeaderVerifier, SignaturePolicy, SignatureVerifier, verifier_for_policy,
+};
 
 /// File name of the application executable inside the release zip.
 pub const EXE_NAME: &str = "TokenMon.exe";

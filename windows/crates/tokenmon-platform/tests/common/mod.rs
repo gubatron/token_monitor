@@ -26,12 +26,39 @@ pub fn fake_msi() -> Vec<u8> {
 
 /// Builds a zip in memory from `(name, bytes)` pairs.
 pub fn make_zip(entries: &[(&str, &[u8])]) -> Vec<u8> {
+    // The zip writer normalises hostile names (`..`, `\\`, drive letters), so
+    // write same-length placeholders and patch the real bytes into both the
+    // local headers and the central directory afterwards.
+    let placeholders: Vec<Vec<u8>> = entries
+        .iter()
+        .enumerate()
+        .map(|(i, (name, _))| {
+            let tag = format!("Q{i}Q");
+            let mut p = tag.into_bytes();
+            p.resize(name.len().max(p.len()), b'Q');
+            p
+        })
+        .collect();
     let mut w = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
-    for (name, data) in entries {
-        w.start_file(*name, SimpleFileOptions::default()).unwrap();
+    for ((_, data), ph) in entries.iter().zip(&placeholders) {
+        let ph = std::str::from_utf8(ph).unwrap();
+        w.start_file(ph, SimpleFileOptions::default()).unwrap();
         w.write_all(data).unwrap();
     }
-    w.finish().unwrap().into_inner()
+    let mut bytes = w.finish().unwrap().into_inner();
+    for ((name, _), ph) in entries.iter().zip(&placeholders) {
+        assert_eq!(name.len(), ph.len(), "name too short for placeholder");
+        let mut from = 0;
+        while let Some(pos) = bytes[from..]
+            .windows(ph.len())
+            .position(|w| w == ph.as_slice())
+        {
+            let at = from + pos;
+            bytes[at..at + ph.len()].copy_from_slice(name.as_bytes());
+            from = at + ph.len();
+        }
+    }
+    bytes
 }
 
 /// A zip containing a symbolic link entry.

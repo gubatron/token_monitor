@@ -94,3 +94,103 @@ impl ProcessLauncher for StdLauncher {
         cmd.spawn().map(drop)
     }
 }
+
+/// Extracts the pid from a `--wait-for-pid <pid>` (or `--wait-for-pid=<pid>`)
+/// command line. Returns `None` when absent or not a valid non-zero pid.
+///
+/// # Examples
+///
+/// ```
+/// use tokenmon_platform::install::relaunch::parse_wait_for_pid;
+///
+/// assert_eq!(parse_wait_for_pid(["TokenMon.exe", "--wait-for-pid", "42"]), Some(42));
+/// assert_eq!(parse_wait_for_pid(["x", "--wait-for-pid=7"]), Some(7));
+/// assert_eq!(parse_wait_for_pid(["x", "--wait-for-pid", "abc"]), None);
+/// assert_eq!(parse_wait_for_pid(["x", "--wait-for-pid", "0"]), None);
+/// assert_eq!(parse_wait_for_pid(["x"]), None);
+/// ```
+pub fn parse_wait_for_pid<I, S>(args: I) -> Option<u32>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    let mut it = args.into_iter();
+    while let Some(arg) = it.next() {
+        let arg = arg.as_ref();
+        let value = if arg == RELAUNCH_WAIT_ARG {
+            it.next().map(|v| v.as_ref().to_owned())
+        } else {
+            arg.strip_prefix("--wait-for-pid=").map(str::to_owned)
+        };
+        if let Some(v) = value {
+            return v.trim().parse::<u32>().ok().filter(|p| *p != 0);
+        }
+    }
+    None
+}
+
+/// Longest the new process waits for the old one to exit.
+pub const WAIT_FOR_PID_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Blocks until process `pid` has exited or `timeout` elapses; returns `true`
+/// when it is gone (or cannot be opened, which means it is already gone).
+/// On non-Windows hosts it returns `true` immediately.
+pub fn wait_for_pid_exit(pid: u32, timeout: std::time::Duration) -> bool {
+    imp::wait(pid, timeout)
+}
+
+/// Startup helper for the app (ws-app): call once, first thing in `main`,
+/// before the single-instance guard.
+///
+/// 1. If the command line has `--wait-for-pid <pid>` (the previous build is
+///    exiting after an update), waits for it, bounded by
+///    [`WAIT_FOR_PID_TIMEOUT`].
+/// 2. Calls [`super::swap::cleanup_leftovers`] for `running_exe` to delete the
+///    renamed-aside old exe and abandoned staged copies.
+///
+/// Returns the pid that was waited for, if any.
+pub fn handle_startup_args<I, S>(args: I, running_exe: &Path) -> Option<u32>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    let waited = parse_wait_for_pid(args);
+    if let Some(pid) = waited {
+        wait_for_pid_exit(pid, WAIT_FOR_PID_TIMEOUT);
+    }
+    super::swap::cleanup_leftovers(running_exe);
+    waited
+}
+
+#[cfg(windows)]
+mod imp {
+    use std::time::Duration;
+
+    use windows_sys::Win32::Foundation::{CloseHandle, WAIT_TIMEOUT};
+    use windows_sys::Win32::System::Threading::{
+        OpenProcess, PROCESS_SYNCHRONIZE, WaitForSingleObject,
+    };
+
+    pub fn wait(pid: u32, timeout: Duration) -> bool {
+        // SAFETY: plain Win32 calls; the handle is closed before returning.
+        unsafe {
+            let handle = OpenProcess(PROCESS_SYNCHRONIZE, 0, pid);
+            if handle.is_null() {
+                return true;
+            }
+            let ms = u32::try_from(timeout.as_millis()).unwrap_or(u32::MAX);
+            let r = WaitForSingleObject(handle, ms);
+            CloseHandle(handle);
+            r != WAIT_TIMEOUT
+        }
+    }
+}
+
+#[cfg(not(windows))]
+mod imp {
+    use std::time::Duration;
+
+    pub fn wait(_pid: u32, _timeout: Duration) -> bool {
+        true
+    }
+}

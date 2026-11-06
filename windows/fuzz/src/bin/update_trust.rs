@@ -14,7 +14,10 @@ fuzz_target!(|data: &[u8]| {
     assert!(!repo || trusted);
     if repo {
         assert!(url.to_ascii_lowercase().starts_with("https://github.com"));
-        assert!(!url.contains(['@', '\\', '?', '#']));
+        assert!(!url.contains(['\\', '?', '#']));
+        // `@` is legal in a tag name (path) but never in the authority.
+        let authority = url.split_once("://").map_or("", |(_, r)| r.split('/').next().unwrap_or(""));
+        assert!(!authority.contains('@'));
         let rest = url.split_once("://").map_or("", |(_, r)| r);
         let segments: Vec<&str> = rest.split('/').skip(1).collect();
         assert_eq!(segments.len(), 6);
