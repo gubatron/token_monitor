@@ -9,6 +9,7 @@
 use std::time::Duration;
 
 use tokenmon_core::AuthConfig;
+use tokenmon_core::net::Domain;
 
 /// Hosts whose cookies belong to the Cursor session. Also the sign-out hosts.
 /// The first entry is the base host used to parse refreshed cookies.
@@ -29,31 +30,6 @@ pub const CURSOR_AUTH_HOSTS: [&str; 4] = [
 
 /// Lowercase name of the one cookie that carries the Cursor session.
 pub const SESSION_COOKIE_NAME_LOWER: &str = "workoscursorsessiontoken";
-
-/// `Domain.matches(host, hosts)`: case-insensitive, strips one leading `.`,
-/// matches equal hosts or subdomains. A substring never matches.
-///
-/// This is a private copy of the core-net helper so the crate stands alone
-/// until `tokenmon_core::net` exports it.
-///
-/// # Examples
-///
-/// ```
-/// use tokenmon_provider_cursor::domain_matches;
-/// assert!(domain_matches("www.cursor.com", &["cursor.com"]));
-/// assert!(!domain_matches("evilcursor.com", &["cursor.com"]));
-/// ```
-pub fn domain_matches(host: &str, hosts: &[&str]) -> bool {
-    let host = host.to_ascii_lowercase();
-    let host = host.strip_prefix('.').unwrap_or(&host);
-    hosts.iter().any(|entry| {
-        let entry = entry.to_ascii_lowercase();
-        host == entry
-            || host
-                .strip_suffix(entry.as_str())
-                .is_some_and(|rest| rest.ends_with('.'))
-    })
-}
 
 /// The [`AuthConfig`] of the Cursor cookie session (also used by Grokbot).
 ///
@@ -113,7 +89,7 @@ impl CursorSignIn {
     /// assert!(!CursorSignIn::is_auth_page("cursor.com", "/dashboard"));
     /// ```
     pub fn is_auth_page(host: &str, path: &str) -> bool {
-        domain_matches(host, &CURSOR_AUTH_HOSTS)
+        Domain::matches(host, &CURSOR_AUTH_HOSTS)
             || path.contains("/login")
             || path.contains("/signin")
     }
@@ -128,7 +104,7 @@ impl CursorSignIn {
 
     /// `isCursorDomain(d)`: whether a cookie domain belongs to Cursor.
     pub fn is_cursor_domain(domain: &str) -> bool {
-        domain_matches(domain, &CURSOR_COOKIE_HOSTS)
+        Domain::matches(domain, &CURSOR_COOKIE_HOSTS)
     }
 
     /// `looksLikeAuthCookie` (moot while the allowlist is configured).

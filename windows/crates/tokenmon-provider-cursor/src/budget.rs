@@ -10,8 +10,7 @@ use std::collections::BTreeMap;
 
 use chrono::{DateTime, NaiveDate, Utc};
 use tokenmon_core::Clock;
-
-use crate::time::{local_date, local_midnight, subscription_month};
+use tokenmon_core::usage::{Calendar, DailyBudget};
 
 /// Inputs of [`blend_daily_budget`].
 #[derive(Debug, Clone, Copy)]
@@ -81,10 +80,17 @@ fn sane(value: f64) -> f64 {
 /// assert_eq!(out.blended[&day(26)], 2.0);
 /// ```
 pub fn blend_daily_budget(clock: &dyn Clock, input: BlendInputs<'_>) -> Option<BlendedBudget> {
-    let (start, end) =
-        subscription_month(clock, input.cycle_start, input.cycle_end, Some(input.now))?;
-    let cycle_start_day = local_date(clock, start);
-    let in_cycle = |day: &NaiveDate| *day >= cycle_start_day && local_midnight(clock, *day) < end;
+    let cal = Calendar::local(clock);
+    let bounds =
+        DailyBudget::subscription_month(input.cycle_start, input.cycle_end, Some(input.now), &cal)?;
+    let (start, end) = (bounds.start, bounds.end);
+    let cycle_start_day = cal.date_of(start);
+    let in_cycle = |day: &NaiveDate| {
+        *day >= cycle_start_day
+            && cal
+                .start_of_date(*day)
+                .is_some_and(|midnight| midnight < end)
+    };
     let observed: BTreeMap<NaiveDate, f64> = input
         .observed_by_day
         .iter()
@@ -103,7 +109,7 @@ pub fn blend_daily_budget(clock: &dyn Clock, input: BlendInputs<'_>) -> Option<B
     let blended = fill(&effective, &estimated, sane(input.used_percent));
     let prior = input
         .interrupted_window_start
-        .map(|w| local_date(clock, w))
+        .map(|w| cal.date_of(w))
         .map(|from| {
             input
                 .observed_by_day

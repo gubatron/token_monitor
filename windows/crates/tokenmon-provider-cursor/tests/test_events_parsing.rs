@@ -6,7 +6,7 @@ use chrono::{FixedOffset, Utc};
 use common::{at, event, event_at};
 use serde_json::json;
 use tokenmon_core::ManualClock;
-use tokenmon_provider_cursor::json::safe_int64;
+use tokenmon_provider_cursor::safe_int64;
 use tokenmon_provider_cursor::{
     AVERAGE_WEEKS_PER_MONTH, CursorSnapshot, aggregate_cost_stats, aggregate_events, daily_tokens,
     date_from_epoch_number, estimated_weight_by_day, event_timestamp, hour_weights, parse_summary,
@@ -251,10 +251,14 @@ fn test_daily_tokens_roll_up_per_day_and_model() {
         "tokenUsage": {"inputTokens": 4}}));
     let days = daily_tokens(&utc(), &[e1, e2]);
     let day = &days[&chrono::NaiveDate::from_ymd_opt(2026, 8, 10).unwrap()];
-    assert_eq!(day.cost_usd, 1.5);
-    assert_eq!((day.input, day.output, day.total()), (14, 5, 19));
-    assert_eq!(day.by_model["a"], 15);
-    assert_eq!(day.by_model["b"], 4);
+    assert_eq!(day.cost_usd, Some(1.5));
+    assert_eq!(
+        (day.input_tokens, day.output_tokens, day.total_tokens()),
+        (14, 5, 19)
+    );
+    let tokens_of = |name: &str| day.models.iter().find(|m| m.name == name).map(|m| m.tokens);
+    assert_eq!(tokens_of("a"), Some(15));
+    assert_eq!(tokens_of("b"), Some(4));
 }
 
 /// The aggregate bundle ties the pieces together for one day.

@@ -53,9 +53,20 @@ impl AuthSession for FakeSession {
     fn add_listener(&self, _listener: Arc<dyn AuthEventListener>) {}
 }
 
+/// A `CursorHttp` for `base_url` with Grokbot wording and a fixed clock.
+fn cursor_http(base_url: &str) -> CursorHttp {
+    CursorHttp::with_base_url(
+        ProviderErrorContext::Grokbot,
+        base_url,
+        Some("test"),
+        Arc::new(FixedClock::from_unix(1_787_000_000)),
+    )
+    .unwrap()
+}
+
 fn fetcher(server: &MockServer, session: &Arc<FakeSession>) -> GrokbotFetcher {
     GrokbotFetcher::new(
-        GrokbotUsageClient::new(CursorHttp::new(&server.uri(), "TokenMon/test")),
+        GrokbotUsageClient::new(cursor_http(&server.uri())),
         Arc::clone(session) as Arc<dyn AuthSession>,
         Arc::new(FixedClock::from_unix(1_787_000_000)),
     )

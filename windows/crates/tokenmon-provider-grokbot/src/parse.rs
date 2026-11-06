@@ -4,10 +4,10 @@
 
 use chrono::{DateTime, Utc};
 use serde_json::{Map, Value};
+use tokenmon_core::usage::Percent;
+use tokenmon_core::util::json::{first_bool, first_double, first_string, number};
+use tokenmon_core::util::parse_flexible;
 use tokenmon_core::{ProviderError, ProviderErrorContext, UsageError};
-use tokenmon_provider_cursor::json::{
-    clamp_percent, first_bool, first_double, first_string, number, parse_flexible,
-};
 use tokenmon_provider_cursor::reject_unauthorized_body;
 
 use crate::models::{GrokbotEntitlement, GrokbotSnapshot};
@@ -48,8 +48,14 @@ fn has_allowance_field(root: &Map<String, Value>) -> bool {
 
 /// A `{seconds, nanos}` object as an instant; `seconds <= 0` counts as missing.
 fn structured_timestamp(map: &Map<String, Value>) -> Option<DateTime<Utc>> {
-    let seconds = map.get("seconds").and_then(number).filter(|s| *s > 0.0)?;
-    let nanos = map.get("nanos").and_then(number).unwrap_or(0.0);
+    let seconds = map
+        .get("seconds")
+        .and_then(|v| number(Some(v)))
+        .filter(|s| *s > 0.0)?;
+    let nanos = map
+        .get("nanos")
+        .and_then(|v| number(Some(v)))
+        .unwrap_or(0.0);
     let total = seconds + nanos / 1e9;
     if !total.is_finite() || total.abs() > MAX_EPOCH_SECONDS {
         return None;
@@ -120,7 +126,7 @@ pub fn parse_usage_status(
         !first_bool(&root, &LIMIT_ZERO_KEYS, false) && first_bool(&root, &NON_ZERO_KEYS, true);
     Ok(GrokbotSnapshot {
         fetched_at,
-        used_percent: clamp_percent(percent),
+        used_percent: Percent::clamp(percent),
         period_start: first_date(&root, &START_KEYS),
         resets_at: first_date(&root, &RESET_KEYS),
         entitlement: entitlement(&root),

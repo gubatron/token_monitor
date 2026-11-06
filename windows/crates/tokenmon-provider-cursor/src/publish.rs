@@ -8,11 +8,11 @@ use std::collections::BTreeMap;
 
 use chrono::{DateTime, NaiveDate, Utc};
 use tokenmon_core::Clock;
+use tokenmon_core::usage::{Calendar, DailyBudget};
 
 use crate::aggregate::CursorDayHourlyUsage;
 use crate::client::CursorFetchResult;
 use crate::models::CursorSnapshot;
-use crate::time::days_in_billing_cycle;
 
 /// Cycle length used for the daily store when the cycle bounds are unknown.
 pub const DEFAULT_CYCLE_DAYS: i64 = 30;
@@ -93,7 +93,9 @@ pub fn cycle_length_days(
     end: Option<DateTime<Utc>>,
 ) -> i64 {
     match (start, end) {
-        (Some(s), Some(e)) if e > s => days_in_billing_cycle(clock, s, e),
+        (Some(s), Some(e)) if e > s => {
+            DailyBudget::days_in_billing_cycle(s, e, &Calendar::local(clock))
+        }
         _ => DEFAULT_CYCLE_DAYS,
     }
 }

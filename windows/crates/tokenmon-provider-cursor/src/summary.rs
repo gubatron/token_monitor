@@ -9,8 +9,10 @@ use chrono::{DateTime, Utc};
 use serde_json::{Map, Value};
 use tokenmon_core::{ProviderError, ProviderErrorContext};
 
-use crate::json::{clamp_percent, number_of, object_of, parse_flexible};
 use crate::models::{CursorPoolUsage, CursorSnapshot, PoolKind};
+use tokenmon_core::usage::Percent;
+use tokenmon_core::util::json::number;
+use tokenmon_core::util::parse_flexible;
 
 const CTX: ProviderErrorContext = ProviderErrorContext::Cursor;
 
@@ -58,8 +60,8 @@ struct Money {
 impl Money {
     fn read(map: Option<&Map<String, Value>>) -> Self {
         map.map_or_else(Self::default, |m| Self {
-            used: number_of(m, "used"),
-            limit: number_of(m, "limit"),
+            used: number(m.get("used")),
+            limit: number(m.get("limit")),
         })
     }
 
@@ -69,7 +71,7 @@ impl Money {
 
     fn percent(self) -> Option<f64> {
         let limit = self.limit.filter(|l| *l > 0.0)?;
-        Some(clamp_percent(self.used.unwrap_or(0.0) / limit * 100.0))
+        Some(Percent::clamp(self.used.unwrap_or(0.0) / limit * 100.0))
     }
 }
 
@@ -85,22 +87,26 @@ pub fn parse_summary_object(
     root: &Map<String, Value>,
     fetched_at: DateTime<Utc>,
 ) -> CursorSnapshot {
-    let individual = object_of(root, "individualUsage");
-    let plan_map = individual.and_then(|i| object_of(i, "plan"));
+    let individual = root.get("individualUsage").and_then(Value::as_object);
+    let plan_map = individual.and_then(|i| i.get("plan").and_then(Value::as_object));
     let plan = Money::read(plan_map);
-    let overall = Money::read(individual.and_then(|i| object_of(i, "overall")));
-    let pooled = Money::read(object_of(root, "teamUsage").and_then(|t| object_of(t, "pooled")));
-    let on_demand = individual.and_then(|i| object_of(i, "onDemand"));
+    let overall = Money::read(individual.and_then(|i| i.get("overall").and_then(Value::as_object)));
+    let pooled = Money::read(
+        root.get("teamUsage")
+            .and_then(Value::as_object)
+            .and_then(|t| t.get("pooled").and_then(Value::as_object)),
+    );
+    let on_demand = individual.and_then(|i| i.get("onDemand").and_then(Value::as_object));
 
     let auto = plan_map
-        .and_then(|p| number_of(p, "autoPercentUsed"))
-        .map(clamp_percent);
+        .and_then(|p| number(p.get("autoPercentUsed")))
+        .map(Percent::clamp);
     let api = plan_map
-        .and_then(|p| number_of(p, "apiPercentUsed"))
-        .map(clamp_percent);
+        .and_then(|p| number(p.get("apiPercentUsed")))
+        .map(Percent::clamp);
     let explicit_total = plan_map
-        .and_then(|p| number_of(p, "totalPercentUsed"))
-        .map(clamp_percent);
+        .and_then(|p| number(p.get("totalPercentUsed")))
+        .map(Percent::clamp);
     let total = total_percent(explicit_total, auto, api, plan, overall, pooled);
 
     let cycle_end = cycle_date(root, "billingCycleEnd");
@@ -122,10 +128,10 @@ pub fn parse_summary_object(
             .and_then(Value::as_bool)
             .unwrap_or(false),
         on_demand_used_usd: on_demand
-            .and_then(|o| number_of(o, "used"))
+            .and_then(|o| number(o.get("used")))
             .map(|c| c / 100.0),
         on_demand_limit_usd: on_demand
-            .and_then(|o| number_of(o, "limit"))
+            .and_then(|o| number(o.get("limit")))
             .map(|c| c / 100.0),
         cost_stats: None,
         account_email: None,
@@ -143,7 +149,7 @@ fn total_percent(
 ) -> f64 {
     explicit
         .or_else(|| match (auto, api) {
-            (Some(a), Some(b)) => Some(clamp_percent(a.midpoint(b))),
+            (Some(a), Some(b)) => Some(Percent::clamp(a.midpoint(b))),
             _ => None,
         })
         .or(api)
