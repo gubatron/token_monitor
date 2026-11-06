@@ -54,8 +54,9 @@ not drift apart: every behavior change on macOS needs the same change on
 Windows, or an issue that tracks it. CI enforces this on every push and pull
 request, `master` included (`.github/workflows/windows-parity.yml`):
 
-- **Drift guard.** A change that touches `TokenMon/`, `TokenMonTests/` or
-  `Tests/` must also touch `windows/`, or reference an **open** issue labeled
+- **Drift guard.** A change that touches the macOS app (`TokenMon/`,
+  `TokenMonTests/`, `Tests/`, `Scripts/`, `TokenMon.xcodeproj/`, `project.yml`
+  or `Makefile`) must also touch `windows/`, or reference an **open** issue labeled
   `windows-parity` (for example `Refs #123` in the pull request description, or
   in the commit message for a direct push). Otherwise the check fails.
 - **Parity ledger.** `windows/docs/PARITY.md` has one row per Swift test (every

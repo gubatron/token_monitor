@@ -164,6 +164,80 @@ class ExtractXCTestsTests(unittest.TestCase):
         self.assertEqual(test.line, 3)
 
 
+class ExtractSwiftTestingTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def test_finds_test_functions_in_suites_and_at_file_scope(self) -> None:
+        write(
+            self.root,
+            "TokenMonTests/Core/PaceTests.swift",
+            """
+            import Testing
+
+            @Suite("Pace")
+            struct PaceTests {
+                @Test func resetMovesWithPeriod() { #expect(1 == 1) }
+                @Test("Display name", arguments: [1, 2])
+                func parameterised(value: Int) async throws {}
+                func helper() {}
+                let s = "@Test func notATest() {"
+            }
+
+            @Test
+            func freeStanding() {}
+
+            extension PaceTests {
+                @MainActor @Test func inExtension() {}
+            }
+            """,
+        )
+        tests = ex.extract_all(self.root)
+        self.assertEqual(
+            [t.id for t in tests],
+            [
+                "TokenMonTests/Core/PaceTests.swift::PaceTests::resetMovesWithPeriod",
+                "TokenMonTests/Core/PaceTests.swift::PaceTests::parameterised",
+                "TokenMonTests/Core/PaceTests.swift::global::freeStanding",
+                "TokenMonTests/Core/PaceTests.swift::PaceTests::inExtension",
+            ],
+        )
+        self.assertEqual({t.kind for t in tests}, {"swift-testing"})
+        self.assertEqual(tests[1].line, 8)  # the `func` line
+
+    def test_mixed_with_xctest(self) -> None:
+        write(
+            self.root,
+            "TokenMonTests/Mixed.swift",
+            """
+            final class OldTests: XCTestCase { func testA() {} }
+            struct NewTests { @Test func b() {} }
+            """,
+        )
+        self.assertEqual(
+            [(t.name, t.kind) for t in ex.extract_all(self.root)], [("testA", "xctest"), ("b", "swift-testing")]
+        )
+
+    def test_unattributable_test_attribute_fails_loudly(self) -> None:
+        write(
+            self.root,
+            "TokenMonTests/Odd.swift",
+            """
+            struct OddTests {
+                func outer() {
+                    @Test func nested() {}
+                }
+            }
+            """,
+        )
+        with self.assertRaisesRegex(ValueError, r"Odd.swift: found 1 `@Test`.*lines 4"):
+            ex.extract_all(self.root)
+
+
 class ExtractCoreChecksTests(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
@@ -183,14 +257,26 @@ class ExtractCoreChecksTests(unittest.TestCase):
                     try assertTrue(a == 1, "Used Percent")
                     try assertTrue(list.contains(where: { $0.id == "chat", }),
                                    "grpc chat")
-                    try assertTrue(b, "used percent")
                 }
             }
             """,
         )
         ids = [t.id for t in ex.extract_all(self.root)]
         prefix = "Tests/Manual/CoreTestsMain.swift::CoreTestsMain::"
-        self.assertEqual(ids, [prefix + "used_percent", prefix + "grpc_chat", prefix + "used_percent_2"])
+        self.assertEqual(ids, [prefix + "used_percent", prefix + "grpc_chat"])
+
+    def test_labels_that_collapse_to_one_id_are_an_error(self) -> None:
+        write(
+            self.root,
+            "Tests/Manual/CoreTestsMain.swift",
+            """
+            func assertTrue(_ c: Bool, _ m: String) {}
+            try assertTrue(a == 1, "Used Percent")
+            try assertTrue(b, "used percent")
+            """,
+        )
+        with self.assertRaisesRegex(ValueError, r"CoreTestsMain.swift:4: .*`used_percent`.*line 3"):
+            ex.extract_all(self.root)
 
     def test_non_literal_label_is_an_error(self) -> None:
         write(
@@ -206,7 +292,7 @@ class ExtractCoreChecksTests(unittest.TestCase):
         out = io.StringIO()
         with redirect_stdout(out):
             self.assertEqual(ex.main(["--repo", str(self.root), "--format", "count"]), 0)
-        self.assertEqual(out.getvalue().strip(), "xctest=1 core-check=0 total=1")
+        self.assertEqual(out.getvalue().strip(), "xctest=1 swift-testing=0 core-check=0 total=1")
 
 
 class RealRepositoryTests(unittest.TestCase):

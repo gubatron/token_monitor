@@ -84,6 +84,36 @@ class CheckParityTests(unittest.TestCase):
         escape = self.run_check(HEADER + self.row(ID_A, "ported", "../windows/crates/tokenmon-core/tests/a.rs::a_works") + self.row(ID_B))
         self.assertIn("inside windows/", "\n".join(escape.errors))
 
+    def test_ported_row_needs_a_real_test_fn(self) -> None:
+        rust = self.root / "windows/crates/tokenmon-core/tests/b.rs"
+        rust.write_text(
+            "// fn in_comment() {}\n"
+            "/* nested /* fn in_block() {} */ */\n"
+            'const S: &str = "fn in_string() {}";\n'
+            'const R: &str = r#"fn in_raw() { "# ;\n'
+            "fn helper() {}\n"
+            "fn lifetime<'a>(x: &'a str) -> &'a str { x }\n"
+            '#[test]\n#[ignore = "blocked on #1"]\nfn ignored() {}\n'
+            '#[tokio::test(flavor = "multi_thread")]\n#[cfg_attr(windows, allow(unused))]\npub async fn tokio_flavoured() {}\n'
+            "#[rstest]\nfn with_rstest() {}\n"
+            "proptest! {\n    #[test]\n    fn in_proptest(x in 0..10u8) { let c = '{'; }\n}\n"
+            "#[test]\nfn after_char_literal() {}\n"
+        )
+
+        def problem(name: str) -> str:
+            report = self.run_check(
+                HEADER + self.row(ID_A, "ported", f"crates/tokenmon-core/tests/b.rs::{name}") + self.row(ID_B)
+            )
+            return "\n".join(report.errors)
+
+        for good in ("tokio_flavoured", "with_rstest", "in_proptest", "after_char_literal"):
+            self.assertEqual(problem(good), "", good)
+        for hidden in ("in_comment", "in_block", "in_string", "in_raw"):
+            self.assertIn(f"no `fn {hidden}`", problem(hidden))
+        self.assertIn("no test attribute", problem("helper"))
+        self.assertIn("no test attribute", problem("lifetime"))
+        self.assertIn("`#[ignore]`d", problem("ignored"))
+
     def test_na_needs_a_reason(self) -> None:
         report = self.run_check(HEADER + self.row(ID_A, "n/a") + self.row(ID_B, "n/a", notes="macOS-only: Keychain"))
         self.assertEqual(len(report.errors), 1)

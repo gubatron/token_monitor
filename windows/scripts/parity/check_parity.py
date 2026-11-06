@@ -9,7 +9,11 @@ Fails (exit 1) when:
 * a row's status is not one of ``todo``, ``ported``, ``n/a``, or its
   workstream is not ``ws-<name>``;
 * a row marked ``ported`` does not name a Rust test, or names one that does not
-  exist (the file is missing, or it has no ``fn <name>``);
+  exist: the file is missing, or it has no ``fn <name>`` carrying a test
+  attribute (``#[test]``, ``#[tokio::test]``, ``#[rstest]``, ``#[test_case]``,
+  or another ``#[...::test]``; ``#[test]`` fns inside ``proptest!`` count), or
+  the test is ``#[ignore]``d. Comments and string literals are skipped, so a
+  helper fn or a fn named in a comment never counts;
 * a row marked ``n/a`` gives no reason in its Notes column.
 
 ``todo`` rows pass: the ledger is allowed to be incomplete, never wrong.
@@ -24,6 +28,7 @@ Python 3 standard library only.
 from __future__ import annotations
 
 import argparse
+import functools
 import re
 import sys
 from collections import Counter, defaultdict
@@ -39,6 +44,10 @@ ROW_ID = re.compile(r"^`([^`]+)`$")
 CELL_SPLIT = re.compile(r"(?<!\\)\|")
 RUST_REF = re.compile(r"^(?P<path>[\w./-]+\.rs)::(?P<fn>[A-Za-z_]\w*)$")
 MAX_LISTED = 300
+# The last path segment of an attribute that makes a fn a test.
+TEST_ATTRIBUTES = {"test", "rstest", "test_case", "test_log", "wasm_bindgen_test"}
+FN_MODIFIERS = re.compile(r"(?:\b(?:pub(?:\s*\([^)]*\))?|async|unsafe|const)\s+)*$")
+CHAR_LITERAL = re.compile(r"'(?:\\(?:u\{[0-9A-Fa-f]{1,6}\}|x[0-9A-Fa-f]{2}|.)|[^\\'\n])'")
 
 # Best guess of the owning workstream for --print-missing-rows, by path prefix.
 # The first match wins; a human still checks the row before committing it.
@@ -163,6 +172,118 @@ def rust_refs(cell: str) -> list[str]:
     return [p.strip().strip("`").strip() for p in parts if p.strip().strip("`").strip()]
 
 
+def blank_rust(source: str) -> str:
+    """Return ``source`` with comments and the contents of string and char
+    literals replaced by spaces (same length, same newlines)."""
+    out = list(source)
+    n = len(source)
+
+    def blank(start: int, end: int) -> None:
+        for k in range(start, min(end, n)):
+            if out[k] != "\n":
+                out[k] = " "
+
+    i = 0
+    while i < n:
+        c = source[i]
+        if source.startswith("//", i):
+            j = source.find("\n", i)
+            j = n if j == -1 else j
+            blank(i, j)
+            i = j
+        elif source.startswith("/*", i):
+            depth, j = 0, i
+            while j < n:
+                if source.startswith("/*", j):
+                    depth, j = depth + 1, j + 2
+                elif source.startswith("*/", j):
+                    depth, j = depth - 1, j + 2
+                    if depth == 0:
+                        break
+                else:
+                    j += 1
+            blank(i, j)
+            i = j
+        elif c == "r" and re.match(r'r#*"', source[i:i + 260]) and not (i and (source[i - 1].isalnum() or source[i - 1] == "_")):
+            hashes = re.match(r'r(#*)"', source[i:]).group(1)
+            start = i + 2 + len(hashes)
+            end = source.find('"' + hashes, start)
+            end = n if end == -1 else end
+            blank(start, end)
+            i = end + 1 + len(hashes)
+        elif c == '"':
+            j = i + 1
+            while j < n and source[j] != '"':
+                j += 2 if source[j] == "\\" else 1
+            blank(i + 1, j)
+            i = j + 1
+        elif c == "'":
+            m = CHAR_LITERAL.match(source, i)
+            if m:
+                blank(i + 1, m.end() - 1)
+                i = m.end()
+            else:
+                i += 1  # a lifetime
+        else:
+            i += 1
+    return "".join(out)
+
+
+def _attributes_before(code: str, end: int) -> list[str]:
+    """The ``#[...]`` attributes (inner text) directly in front of ``code[:end]``,
+    skipping ``pub``/``async``/``unsafe``/``const`` and whitespace."""
+    modifiers = FN_MODIFIERS.search(code, 0, end)
+    i = modifiers.start() if modifiers else end
+    attrs: list[str] = []
+    while True:
+        while i > 0 and code[i - 1].isspace():
+            i -= 1
+        if i == 0 or code[i - 1] != "]":
+            return attrs
+        depth, j = 0, i - 1
+        while j >= 0:
+            if code[j] == "]":
+                depth += 1
+            elif code[j] == "[":
+                depth -= 1
+                if depth == 0:
+                    break
+            j -= 1
+        if j < 1 or code[j - 1] != "#":
+            return attrs
+        attrs.append(code[j + 1 : i - 1].strip())
+        i = j - 1
+
+
+def _attribute_name(attr: str) -> str:
+    return re.split(r"[\s(=]", attr, maxsplit=1)[0].split("::")[-1]
+
+
+@functools.lru_cache(maxsize=None)
+def _blanked_file(path: Path) -> str:
+    return blank_rust(path.read_text(encoding="utf-8", errors="replace"))
+
+
+def find_test_fn(source: str, name: str, *, blanked: bool = False) -> str | None:
+    """Look for a test fn called ``name`` in Rust ``source``.
+
+    Returns None when one exists and is not ignored; otherwise why not."""
+    code = source if blanked else blank_rust(source)
+    found_plain = False
+    for match in re.finditer(rf"\bfn\s+{re.escape(name)}\s*[(<]", code):
+        attrs = _attributes_before(code, match.start())
+        names = {_attribute_name(a) for a in attrs}
+        if not names & TEST_ATTRIBUTES:
+            found_plain = True
+            continue
+        if "ignore" in names:
+            return f"`fn {name}` is `#[ignore]`d, so it does not run; mark the row `todo` until it does"
+        return None
+    if found_plain:
+        return f"`fn {name}` has no test attribute (`#[test]`, `#[tokio::test]`, ...); point at the test, not a helper"
+    return f"no `fn {name}`"
+
+
 def check_rust_ref(ref: str, windows_root: Path) -> str | None:
     """Return an error message, or None when ``ref`` names an existing Rust test."""
     match = RUST_REF.match(ref)
@@ -178,15 +299,16 @@ def check_rust_ref(ref: str, windows_root: Path) -> str | None:
             return (f"`{ref}`: paths are relative to windows/, so drop the leading "
                     f"`windows/` (use `{Path(*rel.parts[1:]).as_posix()}`)")
         return f"`{ref}`: file windows/{rel.as_posix()} does not exist"
-    source = path.read_text(encoding="utf-8", errors="replace")
-    if not re.search(rf"\bfn\s+{re.escape(match.group('fn'))}\s*[(<]", source):
-        return f"`{ref}`: no `fn {match.group('fn')}` in windows/{rel.as_posix()}"
+    problem = find_test_fn(_blanked_file(path.resolve()), match.group("fn"), blanked=True)
+    if problem:
+        return f"`{ref}`: {problem} in windows/{rel.as_posix()}"
     return None
 
 
 def check(repo: Path, ledger_path: Path) -> Report:
     report = Report()
     windows_root = repo / "windows"
+    _blanked_file.cache_clear()
     report.swift_ids = [t.id for t in extract_swift_tests.extract_all(repo)]
     rows, errors = parse_ledger(ledger_path.read_text(encoding="utf-8"))
     report.rows = rows

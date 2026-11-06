@@ -8,12 +8,20 @@ Two sources are scanned, relative to the repository root:
   directly inside a class (or an extension of a class) that inherits from
   ``XCTestCase`` (directly or through another test class), and is not
   ``private``, ``fileprivate`` or ``static``. These are the methods XCTest runs.
+  Swift Testing tests count too: every function marked ``@Test`` (in any
+  type, or at file scope), whatever its name or parameters. A file that has an
+  ``@Test`` the scanner cannot attribute to a function is an error, so a new
+  kind of test can never slip past the ledger unnoticed.
 * ``Tests/Manual/CoreTestsMain.swift``: every ``assertTrue(<condition>, "<label>")``
-  check in the command-line core smoke test (``make test-core``).
+  check in the command-line core smoke test (``make test-core``). Two checks
+  whose labels give the same ID are an error: each check needs its own row.
 
 Each test gets a stable ID:
 
 * ``TokenMonTests/Providers/Grok/GrokUsageParsingTests.swift::GrokUsageParsingTests::testParseFixtureJSON``
+* ``TokenMonTests/Core/PaceTests.swift::PaceTests::resetMovesWithPeriod`` (a
+  Swift Testing ``@Test``; the middle part is the enclosing type, or
+  ``global`` for a function at file scope)
 * ``Tests/Manual/CoreTestsMain.swift::CoreTestsMain::grpc_usedpercent`` (the
   label, lower-cased, with runs of other characters folded to ``_``)
 
@@ -37,6 +45,8 @@ from pathlib import Path
 XCTEST_ROOT = "TokenMonTests"
 CORE_MAIN = "Tests/Manual/CoreTestsMain.swift"
 CORE_CLASS = "CoreTestsMain"
+GLOBAL_SCOPE = "global"
+SWIFT_TESTING_ATTR = re.compile(r"@Test\b")
 
 
 @dataclass(frozen=True)
@@ -48,7 +58,7 @@ class SwiftTest:
     cls: str
     name: str
     line: int
-    kind: str  # "xctest" or "core-check"
+    kind: str  # "xctest", "swift-testing" or "core-check"
 
 
 # ---------------------------------------------------------------------------
@@ -194,17 +204,22 @@ def _inherits(clause: str) -> list[str]:
     return [part.strip().split("<")[0].split(".")[-1] for part in clause.split(":", 1)[1].split(",")]
 
 
-def scan_swift_file(code: str) -> tuple[list[tuple[str, str, int]], dict[str, list[str]]]:
+def scan_swift_file(code: str) -> tuple[list[tuple[str, str, int, str]], dict[str, list[str]]]:
     """Scan blanked Swift code.
 
-    Returns ``(candidates, supertypes)`` where ``candidates`` is a list of
-    ``(type_name, method_name, line)`` for every parameterless, non-private,
-    non-static ``func test...`` declared directly in a class or extension,
-    and ``supertypes`` maps each class declared in the file to its inheritance
-    list.
+    Returns ``(candidates, supertypes)``. ``candidates`` lists
+    ``(type_name, method_name, line, kind)``:
+
+    * kind ``"xctest"``: a parameterless, non-private, non-static
+      ``func test...`` declared directly in a class or extension (it is a test
+      when that class turns out to be an ``XCTestCase``);
+    * kind ``"swift-testing"``: any function marked ``@Test``, declared in a
+      type or at file scope (``type_name`` is ``global`` then).
+
+    ``supertypes`` maps each class declared in the file to its inheritance list.
     """
     stack: list[_Scope] = []
-    candidates: list[tuple[str, str, int]] = []
+    candidates: list[tuple[str, str, int, str]] = []
     supertypes: dict[str, list[str]] = {}
     for idx, ch in enumerate(code):
         if ch == "}":
@@ -222,19 +237,37 @@ def scan_swift_file(code: str) -> tuple[list[tuple[str, str, int]], dict[str, li
                 supertypes.setdefault(name, []).extend(_inherits(type_match.group(3)))
             stack.append(_Scope("type", name, keyword))
             continue
-        if func and stack and stack[-1].kind == "type" and stack[-1].keyword in ("class", "extension"):
-            name, params = func.group(1), func.group(3).strip()
-            mods_match = MODIFIERS_BEFORE_FUNC.search(header)
-            mods = mods_match.group(1).split() if mods_match else []
-            if (
-                name.startswith("test")
-                and not params
-                and not {"private", "fileprivate", "static", "class"} & set(mods)
-            ):
-                line = code.count("\n", 0, idx - len(header) + func.start()) + 1
-                candidates.append((stack[-1].name, name, line))
+        if func:
+            line = code.count("\n", 0, idx - len(header) + func.start()) + 1
+            name = func.group(1)
+            in_type = bool(stack) and stack[-1].kind == "type"
+            if SWIFT_TESTING_ATTR.search(header[: func.start()]) and (in_type or not stack):
+                owner = stack[-1].name if in_type else GLOBAL_SCOPE
+                candidates.append((owner, name, line, "swift-testing"))
+            elif in_type and stack[-1].keyword in ("class", "extension"):
+                params = func.group(3).strip()
+                mods_match = MODIFIERS_BEFORE_FUNC.search(header)
+                mods = mods_match.group(1).split() if mods_match else []
+                if (
+                    name.startswith("test")
+                    and not params
+                    and not {"private", "fileprivate", "static", "class"} & set(mods)
+                ):
+                    candidates.append((stack[-1].name, name, line, "xctest"))
         stack.append(_Scope("other"))
     return candidates, supertypes
+
+
+def _unattributed_swift_testing(rel: str, code: str, candidates: list[tuple[str, str, int, str]]) -> None:
+    """Fail when ``@Test`` appears more often than the scanner found ``@Test`` functions."""
+    marks = [code.count("\n", 0, m.start()) + 1 for m in SWIFT_TESTING_ATTR.finditer(code)]
+    found = sum(kind == "swift-testing" for *_, kind in candidates)
+    if len(marks) != found:
+        raise ValueError(
+            f"{rel}: found {len(marks)} `@Test` attribute(s) (lines {', '.join(map(str, marks))}) but could "
+            f"extract only {found} Swift Testing function(s); declare each `@Test func` directly in a type or "
+            "at file scope, or teach windows/scripts/parity/extract_swift_tests.py the new form"
+        )
 
 
 def _is_test_case(name: str, supertypes: dict[str, list[str]], seen: set[str] | None = None) -> bool:
@@ -251,20 +284,21 @@ def extract_xctests(repo: Path) -> list[SwiftTest]:
     root = repo / XCTEST_ROOT
     if not root.is_dir():
         return []
-    per_file: list[tuple[str, list[tuple[str, str, int]]]] = []
+    per_file: list[tuple[str, list[tuple[str, str, int, str]]]] = []
     supertypes: dict[str, list[str]] = {}
     for path in sorted(root.rglob("*.swift")):
         rel = path.relative_to(repo).as_posix()
         code = blank_swift(path.read_text(encoding="utf-8"))
         candidates, file_supers = scan_swift_file(code)
+        _unattributed_swift_testing(rel, code, candidates)
         for cls, parents in file_supers.items():
             supertypes.setdefault(cls, []).extend(parents)
         per_file.append((rel, candidates))
     tests: list[SwiftTest] = []
     for rel, candidates in per_file:
-        for cls, name, line in candidates:
-            if _is_test_case(cls, supertypes):
-                tests.append(SwiftTest(f"{rel}::{cls}::{name}", rel, cls, name, line, "xctest"))
+        for cls, name, line, kind in candidates:
+            if kind == "swift-testing" or _is_test_case(cls, supertypes):
+                tests.append(SwiftTest(f"{rel}::{cls}::{name}", rel, cls, name, line, kind))
     return tests
 
 
@@ -312,7 +346,7 @@ def extract_core_checks(repo: Path) -> list[SwiftTest]:
     source = path.read_text(encoding="utf-8")
     code = blank_swift(source)
     tests: list[SwiftTest] = []
-    used: dict[str, int] = {}
+    first_line: dict[str, int] = {}
     for match in re.finditer(r"\bassertTrue\s*\(", code):
         if re.search(r"\bfunc\s*$", code[: match.start()]):
             continue  # the helper's own declaration
@@ -324,10 +358,15 @@ def extract_core_checks(repo: Path) -> list[SwiftTest]:
                 "string-literal label as its last argument so the parity ledger can name it"
             )
         slug = slugify(label_match.group(1))
-        used[slug] = used.get(slug, 0) + 1
-        if used[slug] > 1:
-            slug = f"{slug}_{used[slug]}"
         line = code.count("\n", 0, match.start()) + 1
+        if slug in first_line:
+            # Numbering the second one would let two checks share a row by
+            # accident (and renumber when one is removed). Make the author pick.
+            raise ValueError(
+                f"{CORE_MAIN}:{line}: assertTrue label {label_match.group(1)!r} gives the ID `{slug}`, "
+                f"already used by the check on line {first_line[slug]}; give each check a distinct label"
+            )
+        first_line[slug] = line
         tests.append(SwiftTest(f"{CORE_MAIN}::{CORE_CLASS}::{slug}", CORE_MAIN, CORE_CLASS, slug, line, "core-check"))
     return tests
 
@@ -368,8 +407,8 @@ def main(argv: list[str] | None = None) -> int:
         json.dump([asdict(t) for t in tests], sys.stdout, indent=2)
         print()
     else:
-        xct = sum(t.kind == "xctest" for t in tests)
-        print(f"xctest={xct} core-check={len(tests) - xct} total={len(tests)}")
+        kinds = {kind: sum(t.kind == kind for t in tests) for kind in ("xctest", "swift-testing", "core-check")}
+        print(" ".join(f"{k}={v}" for k, v in kinds.items()) + f" total={len(tests)}")
     return 0
 
 
