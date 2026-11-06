@@ -45,7 +45,49 @@ pub fn relaunch_spec(exe: &Path, pid: u32) -> CommandSpec {
     }
 }
 
+/// The Windows system directory (`C:\Windows\System32`), as an absolute path.
+///
+/// Asked from the OS (`GetSystemDirectoryW`); if that fails, `%SystemRoot%`
+/// and finally `C:\Windows` are used. Never a relative path, so a program
+/// resolved under it cannot be shadowed by the application directory or the
+/// current directory.
+pub fn system_directory() -> String {
+    #[cfg(windows)]
+    if let Some(dir) = os_system_directory() {
+        return dir;
+    }
+    let root = std::env::var("SystemRoot")
+        .ok()
+        .filter(|r| is_absolute_windows_path(r))
+        .unwrap_or_else(|| r"C:\Windows".to_owned());
+    format!("{}\\System32", root.trim_end_matches(['\\', '/']))
+}
+
+#[cfg(windows)]
+fn os_system_directory() -> Option<String> {
+    use windows_sys::Win32::System::SystemInformation::GetSystemDirectoryW;
+    let mut buf = [0u16; 260];
+    // SAFETY: `buf` is valid for `buf.len()` u16 writes.
+    let len = unsafe { GetSystemDirectoryW(buf.as_mut_ptr(), buf.len() as u32) } as usize;
+    if len == 0 || len >= buf.len() {
+        return None;
+    }
+    let dir = String::from_utf16(&buf[..len]).ok()?;
+    is_absolute_windows_path(&dir).then_some(dir)
+}
+
+/// `X:\...` or `\\server\...`.
+fn is_absolute_windows_path(p: &str) -> bool {
+    let b = p.as_bytes();
+    (b.len() >= 3 && b[0].is_ascii_alphabetic() && b[1] == b':' && (b[2] == b'\\' || b[2] == b'/'))
+        || p.starts_with("\\\\")
+}
+
 /// Per-user, unattended-with-progress `msiexec` run of a downloaded package.
+///
+/// `msiexec.exe` is addressed by its absolute path under the system directory
+/// ([`system_directory`]); a bare name would be looked up in the application's
+/// own (user-writable) folder first.
 ///
 /// # Examples
 ///
@@ -54,12 +96,18 @@ pub fn relaunch_spec(exe: &Path, pid: u32) -> CommandSpec {
 /// use tokenmon_platform::install::relaunch::msiexec_spec;
 ///
 /// let spec = msiexec_spec(Path::new(r"C:\t\x.msi"));
-/// assert_eq!(spec.program, "msiexec.exe");
+/// let program = spec.program.to_string_lossy().to_lowercase();
+/// assert!(program.ends_with(r"\system32\msiexec.exe"), "{program}");
 /// assert!(spec.args.iter().any(|a| a == "MSIINSTALLPERUSER=1"));
 /// ```
 pub fn msiexec_spec(msi: &Path) -> CommandSpec {
+    msiexec_spec_in(&system_directory(), msi)
+}
+
+/// [`msiexec_spec`] with the system directory supplied (testable).
+pub fn msiexec_spec_in(system_dir: &str, msi: &Path) -> CommandSpec {
     CommandSpec {
-        program: "msiexec.exe".into(),
+        program: format!("{}\\msiexec.exe", system_dir.trim_end_matches(['\\', '/'])).into(),
         args: vec![
             "/i".into(),
             msi.as_os_str().to_owned(),

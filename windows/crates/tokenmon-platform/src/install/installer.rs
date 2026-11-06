@@ -7,7 +7,8 @@ use tempfile::{Builder, TempDir};
 use tokenmon_core::BoxFuture;
 use tokenmon_core::update::{
     AssetKind, InstallError, InstallOutcome, InstallRequest, MAX_DOWNLOAD_BYTES,
-    MAX_EXTRACTED_BYTES, ReleaseSource, UpdateInstaller, is_repository_release_download,
+    MAX_EXTRACTED_BYTES, ReleaseSource, Sha256Stream, UpdateInstaller,
+    is_repository_release_download,
 };
 
 use super::archive::{extract_zip, locate_exe};
@@ -148,10 +149,33 @@ impl WindowsUpdateInstaller {
     ) -> Result<InstallOutcome, InstallError> {
         let msi = self.fetch_verified(req, dir, "TokenMon.msi").await?;
         self.verifier.verify_msi(&msi)?;
+        // Close the verify-to-run gap: the file must still be the checked
+        // download at the moment msiexec is spawned.
+        if hash_file(&msi)? != req.expected_sha256.to_ascii_lowercase() {
+            return Err(InstallError::Verification(
+                "The package changed after it was verified.".into(),
+            ));
+        }
         self.launcher
             .spawn_detached(&msiexec_spec(&msi))
             .map_err(|e| InstallError::Install(e.to_string()))?;
         Ok(InstallOutcome::Relaunching)
+    }
+}
+
+/// Lowercase hex SHA-256 of a file, streamed.
+fn hash_file(path: &Path) -> Result<String, InstallError> {
+    use std::io::Read;
+    let io = |e: std::io::Error| InstallError::Install(e.to_string());
+    let mut file = std::fs::File::open(path).map_err(io)?;
+    let mut hasher = Sha256Stream::new();
+    let mut buf = [0u8; 64 * 1024];
+    loop {
+        let n = file.read(&mut buf).map_err(io)?;
+        if n == 0 {
+            return Ok(hasher.finish_hex());
+        }
+        hasher.update(&buf[..n]);
     }
 }
 
