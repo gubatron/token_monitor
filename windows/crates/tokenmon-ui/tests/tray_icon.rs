@@ -526,3 +526,37 @@ fn test_menu_action_ids_roundtrip() {
     assert_eq!(MenuAction::from_id(0), None);
     assert_eq!(MenuAction::from_id(107), None);
 }
+
+/// Issue #61: the tooltip is derived from the same content as the icon, so a
+/// provider whose segment shows a percent never reads as a bare name.
+#[test]
+fn test_tooltip_for_content_follows_the_icon_segments() {
+    let bars = TrayContent::Bars(vec![
+        BarSegment {
+            provider: Grok,
+            used: None,
+        },
+        BarSegment {
+            provider: OpenCode,
+            used: Some(12.4),
+        },
+        BarSegment {
+            provider: Cursor,
+            used: None,
+        },
+    ]);
+    assert_eq!(
+        tooltip_for_content(&bars, false),
+        "Grok \u{b7} OpenCode 12% \u{b7} Cursor \u{2014}"
+    );
+    assert_eq!(
+        tooltip_for_content(&bars, true),
+        "Grok \u{2014} \u{b7} OpenCode 12% \u{b7} Cursor \u{2014}"
+    );
+    let selected = TrayContent::Selected {
+        provider: OpenCode,
+        used: Some(12.0),
+    };
+    assert_eq!(tooltip_for_content(&selected, false), "OpenCode 12%");
+    assert_eq!(tooltip_for_content(&TrayContent::Empty, true), "TokenMon");
+}

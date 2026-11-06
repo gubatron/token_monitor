@@ -153,8 +153,12 @@ pub fn build_code_section(c: &ClaudeCodeInput) -> ClaudeCodeVm {
             MetricVm::new("Total tokens", format::tokens(c.all_time.tokens)),
             MetricVm::new("Total spend", spend(&c.all_time)),
         ],
-        models: (!rows.is_empty())
-            .then(|| ModelsCardVm::new("Models This Month", true, c.models_expanded, rows, true)),
+        // The Mac lists every model under a collapsible header, with no
+        // "View all" / "Show less" toggle.
+        models: (!rows.is_empty()).then(|| ModelsCardVm {
+            toggle_label: None,
+            ..ModelsCardVm::new("Models This Month", true, c.models_expanded, rows, true)
+        }),
     }
 }
 
@@ -268,29 +272,36 @@ pub fn build_chatgpt(input: &ChatGptInput, ctx: &PanelContext) -> PanelVm<ChatGp
     };
     let accent = ProviderId::ChatGpt.panel_accent();
     let mut tracks = Vec::with_capacity(2);
-    let (plabel, pused, pcap) = match &snap.primary {
+    let (plabel, pused) = match &snap.primary {
         Some(w) => (
             w.label
                 .clone()
                 .unwrap_or_else(|| "5-Hour Window".to_owned()),
             w.used_percent.unwrap_or(0.0),
-            if snap.limit_reached {
-                Some("Limit reached".to_owned())
-            } else {
-                w.resets_at.map(|t| ctx.reset_caption(t))
-            },
         ),
-        None => ("5-Hour Window".to_owned(), 0.0, None),
+        None => ("5-Hour Window".to_owned(), 0.0),
+    };
+    let pcap = if snap.limit_reached {
+        Some("Limit reached".to_owned())
+    } else {
+        snap.primary
+            .as_ref()
+            .and_then(|w| w.resets_at)
+            .map(|t| ctx.reset_caption(t))
     };
     tracks.push(TrackVm::new(&plabel, pused, accent, pcap));
-    if let Some(w) = &snap.secondary {
-        tracks.push(TrackVm::new(
-            w.label.as_deref().unwrap_or("Weekly"),
-            w.used_percent.unwrap_or(0.0),
-            accent,
-            w.resets_at.map(|t| ctx.reset_caption(t)),
-        ));
-    }
+    // The Weekly track is always drawn, "0% Used" when the window is missing.
+    let secondary = snap.secondary.as_ref();
+    tracks.push(TrackVm::new(
+        secondary
+            .and_then(|w| w.label.as_deref())
+            .unwrap_or("Weekly"),
+        secondary.and_then(|w| w.used_percent).unwrap_or(0.0),
+        accent,
+        secondary
+            .and_then(|w| w.resets_at)
+            .map(|t| ctx.reset_caption(t)),
+    ));
     PanelVm::with_usage(
         header.with_meta(Some(snap.plan_name.clone())),
         ChatGptUsage {

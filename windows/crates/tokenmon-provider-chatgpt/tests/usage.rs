@@ -225,5 +225,8 @@ fn test_chatgpt_pools() {
         snap(Some(window(10.0)), Some(window(20.0))).usage_pool(),
         UsagePool::Mixed
     );
-    assert_eq!(snap(None, Some(window(20.0))).usage_pool(), UsagePool::Weekly);
+    assert_eq!(
+        snap(None, Some(window(20.0))).usage_pool(),
+        UsagePool::Weekly
+    );
 }

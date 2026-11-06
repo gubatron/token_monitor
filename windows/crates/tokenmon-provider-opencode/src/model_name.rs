@@ -121,7 +121,7 @@ pub fn palette_index(seed: &str) -> usize {
 
 /// Colour for a model row: Go is the OpenCode orange, Zen purple, others seeded.
 pub fn color_for_provider(provider_id: &str, seed: &str, opencode_orange: Srgb) -> Srgb {
-    match provider_id {
+    match provider_id.to_lowercase().as_str() {
         "opencode-go" => opencode_orange,
         "opencode" => PURPLE,
         _ => {

@@ -575,8 +575,59 @@ fn test_chatgpt_limit_reached_and_blocked() {
         u.tracks[0].caption.as_deref(),
         Some("Resets Wed 15 July 3:00pm")
     );
-    assert_eq!(u.tracks.len(), 1);
+    // The Weekly track is always drawn, empty when the window is missing.
+    assert_eq!(u.tracks.len(), 2);
+    assert_eq!(u.tracks[1].label, "Weekly");
+    assert_eq!(u.tracks[1].used_text, "0% Used");
+    assert!(u.tracks[1].caption.is_none());
     assert!(u.blocked_text.is_none());
+}
+
+/// Issue #61: a ChatGPT snapshot with no primary window still says
+/// "Limit reached" like the Mac, and the Weekly track is still drawn.
+#[test]
+fn test_chatgpt_limit_reached_without_primary() {
+    let mut s = chatgpt_snap();
+    s.primary = None;
+    s.secondary = None;
+    let u = build_chatgpt(
+        &ChatGptInput {
+            status: status(),
+            snapshot: Some(s),
+        },
+        &ctx(),
+    )
+    .usage
+    .unwrap();
+    assert_eq!(u.tracks.len(), 2);
+    assert_eq!(u.tracks[0].used_text, "0% Used");
+    assert_eq!(u.tracks[0].caption.as_deref(), Some("Limit reached"));
+    assert_eq!(u.tracks[1].label, "Weekly");
+}
+
+/// Issue #61: Claude's "Models This Month" lists every model with no
+/// "View all" / "Show less" toggle.
+#[test]
+fn test_claude_models_have_no_toggle() {
+    let mut code = claude_code();
+    let template = code.month_models[0].clone();
+    code.month_models = (0..5)
+        .map(|i| CodeModelInput {
+            name: format!("Model {i}"),
+            ..template.clone()
+        })
+        .collect();
+    let v = build_claude(
+        &ClaudeInput {
+            status: status(),
+            snapshot: Some(claude_snap()),
+            code: Some(code),
+        },
+        &ctx(),
+    );
+    let card = v.code.unwrap().models.unwrap();
+    assert_eq!(card.rows.len(), 5);
+    assert!(card.toggle_label.is_none());
 }
 
 /// ChatGPT signed-out.

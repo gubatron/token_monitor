@@ -625,7 +625,14 @@ fn build_bar(day: &DayInput, input: &DailyBudgetInput, today: NaiveDate) -> DayB
     } else {
         0.0
     };
-    let drawn = fraction > input.fill_threshold && !future;
+    // Grok draws nothing for a day at or below 0.05% of the weekly pool
+    // (`GrokDailyUsageBuilder.fillFraction`); other providers use the
+    // input's fraction threshold.
+    let above_threshold = match input.footer_kind {
+        FooterKind::GrokWeek { .. } => day.spent > GROK_MIN_DAY_PERCENT,
+        FooterKind::Generic => fraction > input.fill_threshold,
+    };
+    let drawn = above_threshold && !future;
     let h = geometry::STEM_HEIGHT;
     DayBarVm {
         fill_height: if drawn {
@@ -674,6 +681,26 @@ fn footer(input: &DailyBudgetInput, today: NaiveDate) -> Option<String> {
     }
 }
 
+/// Smallest weekly-pool percent a Grok day must exceed to draw a bar.
+const GROK_MIN_DAY_PERCENT: f64 = 0.05;
+
+/// Grok's week range, abbreviated on both ends: `Nov 3 – Nov 9`
+/// (`GrokModels.swift` `rangeLabel`).
+///
+/// ```
+/// use chrono::NaiveDate;
+/// use tokenmon_ui::panels::common::grok_range_label;
+/// let d = |m, d| NaiveDate::from_ymd_opt(2026, m, d).unwrap();
+/// assert_eq!(grok_range_label(d(11, 3), d(11, 9)), "Nov 3 \u{2013} Nov 9");
+/// ```
+pub fn grok_range_label(first: NaiveDate, last: NaiveDate) -> String {
+    format!(
+        "{} \u{2013} {}",
+        first.format("%b %-d"),
+        last.format("%b %-d")
+    )
+}
+
 /// Builds the daily-budget card; `None` when there are no days (card hidden).
 pub fn build_daily_budget(input: &DailyBudgetInput, ctx: &PanelContext) -> Option<DailyBudgetVm> {
     let (first, last) = (input.days.first()?, input.days.last()?);
@@ -682,7 +709,10 @@ pub fn build_daily_budget(input: &DailyBudgetInput, ctx: &PanelContext) -> Optio
     Some(DailyBudgetVm {
         title: "Daily Budget".to_owned(),
         allowance_text: (budget > 0.0).then(|| format!("{budget:.1}%")),
-        range_label: range_label(first.date, last.date),
+        range_label: match input.footer_kind {
+            FooterKind::GrokWeek { .. } => grok_range_label(first.date, last.date),
+            FooterKind::Generic => range_label(first.date, last.date),
+        },
         has_navigation: input.has_navigation,
         can_go_previous: input.has_navigation,
         can_go_next: input.can_go_next,

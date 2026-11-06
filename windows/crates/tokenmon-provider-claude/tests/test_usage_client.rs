@@ -227,7 +227,10 @@ fn test_claude_pools() {
         seven_day,
         account_email: None,
     };
-    assert_eq!(snap(Some(w(10.0)), Some(w(20.0))).usage_pool(), UsagePool::Mixed);
+    assert_eq!(
+        snap(Some(w(10.0)), Some(w(20.0))).usage_pool(),
+        UsagePool::Mixed
+    );
     assert_eq!(snap(Some(w(10.0)), None).usage_pool(), UsagePool::Hourly);
     assert_eq!(snap(None, Some(w(20.0))).usage_pool(), UsagePool::Weekly);
 }

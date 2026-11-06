@@ -174,3 +174,45 @@ fn test_opencode_pool_name_follows_windows() {
     assert_eq!(pool(&[WindowKind::Rolling5h]), "Hourly");
     assert_eq!(pool(&[WindowKind::Weekly, WindowKind::Monthly]), "Mixed");
 }
+
+/// Issue #61: model rows show the short display name and the provider palette
+/// colour (Go orange, Zen purple, seeded for the rest).
+#[test]
+fn test_opencode_model_rows_use_display_name_and_palette() {
+    use tokenmon_provider_opencode::snapshot::ModelUsage;
+    let model = |provider: &str, id: &str| ModelUsage {
+        provider_id: provider.to_owned(),
+        model_id: id.to_owned(),
+        cost_usd: 1.0,
+        input_tokens: 0,
+        output_tokens: 0,
+        cache_read_tokens: 0,
+        cache_write_tokens: 0,
+        session_count: 1,
+        percent_of_window: 50.0,
+        is_cost_estimated: false,
+        is_cost_unpriced: false,
+    };
+    let snap = OpenCodeSnapshot {
+        models: vec![
+            model("opencode-go", "gpt-5.4"),
+            model("opencode", "glm-5.1"),
+            model("OpenCode-Go", "kimi-k2.5"),
+            model("xai", "grok-4"),
+        ],
+        ..OpenCodeSnapshot::default()
+    };
+    let m = OpenCodeSnapshotInput::from(&snap).models;
+    assert_eq!(m[0].name, "GPT-5.4");
+    assert_eq!(m[0].color, tokenmon_ui::panels::opencode_openrouter::ORANGE);
+    assert_eq!(m[1].color, tokenmon_ui::panels::opencode_openrouter::PURPLE);
+    assert_eq!(m[2].color, m[0].color);
+    assert_eq!(
+        m[3].color,
+        tokenmon_provider_opencode::model_name::color_for_provider(
+            "xai",
+            "xai/grok-4",
+            tokenmon_ui::panels::opencode_openrouter::ORANGE
+        )
+    );
+}

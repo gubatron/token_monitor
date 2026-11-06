@@ -35,8 +35,8 @@ use super::grokbot_cursor::{
     CursorCostInput, CursorPoolInput, CursorSnapshotInput, GrokbotSnapshotInput,
 };
 use super::opencode_openrouter::{
-    BudgetSource, OpenCodeLocalStatsInput, OpenCodeModelInput, OpenCodeSnapshotInput,
-    OpenCodeWindowInput, OpenCodeWindowKind, OpenRouterModelInput, OpenRouterSnapshotInput, PURPLE,
+    BudgetSource, ORANGE, OpenCodeLocalStatsInput, OpenCodeModelInput, OpenCodeSnapshotInput,
+    OpenCodeWindowInput, OpenCodeWindowKind, OpenRouterModelInput, OpenRouterSnapshotInput,
 };
 
 fn tokens(n: i64) -> u64 {
@@ -253,15 +253,16 @@ fn window(w: &WindowUsage) -> OpenCodeWindowInput {
 
 fn opencode_model(m: &OpenCodeModel) -> OpenCodeModelInput {
     OpenCodeModelInput {
-        name: tokenmon_provider_opencode::model_name::model_display_name(
-            &m.provider_id,
-            &m.model_id,
-        ),
+        name: tokenmon_provider_opencode::model_name::display_name(&m.model_id),
         cost_usd: m.cost_usd,
         is_cost_estimated: m.is_cost_estimated,
         is_cost_unpriced: m.is_cost_unpriced,
         percent_of_window: m.percent_of_window,
-        color: PURPLE,
+        color: tokenmon_provider_opencode::model_name::color_for_provider(
+            &m.provider_id,
+            &format!("{}/{}", m.provider_id, m.model_id),
+            ORANGE,
+        ),
     }
 }
 
