@@ -35,7 +35,26 @@ fn bad(msg: &str) -> InstallError {
 const OLE_MAGIC: [u8; 8] = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
 
 fn is_pe(path: &Path) -> std::io::Result<bool> {
-    let mut f = File::open(path)?;
+    is_pe_reader(File::open(path)?)
+}
+
+/// Whether `f` holds a PE image: `MZ` at the start and `PE\0\0` where the DOS
+/// header's `e_lfanew` points. Reads at most 68 bytes; total over any input.
+///
+/// # Examples
+///
+/// ```
+/// use std::io::Cursor;
+/// use tokenmon_platform::install::verify::is_pe_reader;
+///
+/// let mut pe = vec![0u8; 0x44];
+/// pe[..2].copy_from_slice(b"MZ");
+/// pe[0x3C] = 0x40;
+/// pe[0x40..0x44].copy_from_slice(b"PE\0\0");
+/// assert!(is_pe_reader(Cursor::new(pe)).unwrap());
+/// assert!(!is_pe_reader(Cursor::new(b"MZ")).unwrap());
+/// ```
+pub fn is_pe_reader<R: Read + Seek>(mut f: R) -> std::io::Result<bool> {
     let mut dos = [0u8; 64];
     if f.read_exact(&mut dos).is_err() || &dos[..2] != b"MZ" {
         return Ok(false);
