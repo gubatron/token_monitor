@@ -91,6 +91,7 @@ class Row:
     status: str
     rust: str
     notes: str
+    text: str = ""  # the whole row, stripped (the drift guard compares revisions)
 
 
 @dataclass
@@ -162,6 +163,7 @@ def parse_ledger(text: str) -> tuple[list[Row], list[str]]:
                 status=cell("status"),
                 rust=cell("rust test"),
                 notes=cell("notes"),
+                text=stripped,
             )
         )
     return rows, errors

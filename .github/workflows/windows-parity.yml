@@ -5,8 +5,12 @@ name: Windows parity
 # - ledger: every Swift test has exactly one row in windows/docs/PARITY.md, and
 #   every row marked `ported` names a Rust test that exists. `todo` rows pass.
 # - drift-guard: a change to the macOS app (TokenMon/**, TokenMonTests/**, Tests/**,
-#   Scripts/**, TokenMon.xcodeproj/**, project.yml, Makefile) must also
-#   change windows/**, or be tracked by an open issue labeled `windows-parity`.
+#   Scripts/**, TokenMon.xcodeproj/**, project.yml, Makefile) needs its Windows
+#   parity in the same change: when the body of a `ported` Swift test changes,
+#   its PARITY.md row (or the Rust test it names) must change too; any other
+#   macOS change needs windows/crates/** or PARITY.md changes, or a
+#   `Windows-Parity: <reason>` trailer. An open `windows-parity` issue that the
+#   change references (or that names its commit) covers both.
 #
 # Runs on every branch, master included, because macOS changes (including
 # upstream faulknerpearce/token_monitor merges) land there first.
@@ -72,10 +76,11 @@ jobs:
           out="$RUNNER_TEMP/parity"
           mkdir -p "$out"
           if [ "$EVENT" = "pull_request" ]; then
-            base="$PR_BASE"
             head="$PR_HEAD"
-            # Three dots: only what the PR adds on top of its merge base.
-            git diff --name-only "$base...$head" > "$out/changed.txt"
+            # Only what the PR adds on top of its merge base; the guard also
+            # reads the Swift tests and the ledger at this base.
+            base="$(git merge-base "$PR_BASE" "$PR_HEAD")"
+            git diff --name-only "$base" "$head" > "$out/changed.txt"
             git log --format=%H "$base..$head" > "$out/shas.txt"
             printf '%s\n\n%s\n' "$PR_TITLE" "$PR_BODY" > "$out/text.txt"
           else
@@ -109,7 +114,7 @@ jobs:
           echo "PARITY_HEAD=$head" >> "$GITHUB_ENV"
           echo "Compared $base..$head: $(wc -l < "$out/changed.txt") changed paths, $(wc -l < "$out/shas.txt") commits."
 
-      - name: Require Windows parity or a windows-parity issue
+      - name: Require Windows parity, a Windows-Parity trailer or a windows-parity issue
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
@@ -117,5 +122,5 @@ jobs:
             --changed-files "$RUNNER_TEMP/parity/changed.txt" \
             --text-file "$RUNNER_TEMP/parity/text.txt" \
             --shas-file "$RUNNER_TEMP/parity/shas.txt" \
-            --base "$PARITY_BASE" --head "$PARITY_HEAD" \
+            --base "$PARITY_BASE" --head "$PARITY_HEAD" --repo-root . \
             --summary "$GITHUB_STEP_SUMMARY"

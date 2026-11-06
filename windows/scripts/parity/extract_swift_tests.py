@@ -36,6 +36,7 @@ Python 3 standard library only. Run ``--help`` for the output formats.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sys
@@ -66,13 +67,15 @@ class SwiftTest:
 # ---------------------------------------------------------------------------
 
 
-def blank_swift(source: str) -> str:
+def blank_swift(source: str, keep_strings: bool = False) -> str:
     """Return ``source`` with comments and string-literal contents replaced by spaces.
 
     The result has the same length and the same newlines as the input, so
     offsets and line numbers still line up. String delimiters are kept as
     ``"`` so a later pass can still see that a literal was there.
     Interpolated code inside ``\\( ... )`` is kept, because it is code.
+    With ``keep_strings`` only comments are blanked (for body digests, where a
+    changed expected string is a changed test).
     """
     out = list(source)
     n = len(source)
@@ -81,6 +84,10 @@ def blank_swift(source: str) -> str:
         for k in range(start, min(end, n)):
             if out[k] != "\n":
                 out[k] = " "
+
+    def blank_literal(start: int, end: int) -> None:
+        if not keep_strings:
+            blank(start, end)
 
     def skip_code(i: int, stop_at_paren: bool) -> int:
         """Scan code from ``i``; return the index after the closing ``)`` when
@@ -150,21 +157,21 @@ def blank_swift(source: str) -> str:
             if source.startswith(escape, k):
                 after = k + len(escape)
                 if after < n and source[after] == "(":
-                    blank(content_start, k)
+                    blank_literal(content_start, k)
                     k = skip_code(after + 1, stop_at_paren=True)
                     content_start = k
                     continue
                 k = after + 1
                 continue
             if source.startswith(close, k):
-                blank(content_start, k)
+                blank_literal(content_start, k)
                 return k + len(close)
             if not multiline and source[k] == "\n":
                 # Unterminated single-line literal: stop at the line end.
-                blank(content_start, k)
+                blank_literal(content_start, k)
                 return k
             k += 1
-        blank(content_start, n)
+        blank_literal(content_start, n)
         return n
 
     skip_code(0, stop_at_paren=False)
@@ -189,6 +196,19 @@ class _Scope:
     kind: str  # "type" or "other"
     name: str = ""
     keyword: str = ""
+    candidate: "Candidate | None" = None
+
+
+@dataclass
+class Candidate:
+    """A test-shaped function found in one file (see ``scan_swift_file``)."""
+
+    owner: str
+    name: str
+    line: int
+    kind: str
+    start: int  # offset of the `func` keyword (the digest covers signature and body)
+    end: int = -1  # offset just past the body's ``}``
 
 
 def _header(code: str, brace: int) -> str:
@@ -204,11 +224,11 @@ def _inherits(clause: str) -> list[str]:
     return [part.strip().split("<")[0].split(".")[-1] for part in clause.split(":", 1)[1].split(",")]
 
 
-def scan_swift_file(code: str) -> tuple[list[tuple[str, str, int, str]], dict[str, list[str]]]:
+def scan_swift_file(code: str) -> tuple[list[Candidate], dict[str, list[str]]]:
     """Scan blanked Swift code.
 
-    Returns ``(candidates, supertypes)``. ``candidates`` lists
-    ``(type_name, method_name, line, kind)``:
+    Returns ``(candidates, supertypes)``. Each candidate has an owner (type
+    name), a function name, a line, the body's offsets, and a kind:
 
     * kind ``"xctest"``: a parameterless, non-private, non-static
       ``func test...`` declared directly in a class or extension (it is a test
@@ -219,12 +239,14 @@ def scan_swift_file(code: str) -> tuple[list[tuple[str, str, int, str]], dict[st
     ``supertypes`` maps each class declared in the file to its inheritance list.
     """
     stack: list[_Scope] = []
-    candidates: list[tuple[str, str, int, str]] = []
+    candidates: list[Candidate] = []
     supertypes: dict[str, list[str]] = {}
     for idx, ch in enumerate(code):
         if ch == "}":
             if stack:
-                stack.pop()
+                closed = stack.pop()
+                if closed.candidate is not None:
+                    closed.candidate.end = idx + 1
             continue
         if ch != "{":
             continue
@@ -237,13 +259,15 @@ def scan_swift_file(code: str) -> tuple[list[tuple[str, str, int, str]], dict[st
                 supertypes.setdefault(name, []).extend(_inherits(type_match.group(3)))
             stack.append(_Scope("type", name, keyword))
             continue
+        found: Candidate | None = None
         if func:
-            line = code.count("\n", 0, idx - len(header) + func.start()) + 1
+            decl = idx - len(header) + func.start()
+            line = code.count("\n", 0, decl) + 1
             name = func.group(1)
             in_type = bool(stack) and stack[-1].kind == "type"
             if SWIFT_TESTING_ATTR.search(header[: func.start()]) and (in_type or not stack):
                 owner = stack[-1].name if in_type else GLOBAL_SCOPE
-                candidates.append((owner, name, line, "swift-testing"))
+                found = Candidate(owner, name, line, "swift-testing", decl)
             elif in_type and stack[-1].keyword in ("class", "extension"):
                 params = func.group(3).strip()
                 mods_match = MODIFIERS_BEFORE_FUNC.search(header)
@@ -253,15 +277,17 @@ def scan_swift_file(code: str) -> tuple[list[tuple[str, str, int, str]], dict[st
                     and not params
                     and not {"private", "fileprivate", "static", "class"} & set(mods)
                 ):
-                    candidates.append((stack[-1].name, name, line, "xctest"))
-        stack.append(_Scope("other"))
+                    found = Candidate(stack[-1].name, name, line, "xctest", decl)
+        if found:
+            candidates.append(found)
+        stack.append(_Scope("other", candidate=found))
     return candidates, supertypes
 
 
-def _unattributed_swift_testing(rel: str, code: str, candidates: list[tuple[str, str, int, str]]) -> None:
+def _unattributed_swift_testing(rel: str, code: str, candidates: list[Candidate]) -> None:
     """Fail when ``@Test`` appears more often than the scanner found ``@Test`` functions."""
     marks = [code.count("\n", 0, m.start()) + 1 for m in SWIFT_TESTING_ATTR.finditer(code)]
-    found = sum(kind == "swift-testing" for *_, kind in candidates)
+    found = sum(c.kind == "swift-testing" for c in candidates)
     if len(marks) != found:
         raise ValueError(
             f"{rel}: found {len(marks)} `@Test` attribute(s) (lines {', '.join(map(str, marks))}) but could "
@@ -284,7 +310,7 @@ def extract_xctests(repo: Path) -> list[SwiftTest]:
     root = repo / XCTEST_ROOT
     if not root.is_dir():
         return []
-    per_file: list[tuple[str, list[tuple[str, str, int, str]]]] = []
+    per_file: list[tuple[str, list[Candidate]]] = []
     supertypes: dict[str, list[str]] = {}
     for path in sorted(root.rglob("*.swift")):
         rel = path.relative_to(repo).as_posix()
@@ -296,9 +322,9 @@ def extract_xctests(repo: Path) -> list[SwiftTest]:
         per_file.append((rel, candidates))
     tests: list[SwiftTest] = []
     for rel, candidates in per_file:
-        for cls, name, line, kind in candidates:
-            if kind == "swift-testing" or _is_test_case(cls, supertypes):
-                tests.append(SwiftTest(f"{rel}::{cls}::{name}", rel, cls, name, line, kind))
+        for c in candidates:
+            if c.kind == "swift-testing" or _is_test_case(c.owner, supertypes):
+                tests.append(SwiftTest(f"{rel}::{c.owner}::{c.name}", rel, c.owner, c.name, c.line, c.kind))
     return tests
 
 
@@ -339,18 +365,17 @@ def _call_arguments(source: str, code: str, open_paren: int) -> tuple[list[str],
     return args, len(code)
 
 
-def extract_core_checks(repo: Path) -> list[SwiftTest]:
-    path = repo / CORE_MAIN
-    if not path.is_file():
-        return []
-    source = path.read_text(encoding="utf-8")
+def scan_core_checks(source: str) -> list[Candidate]:
+    """Every ``assertTrue`` check in CoreTestsMain ``source``, named by its label slug.
+
+    The span covers the call's arguments (the condition and the label)."""
     code = blank_swift(source)
-    tests: list[SwiftTest] = []
+    checks: list[Candidate] = []
     first_line: dict[str, int] = {}
     for match in re.finditer(r"\bassertTrue\s*\(", code):
         if re.search(r"\bfunc\s*$", code[: match.start()]):
             continue  # the helper's own declaration
-        args, _ = _call_arguments(source, code, match.end() - 1)
+        args, close = _call_arguments(source, code, match.end() - 1)
         label_match = STRING_LITERAL.match(args[-1]) if args else None
         if not label_match:
             raise ValueError(
@@ -367,8 +392,69 @@ def extract_core_checks(repo: Path) -> list[SwiftTest]:
                 f"already used by the check on line {first_line[slug]}; give each check a distinct label"
             )
         first_line[slug] = line
-        tests.append(SwiftTest(f"{CORE_MAIN}::{CORE_CLASS}::{slug}", CORE_MAIN, CORE_CLASS, slug, line, "core-check"))
-    return tests
+        checks.append(Candidate(CORE_CLASS, slug, line, "core-check", match.start(), close + 1))
+    return checks
+
+
+def extract_core_checks(repo: Path) -> list[SwiftTest]:
+    path = repo / CORE_MAIN
+    if not path.is_file():
+        return []
+    return [
+        SwiftTest(f"{CORE_MAIN}::{CORE_CLASS}::{c.name}", CORE_MAIN, CORE_CLASS, c.name, c.line, "core-check")
+        for c in scan_core_checks(path.read_text(encoding="utf-8"))
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Body digests (for the drift guard)
+# ---------------------------------------------------------------------------
+
+
+def _normalize(code: str) -> str:
+    """Drop formatting: whitespace runs vanish, except one space between two
+    word characters (so ``let x`` stays two tokens)."""
+    collapsed = re.sub(r"\s+", " ", code).strip()
+    return re.sub(r"(?<=\W) | (?=\W)", "", collapsed)
+
+
+def _digest(code: str) -> str:
+    return hashlib.sha256(_normalize(code).encode("utf-8")).hexdigest()[:16]
+
+
+def body_digests(rel: str, source: str) -> tuple[dict[str, str], str]:
+    """Digest every test-shaped body in one Swift file.
+
+    Returns ``({test ID: digest}, rest digest)``. Comments and formatting do
+    not change a digest; code and string literals do. The rest digest covers
+    everything outside the test bodies (helpers, fixtures, ``setUp``,
+    signatures), which can change what several tests check at once.
+
+    It works on one file's text, so it can digest an old revision. It does not
+    check that a class really is an ``XCTestCase`` (that needs the other
+    files); callers match the IDs against the ledger instead.
+    """
+    code = blank_swift(source)
+    commentless = blank_swift(source, keep_strings=True)
+    if rel == CORE_MAIN:
+        found = scan_core_checks(source)
+    else:
+        found, _ = scan_swift_file(code)
+    digests: dict[str, str] = {}
+    rest: list[str] = []
+    cursor = 0
+    for c in sorted(found, key=lambda c: c.start):
+        if c.start < cursor:
+            continue  # nested inside a body already digested
+        end = c.end if c.end > c.start else len(source)
+        test_id = f"{rel}::{c.owner}::{c.name}"
+        body = _digest(commentless[c.start : end])
+        # Same name twice (overloads in extensions): one digest for both.
+        digests[test_id] = body if test_id not in digests else _digest(digests[test_id] + body)
+        rest.append(commentless[cursor : c.start])
+        cursor = end
+    rest.append(commentless[cursor:])
+    return digests, _digest(" ".join(rest))
 
 
 def extract_all(repo: Path) -> list[SwiftTest]:

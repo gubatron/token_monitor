@@ -34,6 +34,11 @@ specs do not list the test.
   number is in each heading.
 - **Same commit.** When you port a test, flip its row to `ported` in the same
   commit as the Rust test.
+- **Changed Swift test.** When a change edits the body of a Swift test whose
+  row is `ported`, the drift guard requires that row, or one of the Rust test
+  files it names, to change in the same change: check the Rust test against
+  the new Swift expectations and update whichever is out of date (comments and
+  formatting in the Swift test don't count).
 - **New Swift test.** When a macOS change adds, renames or deletes a test, CI
   lists the missing and stale IDs. Run
   `python3 windows/scripts/parity/check_parity.py --print-missing-rows` to get
