@@ -29,7 +29,7 @@ fn notifier() -> (
     let backend = Arc::new(FakeToastBackend::new());
     let clicks: Clicks = Arc::new(Mutex::new(Vec::new()));
     let sink = clicks.clone();
-    let handler: ActivationHandler = Arc::new(move |p| sink.lock().unwrap().push(p));
+    let handler: ActivationHandler = Arc::new(move |p| sink.lock().expect("lock").push(p));
     (
         backend.clone(),
         clicks,
@@ -103,7 +103,7 @@ fn test_click_invokes_callback_with_provider() {
     backend.click(0);
     backend.click(9);
     assert_eq!(
-        *clicks.lock().unwrap(),
+        *clicks.lock().expect("lock"),
         vec![ProviderId::Grok, ProviderId::Claude]
     );
 }
@@ -114,7 +114,7 @@ fn test_backend_failure_is_not_fatal() {
     let (backend, _, n) = notifier();
     backend.set_fail(true);
     n.deliver(&alert(ProviderId::Grok, 85.0, 80.0));
-    assert!(backend.shown().is_empty());
+    assert_eq!(backend.shown().len(), 0);
 }
 
 /// First run registers the AUMID; the second run writes nothing.
@@ -122,19 +122,29 @@ fn test_backend_failure_is_not_fatal() {
 fn test_aumid_registration_is_idempotent() {
     let reg = Arc::new(MemoryRegistry::new());
     let r = AumidRegistration::new(reg.clone(), Some(r"C:\TokenMon\icon.ico".into()));
-    assert_eq!(r.ensure().unwrap(), AumidStatus::Registered);
+    assert_eq!(
+        r.ensure().expect("operation succeeds"),
+        AumidStatus::Registered
+    );
     let key = AumidRegistration::key();
     assert_eq!(key, r"Software\Classes\AppUserModelId\TokenMon");
     assert_eq!(
-        reg.get_string(&key, "DisplayName").unwrap().as_deref(),
+        reg.get_string(&key, "DisplayName")
+            .expect("operation succeeds")
+            .as_deref(),
         Some("TokenMon")
     );
     assert_eq!(
-        reg.get_string(&key, "IconUri").unwrap().as_deref(),
+        reg.get_string(&key, "IconUri")
+            .expect("operation succeeds")
+            .as_deref(),
         Some(r"C:\TokenMon\icon.ico")
     );
     reg.set_fail_writes(true);
-    assert_eq!(r.ensure().unwrap(), AumidStatus::AlreadyRegistered);
+    assert_eq!(
+        r.ensure().expect("operation succeeds"),
+        AumidStatus::AlreadyRegistered
+    );
 }
 
 /// A moved install (new icon path) re-registers; removal is idempotent.
@@ -143,12 +153,18 @@ fn test_aumid_updates_stale_icon_and_removes() {
     let reg = Arc::new(MemoryRegistry::new());
     AumidRegistration::new(reg.clone(), Some("a.ico".into()))
         .ensure()
-        .unwrap();
+        .expect("operation succeeds");
     let r = AumidRegistration::new(reg.clone(), Some("b.ico".into()));
-    assert_eq!(r.ensure().unwrap(), AumidStatus::Registered);
-    r.remove().unwrap();
-    r.remove().unwrap();
-    assert!(!reg.key_exists(&AumidRegistration::key()).unwrap());
+    assert_eq!(
+        r.ensure().expect("operation succeeds"),
+        AumidStatus::Registered
+    );
+    r.remove().expect("operation succeeds");
+    r.remove().expect("operation succeeds");
+    assert!(
+        !reg.key_exists(&AumidRegistration::key())
+            .expect("operation succeeds")
+    );
 }
 
 /// Registry write failures surface as typed errors.
