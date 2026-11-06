@@ -100,6 +100,47 @@ fn test_usd_formats_currency_without_tilde() {
     assert_eq!(Format::usd(f64::NAN), "$0");
 }
 
+/// Issue #59: rounding follows `NumberFormatter` (half-even on the shortest
+/// decimal), not the binary value. Expected strings were measured on macOS.
+#[test]
+fn test_usd_rounds_half_even_on_the_decimal_value() {
+    let table = [
+        (0.015, "$0.02"),
+        (1.005, "$1.00"),
+        (1.015, "$1.02"),
+        (0.125, "$0.12"),
+        (0.025, "$0.02"),
+        (0.035, "$0.04"),
+        (0.045, "$0.04"),
+        (0.055, "$0.06"),
+        (2.675, "$2.68"),
+        (0.075, "$0.08"),
+        (0.005, "$0.00"),
+        (0.0049, "$0.00"),
+        (0.994999, "$0.99"),
+        (0.995, "$1.00"),
+        (999.995, "$1,000.00"),
+        (0.1 + 0.2, "$0.30"),
+        (5e-324, "$0.00"),
+        (1_000_000_000_000_000.5, "$1,000,000,000,000,000.50"),
+        (1e21, "$1,000,000,000,000,000,000,000.00"),
+        (1_234_567.891, "$1,234,567.89"),
+    ];
+    for (v, expected) in table {
+        assert_eq!(Format::usd(v), expected, "{v}");
+    }
+}
+
+/// Negative values keep their sign even when they round to zero, as on the Mac.
+#[test]
+fn test_usd_negative_values_keep_sign_at_zero() {
+    assert_eq!(Format::usd(-0.001), "-$0.00");
+    assert_eq!(Format::usd(-0.005), "-$0.00");
+    assert_eq!(Format::usd(-0.015), "-$0.02");
+    assert_eq!(Format::usd(-0.0), "-$0.00");
+    assert_eq!(Format::usd(-1234.5), "-$1,234.50");
+}
+
 /// Twelve-hour labels.
 #[test]
 fn test_hour_label_twelve_hour_clock() {

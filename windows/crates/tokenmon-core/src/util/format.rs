@@ -75,20 +75,26 @@ impl Format {
     /// en_US currency with two decimals and a `$` symbol: 4.1 gives "$4.10",
     /// 1234.5 gives "$1,234.50", -2 gives "-$2.00". Non-finite input gives "$0".
     ///
+    /// Rounds like Foundation's `NumberFormatter`: half-even on the shortest
+    /// decimal representation of the value (0.015 gives "$0.02" even though
+    /// the binary value is 0.01499...), and a negative value keeps its sign
+    /// when it rounds to zero ("-$0.00").
+    ///
     /// # Examples
     ///
     /// ```
     /// use tokenmon_core::util::Format;
     /// assert_eq!(Format::usd(4.1), "$4.10");
     /// assert_eq!(Format::usd(0.0), "$0.00");
+    /// assert_eq!(Format::usd(0.015), "$0.02");
+    /// assert_eq!(Format::usd(-0.001), "-$0.00");
     /// ```
     #[must_use]
     pub fn usd(amount: f64) -> String {
         if !amount.is_finite() {
             return "$0".to_owned();
         }
-        let fixed = format!("{:.2}", amount.abs());
-        let (int_part, frac) = fixed.split_once('.').unwrap_or((&fixed, "00"));
+        let (int_part, frac) = round_cents(&amount.abs().to_string());
         let mut grouped = String::new();
         for (i, ch) in int_part.chars().enumerate() {
             if i > 0 && (int_part.len() - i) % 3 == 0 {
@@ -96,8 +102,8 @@ impl Format {
             }
             grouped.push(ch);
         }
-        let negative = amount < 0.0 && (grouped != "0" || frac != "00");
-        format!("{}${grouped}.{frac}", if negative { "-" } else { "" })
+        let sign = if amount.is_sign_negative() { "-" } else { "" };
+        format!("{sign}${grouped}.{frac}")
     }
 
     /// Twelve-hour clock label for a 0-23 hour: 0 gives "12a", 15 gives "3p".
@@ -220,4 +226,37 @@ fn render_ldml(dt: DateTime<FixedOffset>, pattern: &str) -> String {
         }
     }
     out
+}
+
+/// Rounds a non-negative plain decimal string (`"12.345"`, `"7"`) to two
+/// fraction digits with round-half-even, returning `(integer, "NN")`.
+fn round_cents(decimal: &str) -> (String, String) {
+    let (int_part, frac) = decimal.split_once('.').unwrap_or((decimal, ""));
+    let mut digits: Vec<u8> = int_part.bytes().map(|b| b - b'0').collect();
+    let frac_digits: Vec<u8> = frac.bytes().map(|b| b - b'0').collect();
+    let kept = |i: usize| frac_digits.get(i).copied().unwrap_or(0);
+    digits.push(kept(0));
+    digits.push(kept(1));
+    let rest = frac_digits.get(2..).unwrap_or(&[]);
+    let round_up = match rest.first() {
+        None | Some(0..=4) => false,
+        Some(5) if rest[1..].iter().all(|d| *d == 0) => digits.last().is_some_and(|d| d % 2 == 1),
+        Some(_) => true,
+    };
+    if round_up {
+        let mut carry = true;
+        for d in digits.iter_mut().rev() {
+            if !carry {
+                break;
+            }
+            *d = (*d + 1) % 10;
+            carry = *d == 0;
+        }
+        if carry {
+            digits.insert(0, 1);
+        }
+    }
+    let split = digits.len() - 2;
+    let text = |ds: &[u8]| ds.iter().map(|d| char::from(b'0' + d)).collect::<String>();
+    (text(&digits[..split]), text(&digits[split..]))
 }
