@@ -1,5 +1,5 @@
 //! Stable-toolchain replay of the fuzz corpus and of every hostile input class
-//! the fuzz targets cover (`fuzz/fuzz_targets/chatgpt_*.rs`), asserting the
+//! the fuzz targets cover (`fuzz/src/bin/chatgpt_*.rs`), asserting the
 //! same invariants.
 #![allow(
     clippy::unwrap_used,

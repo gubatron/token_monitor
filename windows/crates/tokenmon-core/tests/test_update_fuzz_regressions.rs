@@ -23,7 +23,7 @@ fn corpus(target: &str) -> Vec<Vec<u8>> {
         .unwrap_or_default()
 }
 
-/// Same invariants as `fuzz_targets/update_app_version.rs`.
+/// Same invariants as `fuzz/src/bin/update_app_version.rs`.
 fn check_version(data: &[u8]) {
     let Ok(text) = std::str::from_utf8(data) else {
         return;
@@ -38,7 +38,7 @@ fn check_version(data: &[u8]) {
     }
 }
 
-/// Same invariants as `fuzz_targets/update_release_feed.rs`.
+/// Same invariants as `fuzz/src/bin/update_release_feed.rs`.
 fn check_feed(data: &[u8]) {
     let source = ReleaseSource::default();
     let current = AppVersion::parse("1.0.0").unwrap();
@@ -60,7 +60,7 @@ fn check_feed(data: &[u8]) {
     }
 }
 
-/// Same invariants as `fuzz_targets/update_trust.rs`.
+/// Same invariants as `fuzz/src/bin/update_trust.rs`.
 fn check_trust(data: &[u8]) {
     let Ok(url) = std::str::from_utf8(data) else {
         return;

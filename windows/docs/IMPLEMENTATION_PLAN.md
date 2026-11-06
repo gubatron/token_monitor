@@ -70,6 +70,7 @@ windows/
 - Tests go in each crate's `tests/`, never in `#[cfg(test)]` blocks in `src/`. They are hermetic: injected `Clock`, temp dirs, local mock HTTP (wiremock), no real network, no real home directory.
 - Every Swift test in the spec checklists gets a Rust test, and its row in `docs/PARITY.md` is updated in the same commit.
 - Every parser of untrusted input gets a fuzz target in `fuzz/`, with a seed corpus taken from the spec fixtures.
+- Fuzz target convention (no shared list): a target is one file `fuzz/src/bin/<crate>_<parser>.rs` (cargo autodiscovers it) plus a seed corpus in `fuzz/corpus/<target>/`. Never add `[[bin]]` blocks to `fuzz/Cargo.toml` (it conflicted on every rebase); touch it only to add one path-dependency line when a new workspace crate is first fuzzed. Run one with `cargo fuzz run <target> -- -runs=1`. `cargo fuzz list` prints nothing for this layout; CI enumerates targets with `scripts/ci/fuzz_targets.py`.
 - Where the specs flag a Swift bug as "fix rather than copy", fix it and record it in the Divergences section of `PARITY.md`.
 - Gate before every push, run from `windows/`:
   - `cargo fmt --all -- --check`

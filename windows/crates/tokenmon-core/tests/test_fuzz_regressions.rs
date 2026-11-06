@@ -27,7 +27,7 @@ fn corpus(target: &str) -> Vec<Vec<u8>> {
     inputs
 }
 
-/// Mirrors `fuzz_targets/core_iso8601.rs`.
+/// Mirrors `fuzz/src/bin/core_iso8601.rs`.
 fn run_iso8601(data: &[u8]) {
     let text = String::from_utf8_lossy(data);
     if let Some(parsed) = parse_flexible(&text)
@@ -56,7 +56,7 @@ fn check_json(value: &Value) {
     }
 }
 
-/// Mirrors `fuzz_targets/core_json_number.rs`.
+/// Mirrors `fuzz/src/bin/core_json_number.rs`.
 fn run_json(data: &[u8]) {
     if let Ok(value) = serde_json::from_slice::<Value>(data) {
         check_json(&value);
@@ -64,7 +64,7 @@ fn run_json(data: &[u8]) {
     check_json(&Value::String(String::from_utf8_lossy(data).into_owned()));
 }
 
-/// Mirrors `fuzz_targets/core_day_key.rs`.
+/// Mirrors `fuzz/src/bin/core_day_key.rs`.
 fn run_day_key(data: &[u8]) {
     let (head, rest) = data.split_at(data.len().min(4));
     let mut raw = [0u8; 4];
