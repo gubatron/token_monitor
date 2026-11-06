@@ -200,3 +200,56 @@ fn test_return_page_predicates_follow_each_provider() {
         "https://opencode.ai/console/login"
     ));
 }
+
+/// A host whose browser cannot start (no WebView2).
+struct NoBrowser;
+
+impl WebAuthHost for NoBrowser {
+    fn open(
+        &self,
+        _config: tokenmon_platform::webauth::SignInConfig,
+        _delegate: Arc<dyn tokenmon_platform::webauth::SignInDelegate>,
+    ) -> Result<(), tokenmon_platform::webauth::WebAuthError> {
+        Err(
+            tokenmon_platform::webauth::WebAuthError::BrowserUnavailable(
+                "runtime not found".into(),
+            ),
+        )
+    }
+    fn sign_out(&self, _slug: &str) {}
+}
+
+/// A sign-in window that cannot open leaves a visible error with the
+/// WebView2 download link (https only), shared by Grokbot and Cursor, and a
+/// sign-out clears it (#70).
+#[test]
+fn test_sign_in_that_cannot_open_surfaces_a_webview2_error() {
+    use tokenmon_app::signin::WEBVIEW2_DOWNLOAD_URL;
+    let r = rig();
+    let service = SignInService::new(
+        Arc::new(NoBrowser),
+        Arc::clone(&r.sessions),
+        Arc::new(|_| {}),
+    );
+    assert!(r.sessions.sign_in_error(ProviderId::Cursor).is_none());
+    assert!(service.start(ProviderId::Grokbot).is_err());
+    let message = r
+        .sessions
+        .sign_in_error(ProviderId::Cursor)
+        .expect("error recorded under Cursor's session");
+    assert!(message.contains("WebView2") && message.contains(WEBVIEW2_DOWNLOAD_URL));
+    assert!(WEBVIEW2_DOWNLOAD_URL.starts_with("https://"));
+    assert!(r.sessions.sign_in_error(ProviderId::Grokbot).is_some());
+    service.sign_out(ProviderId::Cursor);
+    assert!(r.sessions.sign_in_error(ProviderId::Cursor).is_none());
+}
+
+/// A later successful open clears the stale error.
+#[test]
+fn test_successful_open_clears_the_error() {
+    let r = rig();
+    r.sessions
+        .set_sign_in_error(ProviderId::Claude, Some("old".into()));
+    r.service.start(ProviderId::Claude).expect("opens");
+    assert!(r.sessions.sign_in_error(ProviderId::Claude).is_none());
+}

@@ -192,7 +192,11 @@ impl AppHost {
                 provider,
                 signed_in: s.is_signed_in,
                 email: s.account_email,
-                last_error: s.last_auth_error,
+                last_error: self
+                    .parts
+                    .sessions
+                    .sign_in_error(provider)
+                    .or(s.last_auth_error),
             }
         })
         .collect()
@@ -294,9 +298,9 @@ impl SettingsHost for AppHost {
     }
 
     fn sign_in(&self, provider: ProviderId) {
-        if let Err(e) = self.parts.signin.start(provider) {
-            tracing::warn!(error = %e, %provider, "sign-in could not open");
-        }
+        // A failure is logged and kept by the service; Settings shows it on
+        // the account row.
+        let _ = self.parts.signin.start(provider);
     }
 
     fn sign_out(&self, provider: ProviderId) {

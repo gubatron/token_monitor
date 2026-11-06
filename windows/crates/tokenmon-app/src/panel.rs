@@ -240,7 +240,11 @@ fn status(env: &ViewEnv<'_>, provider: ProviderId) -> ProviderStatus {
         needs_sign_in: auth.needs_sign_in,
         has_auth_error: auth.last_auth_error.is_some(),
         is_refreshing: false,
-        last_error: poller.and_then(|p| p.last_error()).map(|e| e.to_string()),
+        last_error: env
+            .sessions
+            .sign_in_error(provider)
+            .filter(|_| !auth.is_signed_in)
+            .or_else(|| poller.and_then(|p| p.last_error()).map(|e| e.to_string())),
         last_refreshed_at: poller.and_then(|p| p.last_refreshed_at()),
     }
 }
