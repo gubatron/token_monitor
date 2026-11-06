@@ -13,7 +13,7 @@
 #      crash inputs to <out>/crashes/<target>/.
 # The script exits 0 when the targets ran, whatever they found:
 # `fuzz_report.py table` decides pass or fail. It exits 1 only when the fuzz
-# crate does not build.
+# crate does not build, leaving the build log in <out>/build-failed.log.
 set -uo pipefail
 
 seconds=60
@@ -50,6 +50,8 @@ build_args=()
 echo "::group::cargo fuzz build"
 if ! cargo fuzz build --fuzz-dir "$fuzz_dir" "${build_args[@]}" 2>&1 | tee "$out/logs/build.log"; then
   echo "::endgroup::"
+  # fuzz_report.py table --build-failed-log shows this instead of an empty table.
+  cp "$out/logs/build.log" "$out/build-failed.log"
   exit 1
 fi
 echo "::endgroup::"

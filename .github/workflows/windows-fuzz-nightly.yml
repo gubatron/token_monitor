@@ -151,7 +151,7 @@ jobs:
           set -uo pipefail
           shopt -s nullglob
           rows=("$RUNNER_TEMP"/fuzz/rows/*.json)
-          python3 -I scripts/ci/fuzz_report.py table \
+          python3 -I scripts/ci/fuzz_report.py table --build-failed-log "$RUNNER_TEMP/fuzz/build-failed.log" \
             --title "Nightly fuzz: ${{ matrix.target }} (${FUZZ_SECONDS} s, $RUSTUP_TOOLCHAIN)" \
             --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
             "${rows[@]}" >> "$GITHUB_STEP_SUMMARY"
@@ -255,5 +255,9 @@ jobs:
           done
 
       - name: Fail when a target crashed or did not run
-        if: steps.table.outputs.status != '0'
-        run: exit 1
+        if: steps.table.outputs.status != '0' || needs.fuzz.result != 'success'
+        env:
+          FUZZ_RESULT: ${{ needs.fuzz.result }}
+        run: |
+          echo "fuzz jobs: $FUZZ_RESULT (a job that failed before writing its row, e.g. a build error, shows only in its own summary)"
+          exit 1
