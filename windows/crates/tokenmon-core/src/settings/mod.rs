@@ -11,10 +11,12 @@
 
 mod app;
 mod file;
+mod login_item;
 mod model;
 
 pub use app::AppSettings;
-pub use file::{SettingsFile, SettingsMap, decode_map};
+pub use file::{SETTINGS_FILE_NAME, SettingsFile, SettingsMap, decode_map};
+pub use login_item::{LaunchAtLogin, LoginItemError, LoginItemService, LoginItemStatus};
 pub use model::{
     ACTIVE_POLL_RANGE, DEFAULT_ACTIVE_POLL_SECONDS, DEFAULT_IDLE_POLL_SECONDS,
     DEFAULT_THRESHOLD_PERCENT, GrokProduct, IDLE_POLL_RANGE, InvalidEnabledProviders,

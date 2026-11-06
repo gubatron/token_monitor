@@ -10,6 +10,8 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 tokenmon-platform = { path = "../crates/tokenmon-platform" }
+tokenmon-core = { path = "../crates/tokenmon-core" }
+chrono = { version = "0.4", default-features = false, features = ["std"] }
 
 # Own workspace: nightly-only, never built by the stable workspace gate.
 [workspace]
@@ -24,6 +26,20 @@ bench = false
 [[bin]]
 name = "platform_shell_cmdline"
 path = "fuzz_targets/platform_shell_cmdline.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "tokenmon_core_settings_decode"
+path = "fuzz_targets/tokenmon_core_settings_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "tokenmon_core_threshold_notifier"
+path = "fuzz_targets/tokenmon_core_threshold_notifier.rs"
 test = false
 doc = false
 bench = false

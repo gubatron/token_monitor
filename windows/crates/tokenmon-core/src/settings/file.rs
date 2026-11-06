@@ -6,15 +6,19 @@
 //! Reading is total: a missing, unreadable, truncated or non-object file yields an
 //! empty map, so the app always starts with defaults instead of failing.
 //!
-//! `ws-core-storage` owns the shared `AppPaths` and atomic-write helpers; until
-//! they land this module keeps a small private atomic writer. Callers pass the
-//! settings file path explicitly, so swapping the path source is a one-line change.
+//! Writes go through [`crate::storage::write_atomic`]. Production code opens the
+//! file with [`SettingsFile::in_app_directory`] (`<base>\\TokenMon\\settings.json`,
+//! owner-only); tests pass a temp path to [`SettingsFile::open`].
 
-use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use serde_json::{Map, Value};
+
+use crate::storage::{AppPaths, NoopPermissions, OwnerOnlyPermissions, write_atomic};
+
+/// File name of the settings store inside the data directory.
+pub const SETTINGS_FILE_NAME: &str = "settings.json";
 
 /// A JSON object keyed by setting name.
 pub type SettingsMap = Map<String, Value>;
@@ -46,12 +50,25 @@ pub fn decode_map(bytes: &[u8]) -> SettingsMap {
 #[derive(Debug)]
 pub struct SettingsFile {
     path: Option<PathBuf>,
+    permissions: Arc<dyn OwnerOnlyPermissions>,
     map: Mutex<SettingsMap>,
 }
 
 impl SettingsFile {
-    /// Opens `path`, treating a missing or corrupt file as empty.
+    /// Opens `path` without permission hardening (tests, tools).
     pub fn open(path: impl Into<PathBuf>) -> Self {
+        Self::open_with(path, Arc::new(NoopPermissions))
+    }
+
+    /// Opens `<data dir>/settings.json` from the shared [`AppPaths`], creating
+    /// the restricted data directory and applying its owner-only permissions.
+    pub fn in_app_directory(paths: &AppPaths) -> std::io::Result<Self> {
+        let path = paths.directory()?.join(SETTINGS_FILE_NAME);
+        Ok(Self::open_with(path, paths.permissions()))
+    }
+
+    /// Opens `path`, treating a missing or corrupt file as empty.
+    pub fn open_with(path: impl Into<PathBuf>, permissions: Arc<dyn OwnerOnlyPermissions>) -> Self {
         let path = path.into();
         let map = match std::fs::read(&path) {
             Ok(bytes) => decode_map(&bytes),
@@ -59,6 +76,7 @@ impl SettingsFile {
         };
         Self {
             path: Some(path),
+            permissions,
             map: Mutex::new(map),
         }
     }
@@ -67,6 +85,7 @@ impl SettingsFile {
     pub fn in_memory() -> Self {
         Self {
             path: None,
+            permissions: Arc::new(NoopPermissions),
             map: Mutex::new(SettingsMap::new()),
         }
     }
@@ -75,6 +94,7 @@ impl SettingsFile {
     pub fn from_bytes(bytes: &[u8]) -> Self {
         Self {
             path: None,
+            permissions: Arc::new(NoopPermissions),
             map: Mutex::new(decode_map(bytes)),
         }
     }
@@ -115,7 +135,7 @@ impl SettingsFile {
             }
         }
         if let Some(path) = &self.path
-            && let Err(err) = write_atomic(path, &guard)
+            && let Err(err) = write_atomic_json(path, &guard, self.permissions.as_ref())
         {
             tracing::warn!(path = %path.display(), error = %err, "could not persist settings");
         }
@@ -132,20 +152,14 @@ impl SettingsFile {
     }
 }
 
-fn write_atomic(path: &Path, map: &SettingsMap) -> std::io::Result<()> {
+fn write_atomic_json(
+    path: &Path,
+    map: &SettingsMap,
+    permissions: &dyn OwnerOnlyPermissions,
+) -> std::io::Result<()> {
     if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
         std::fs::create_dir_all(dir)?;
     }
-    let tmp = path.with_extension("json.tmp");
     let bytes = serde_json::to_vec_pretty(map).map_err(std::io::Error::other)?;
-    {
-        let mut options = std::fs::OpenOptions::new();
-        options.write(true).create(true).truncate(true);
-        #[cfg(unix)]
-        std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
-        let mut file = options.open(&tmp)?;
-        file.write_all(&bytes)?;
-        file.sync_all()?;
-    }
-    std::fs::rename(&tmp, path)
+    write_atomic(path, &bytes, permissions)
 }
