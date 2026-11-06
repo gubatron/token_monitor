@@ -4,6 +4,10 @@ import { TrackData, MetricData, ModelsData, DailyData, FooterData, HeaderData, S
 
 // Claude panel (spec 03 section 1.7), including the Claude Code section.
 export component ClaudePanel inherits PanelShell {
+    in property <[TabRowData]> tabs <=> root.shell-tabs;
+    out property <length> content-height: root.shell-content-height;
+    callback select-tab(int, int);
+    shell-select-tab(r, c) => { root.select-tab(r, c); }
     in property <HeaderData> header;
     in property <bool> has-usage;
     in property <string> message;
