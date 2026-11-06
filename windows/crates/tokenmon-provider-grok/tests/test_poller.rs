@@ -24,6 +24,7 @@ use tokenmon_provider_grok::poller::{GrokFetch, GrokUsagePoller, HourlySink, Ref
 struct FakeAuth {
     state: Mutex<AuthSessionState>,
     cookie: Mutex<Option<String>>,
+    listeners: Mutex<Vec<Arc<dyn AuthEventListener>>>,
 }
 
 impl FakeAuth {
@@ -33,7 +34,16 @@ impl FakeAuth {
         Arc::new(Self {
             state: Mutex::new(state),
             cookie: Mutex::new(Some("sso=live".to_owned())),
+            listeners: Mutex::new(Vec::new()),
         })
+    }
+
+    /// Delivers `event` to every registered listener, like the real session.
+    fn fire(&self, event: AuthEvent) {
+        let listeners = self.listeners.lock().unwrap().clone();
+        for l in listeners {
+            l.on_auth_event(event);
+        }
     }
 
     fn sign_out_and_in_again(&self) {
@@ -59,7 +69,9 @@ impl AuthSession for FakeAuth {
     fn is_current(&self, generation: SessionGeneration) -> bool {
         self.state.lock().unwrap().is_current(generation)
     }
-    fn add_listener(&self, _listener: Arc<dyn AuthEventListener>) {}
+    fn add_listener(&self, listener: Arc<dyn AuthEventListener>) {
+        self.listeners.lock().unwrap().push(listener);
+    }
 }
 
 type Script = dyn Fn(&FakeAuth) -> Result<WeeklyUsageSnapshot, ProviderError> + Send + Sync;
@@ -262,7 +274,7 @@ async fn test_current_unauthorized_invalidates_session_and_keeps_hourly() {
         );
     }
     assert!(!r.auth.state().is_signed_in);
-    r.poller.on_auth_event(AuthEvent::SignedOut);
+    r.auth.fire(AuthEvent::SignedOut);
     assert!(r.poller.snapshot().is_none());
     assert_eq!(r.hourly.cleared.load(Ordering::SeqCst), 0);
     assert_eq!(*r.hourly.recorded.lock().unwrap(), [12.0]);
@@ -288,10 +300,10 @@ async fn test_stale_transport_error_does_not_clobber_new_session() {
 async fn test_account_reset_clears_hourly_sign_out_keeps_it() {
     let r = rig(|_| Ok(snapshot(10.0)));
     r.poller.perform_refresh().await;
-    r.poller.on_auth_event(AuthEvent::SignedOut);
+    r.auth.fire(AuthEvent::SignedOut);
     assert!(r.poller.snapshot().is_none() && r.poller.last_refreshed_at().is_none());
     assert_eq!(r.hourly.cleared.load(Ordering::SeqCst), 0);
-    r.poller.on_auth_event(AuthEvent::AccountReset);
+    r.auth.fire(AuthEvent::AccountReset);
     assert_eq!(r.hourly.cleared.load(Ordering::SeqCst), 1);
     r.poller.with_history(|h| assert_eq!(h.recent().len(), 1));
 }
@@ -308,6 +320,34 @@ async fn test_poller_builds_the_current_week() {
     assert_eq!(current.days.len(), 7);
     assert!(r.poller.week(-1).is_some());
     assert_ne!(r.poller.week(-1).unwrap().week_start, current.week_start);
-    r.poller.on_auth_event(AuthEvent::SignedOut);
+    r.auth.fire(AuthEvent::SignedOut);
     assert!(r.poller.week(0).is_none());
+}
+
+/// Regression (#65): the poller registers itself, so a session sign-out drops
+/// the snapshot and an account reset also clears hourly data, with no direct
+/// call into the poller.
+#[tokio::test]
+async fn test_poller_registers_for_session_events() {
+    let r = rig(|_| Ok(snapshot(10.0)));
+    assert_eq!(r.auth.listeners.lock().unwrap().len(), 1);
+    r.poller.perform_refresh().await;
+    r.auth.fire(AuthEvent::SignedOut);
+    assert!(r.poller.snapshot().is_none());
+    assert!(r.poller.headline_used_percent().is_none());
+    assert_eq!(r.hourly.cleared.load(Ordering::SeqCst), 0);
+    r.poller.perform_refresh().await;
+    r.auth.fire(AuthEvent::AccountReset);
+    assert!(r.poller.snapshot().is_none());
+    assert_eq!(r.hourly.cleared.load(Ordering::SeqCst), 1);
+}
+
+/// The history flush API used on quit writes only when dirty and never panics
+/// without a backing.
+#[tokio::test]
+async fn test_flush_history_is_safe_without_backing() {
+    let r = rig(|_| Ok(snapshot(10.0)));
+    r.poller.perform_refresh().await;
+    r.poller.flush_history();
+    r.poller.with_history(|h| assert_eq!(h.recent().len(), 1));
 }
