@@ -474,3 +474,175 @@ async fn test_set_menu_open_wakes_the_polling_loop() {
     assert_eq!(h.fetches.load(Ordering::SeqCst), 1);
     h.poller.stop();
 }
+
+/// Before any refresh every accessor reports "nothing yet" and the poller
+/// identifies itself as the Cursor provider.
+#[tokio::test]
+async fn test_poller_accessors_are_empty_before_the_first_refresh() {
+    let h = harness_with(FakeSession::signed_in(), true, None, |_| {
+        Ok(fetch_result(None))
+    });
+    assert_eq!(h.poller.provider(), tokenmon_core::ProviderId::Cursor);
+    assert!(h.poller.snapshot().is_none());
+    assert!(h.poller.day_hourly_usage().is_none());
+    assert!(h.poller.daily_budget_days().is_none());
+    assert!(h.poller.daily_budget_days_at(WeekOffset::new(-1)).is_none());
+    assert!(h.poller.data_source_label().is_none());
+    assert!(h.poller.last_refreshed_at().is_none());
+    assert!(h.poller.headline_used_percent().is_none());
+    assert!(h.poller.headline_resets_at().is_none());
+    assert!(!h.poller.is_refreshing());
+    assert!(!h.poller.is_menu_open());
+}
+
+/// The menu flag follows `set_menu_open` in both directions.
+#[tokio::test]
+async fn test_set_menu_open_tracks_the_flag() {
+    let h = harness_with(FakeSession::signed_in(), true, None, |_| {
+        Ok(fetch_result(None))
+    });
+    h.poller.set_menu_open(true);
+    assert!(h.poller.is_menu_open());
+    h.poller.set_menu_open(true);
+    assert!(h.poller.is_menu_open());
+    h.poller.set_menu_open(false);
+    assert!(!h.poller.is_menu_open());
+}
+
+/// A second refresh carries the first one's hourly usage and bars over.
+#[tokio::test]
+async fn test_second_refresh_keeps_hourly_and_bars() {
+    let h = harness_with(FakeSession::signed_in(), true, None, |_| {
+        Ok(fetch_result(Some("a@b.com")))
+    });
+    h.poller.refresh_now().await;
+    assert!(h.poller.day_hourly_usage().is_some());
+    h.poller.refresh_now().await;
+    assert_eq!(h.fetches.load(Ordering::SeqCst), 2);
+    assert!(h.poller.day_hourly_usage().is_some());
+    assert_eq!(h.poller.daily_budget_days().unwrap().len(), 7);
+}
+
+/// A failed fetch after a success keeps the last snapshot but surfaces the
+/// error.
+#[tokio::test]
+async fn test_failed_fetch_keeps_last_snapshot_and_reports_error() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let counter = Arc::clone(&calls);
+    let h = harness_with(FakeSession::signed_in(), true, None, move |_| {
+        if counter.fetch_add(1, Ordering::SeqCst) == 0 {
+            Ok(fetch_result(None))
+        } else {
+            Err(ProviderError::Network(CTX, "offline".to_owned()))
+        }
+    });
+    h.poller.refresh_now().await;
+    assert!(h.poller.last_error().is_none());
+    h.poller.refresh_now().await;
+    assert_eq!(h.poller.headline_used_percent(), Some(42.0));
+    assert!(matches!(
+        h.poller.last_error(),
+        Some(ProviderError::Network(_, _))
+    ));
+}
+
+/// Clearing the snapshot also drops the event cache; an account reset wipes
+/// the persisted daily history, a plain sign-out keeps it.
+#[tokio::test]
+async fn test_account_reset_wipes_daily_history_but_sign_out_keeps_it() {
+    let clock = Arc::new(ManualClock::new(now()));
+    let backing = Arc::new(InMemoryStringStore::default());
+    let cleared = Arc::new(AtomicUsize::new(0));
+    let session = FakeSession::signed_in();
+    let cleared_by = Arc::clone(&cleared);
+    let calls = AtomicUsize::new(0);
+    let poller = CursorUsagePoller::new(CursorPollerConfig {
+        session: session.clone(),
+        daily: DailyQuotaDeltaStore::new(backing.clone(), "cursor", clock.clone()),
+        clock: clock.clone(),
+        fetch: Arc::new(move |_| {
+            let mut result = fetch_result(None);
+            result.snapshot.used_percent =
+                40.0 + 10.0 * calls.fetch_add(1, Ordering::SeqCst) as f64;
+            Box::pin(async move { Ok(result) })
+        }),
+        clear_event_cache: Arc::new(move || {
+            cleared_by.fetch_add(1, Ordering::SeqCst);
+        }),
+        is_enabled: Arc::new(|| true),
+        poll_interval: Arc::new(|_| None),
+    });
+    poller.refresh_now().await;
+    poller.refresh_now().await;
+    let reload = || DailyQuotaDeltaStore::new(backing.clone(), "cursor", clock.clone());
+    let before = reload().spent_by_day();
+    assert!(!before.is_empty(), "the refresh recorded daily growth");
+
+    session.fire(AuthEvent::SignedOut);
+    assert_eq!(cleared.load(Ordering::SeqCst), 1);
+    assert_eq!(reload().spent_by_day(), before, "sign-out keeps history");
+
+    session.fire(AuthEvent::AccountReset);
+    assert_eq!(cleared.load(Ordering::SeqCst), 2);
+    assert!(reload().spent_by_day().is_empty(), "reset wipes history");
+}
+
+/// An auth event after the poller is gone is ignored.
+#[tokio::test]
+async fn test_auth_event_after_poller_dropped_is_ignored() {
+    let session = FakeSession::signed_in();
+    let h = harness_with(session.clone(), true, None, |_| Ok(fetch_result(None)));
+    drop(h);
+    session.fire(AuthEvent::AccountReset);
+}
+
+/// `CursorPollerConfig::live` fetches through the real client against a mock
+/// server and clears the client's event cache on sign-out.
+#[tokio::test]
+async fn test_live_config_fetches_through_the_client() {
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    let server = MockServer::start().await;
+    let summary = serde_json::json!({
+        "billingCycleStart": at(2026, 8, 22, 17, 0).to_rfc3339(),
+        "billingCycleEnd": at(2026, 9, 22, 17, 0).to_rfc3339(),
+        "individualUsage": {"plan": {"totalPercentUsed": 61}},
+    });
+    Mock::given(method("GET"))
+        .and(path("/api/usage-summary"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(summary.to_string()))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/api/auth/me"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(r#"{"email":"me@x.com"}"#))
+        .mount(&server)
+        .await;
+    let clock = Arc::new(ManualClock::new(now()));
+    let client = Arc::new(tokenmon_provider_cursor::CursorUsageClient::new(
+        common::cursor_http(&server.uri()),
+        clock.clone(),
+    ));
+    let session = FakeSession::signed_in();
+    let poller = CursorUsagePoller::new(CursorPollerConfig::live(
+        session.clone(),
+        DailyQuotaDeltaStore::new(
+            Arc::new(InMemoryStringStore::default()),
+            "cursor",
+            clock.clone(),
+        ),
+        clock,
+        client,
+        Arc::new(|| true),
+        Arc::new(|_| None),
+    ));
+    poller.refresh_now().await;
+    assert_eq!(poller.headline_used_percent(), Some(61.0));
+    assert_eq!(
+        session.snapshot_state().account_email.as_deref(),
+        Some("me@x.com")
+    );
+    session.fire(AuthEvent::SignedOut);
+    assert!(poller.snapshot().is_none());
+}

@@ -330,3 +330,15 @@ fn test_overview_panel_header_and_navigation() {
         Some("No activity recorded on this day.")
     );
 }
+
+/// `tab_provider` resolves occupied cells and rejects padding and
+/// out-of-range coordinates instead of panicking.
+#[test]
+fn test_tab_provider_resolves_cells_and_rejects_invalid_coordinates() {
+    let rows = build_switcher(&[ProviderId::Grok], ProviderId::Overview);
+    assert_eq!(tab_provider(&rows, 0, 0), Some(ProviderId::Overview));
+    assert_eq!(tab_provider(&rows, 0, 1), Some(ProviderId::Grok));
+    assert_eq!(tab_provider(&rows, 0, 2), None, "padding cell");
+    assert_eq!(tab_provider(&rows, 0, 99), None, "column out of range");
+    assert_eq!(tab_provider(&rows, 5, 0), None, "row out of range");
+}
