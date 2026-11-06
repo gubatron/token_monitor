@@ -49,3 +49,64 @@ XWIN_ACCEPT_LICENSE=1 cargo xwin check --target x86_64-pc-windows-msvc -p tokenm
 * **Release repository.** The update feed repository is chosen in one place, `tokenmon_core::update::feed::configured_repository`. It reads the build-time environment variable `TOKENMON_UPDATE_REPO` (`owner/repo`, validated as a plain GitHub slug; invalid values fall back) and defaults to `gubatron/token_monitor`. Example: `TOKENMON_UPDATE_REPO=owner/fork cargo build --release`.
 * **Signature policy.** `tokenmon_platform::install::SignaturePolicy` has `AcceptUnsignedWithDigest` (default: SHA-256 from the same GitHub release plus PE/MSI structure and Mark-of-the-Web checks) and `RequireAuthenticode` (additionally `WinVerifyTrust`, fails closed off Windows). The app picks one with `verifier_for_policy(policy)`; switching is a one-line change.
 * **Startup helpers for the app.** Call `tokenmon_platform::install::handle_startup_args(std::env::args(), &current_exe)` first thing in `main`: it honours `--wait-for-pid <pid>` (bounded 30 s wait for the old process) and then runs `swap::cleanup_leftovers`.
+
+## Releases
+
+Windows releases are tagged `windows-vX.Y.Z` and built by `.github/workflows/windows-release.yml`. Release files live in `installer/`.
+
+| File (on the release) | What it is |
+|---|---|
+| `tokenmon-windows-X.Y.Z-x64.msi` | Per-user MSI, no admin rights. Installs `TokenMon.exe` to `%LOCALAPPDATA%\Programs\TokenMon` and adds a Start-menu shortcut that carries the AppUserModelID `TokenMon` (toasts) |
+| `tokenmon-windows-X.Y.Z-x64.zip` | Portable: `TokenMon.exe`, `README.txt`, `LICENSE.txt` at the top level |
+| `tokenmon-windows-X.Y.Z-SHA256SUMS.txt` | SHA-256 of both, in `sha256sum -c` format |
+
+The in-app updater only looks at `windows-v*` tags and only picks assets named `tokenmon-windows-*.zip` or `tokenmon-windows-*.msi`; the macOS updater only picks `TokenMon-*` assets from `v*` tags. Keep these names, or the updaters will miss the release (or pick the other platform's). The updater skips drafts and prereleases, so nothing reaches users until the draft is published.
+
+### Cut a release
+
+1. Bump `version` under `[workspace.package]` in `windows/Cargo.toml` (every crate inherits it; the MSI and the tag check read it). Run `cargo check --workspace` so `Cargo.lock` follows, then commit to `windows-port`.
+2. Wait for Windows CI on that commit to be green.
+3. Tag the commit and push the tag:
+   ```sh
+   git tag -a windows-v1.2.3 -m "TokenMon for Windows 1.2.3"
+   git push origin windows-v1.2.3
+   ```
+4. The workflow checks that the tag is `windows-v` plus the crate version, runs every Windows CI gate (`windows-ci.yml`) on the tagged commit, builds `x86_64-pc-windows-msvc` on `windows-latest`, builds the MSI and the zip, then installs, upgrades, downgrades and uninstalls the MSI on a clean runner. When everything passes, it creates a **draft** release with the three files. The run's summary lists each file's size and SHA-256.
+5. Review the draft (notes, files) and publish it.
+
+If the tag does not match, the run fails with the fix to apply. Re-running a failed run replaces files already attached to the draft; a first run refuses to.
+
+### Dry runs
+
+The same build and test, without a release, run:
+
+* on every push to `windows-port` that changes `windows/installer/` or the workflow;
+* on demand: `gh workflow run windows-release.yml --ref windows-port` (add `-f gates=false` to skip the CI gates). The files are kept as the run's artifacts for 14 days.
+
+### Build the MSI by hand (on Windows)
+
+```sh
+cd windows
+cargo build --locked --release -p tokenmon-app --target x86_64-pc-windows-msvc
+cargo install --locked cargo-wix --version 0.3.9      # needs WiX Toolset 3.14.1 (candle/light)
+cargo wix -p tokenmon-app --no-build --nocapture --target x86_64-pc-windows-msvc \
+  --include "$PWD/installer/main.wxs" --bin-path "<WiX 3.14 bin folder>" \
+  --output target/wix/tokenmon-windows-$(python installer/package.py version)-x64.msi
+python installer/package.py zip --exe target/x86_64-pc-windows-msvc/release/tokenmon.exe \
+  --license ../LICENSE --readme installer/portable-README.txt --out target/wix/portable.zip
+```
+
+`installer/package.py` (version, tag check, asset names, zip, SHA256SUMS, summary) is tested on any OS with `python3 -I -m unittest discover -s windows/installer/tests`. Never run `installer/smoke-test.ps1` on your own machine: it installs and uninstalls TokenMon and deletes the app's registry entries.
+
+### What the MSI does
+
+* WiX Toolset 3.14.1 driven by cargo-wix 0.3.9 (cargo-wix only drives WiX 3; both are downloaded by version and checked against a SHA-256 in the workflow).
+* Per user (`InstallScope="perUser"`): `%LOCALAPPDATA%\Programs\TokenMon`, an ARP entry under HKCU, a shortcut in the user's Start menu. No elevation.
+* UpgradeCode `97EEF0DA-B00F-4527-93D7-EF335558A346`. Never change it: `MajorUpgrade` finds the installed copy by it. A newer MSI replaces an older one in place; an older one refuses to install over a newer one.
+* A running TokenMon is closed before its files are replaced or removed.
+* Uninstall removes what the app registers at run time: the `TokenMon` value under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` and `...\Explorer\StartupApproved\Run`, `HKCU\Software\Classes\DesktopBackground\Shell\TokenMon` and `HKCU\Software\Classes\AppUserModelId\TokenMon`. An upgrade keeps them.
+* It never deletes the user's data in `%LOCALAPPDATA%\TokenMon`.
+
+### Signing
+
+Builds are unsigned until the maintainer adds signing secrets, and SmartScreen warns on first run. With the repository secrets `WINDOWS_SIGNING_PFX_BASE64` and `WINDOWS_SIGNING_PFX_PASSWORD` set, tag builds and manual runs sign `TokenMon.exe` (before it is packaged) and the MSI with `signtool` (SHA-256, RFC 3161 timestamp) through `installer/sign.sh`. Without them those steps are skipped and the build never fails. The workflow's TODO(signing) note describes the switch to Azure Trusted Signing.
