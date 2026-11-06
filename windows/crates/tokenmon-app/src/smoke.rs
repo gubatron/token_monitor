@@ -64,6 +64,11 @@ pub fn run_headless(version: &str) -> bool {
 
     use crate::app::{App, AppInputs};
 
+    if !own_version_resource_matches(version) {
+        tracing::error!("smoke: the exe's version resource does not match {version}");
+        return false;
+    }
+
     let Ok(dir) = tempfile::tempdir() else {
         tracing::error!("smoke: no temp directory");
         return false;
@@ -103,4 +108,23 @@ pub fn run_headless(version: &str) -> bool {
         tracing::info!(?report, "smoke finished");
         report.passed()
     })
+}
+
+/// The updater trusts the version resource of a downloaded exe (#77), so every
+/// shipped exe must carry one equal to the build's own version (`build.rs`).
+/// Only checked for the MSVC build the releases ship.
+#[cfg(all(windows, target_env = "msvc"))]
+fn own_version_resource_matches(version: &str) -> bool {
+    use tokenmon_core::update::AppVersion;
+
+    let declared = std::env::current_exe()
+        .ok()
+        .and_then(|p| std::fs::File::open(p).ok())
+        .and_then(tokenmon_platform::install::read_pe_version);
+    declared.is_some() && declared == AppVersion::parse(version)
+}
+
+#[cfg(not(all(windows, target_env = "msvc")))]
+fn own_version_resource_matches(_version: &str) -> bool {
+    true
 }

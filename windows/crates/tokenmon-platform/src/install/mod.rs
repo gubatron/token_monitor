@@ -16,6 +16,7 @@ pub mod archive;
 pub mod download;
 pub mod feed;
 pub mod installer;
+pub mod pe_version;
 pub mod relaunch;
 pub mod swap;
 pub mod verify;
@@ -23,6 +24,7 @@ pub mod verify;
 pub use download::{DownloadedFile, Downloader, HttpDownloader, TrustPolicy};
 pub use feed::HttpFeedFetcher;
 pub use installer::WindowsUpdateInstaller;
+pub use pe_version::{PackageVersionReader, SystemVersionReader, read_pe_version};
 pub use relaunch::{
     CommandSpec, ProcessLauncher, StdLauncher, handle_startup_args, parse_wait_for_pid,
     wait_for_pid_exit,
