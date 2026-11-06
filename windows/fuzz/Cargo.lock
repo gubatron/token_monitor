@@ -1632,6 +1632,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tokenmon-core",
+ "tokio",
  "tracing",
 ]
 
@@ -1641,7 +1642,6 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "futures",
- "reqwest",
  "serde_json",
  "tokenmon-core",
  "tracing",
