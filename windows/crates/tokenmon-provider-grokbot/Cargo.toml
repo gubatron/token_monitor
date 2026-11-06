@@ -1,0 +1,16 @@
+[package]
+name = "tokenmon-provider-grokbot"
+description = "TokenMon grokbot provider"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+tokenmon-core = { workspace = true }
+tokenmon-provider-cursor = { workspace = true }
