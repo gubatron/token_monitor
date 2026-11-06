@@ -39,8 +39,8 @@
     <?error TokenMon for Windows is x64 only: build for x86_64-pc-windows-msvc. ?>
   <?endif?>
   <?ifndef AppExe ?>
-    <!-- The cargo [[bin]] is "tokenmon"; it is installed as TokenMon.exe. -->
-    <?define AppExe = "$(var.CargoTargetBinDir)\tokenmon.exe" ?>
+    <!-- The cargo [[bin]] of tokenmon-app is "TokenMon". -->
+    <?define AppExe = "$(var.CargoTargetBinDir)\TokenMon.exe" ?>
   <?endif?>
   <?define RepoRoot = "$(sys.SOURCEFILEDIR)..\.." ?>
   <?define AppIcon = "$(sys.SOURCEFILEDIR)..\crates\tokenmon-app\assets\tokenmon.ico" ?>

@@ -92,7 +92,7 @@ cargo install --locked cargo-wix --version 0.3.9      # needs WiX Toolset 3.14.1
 cargo wix -p tokenmon-app --no-build --nocapture --target x86_64-pc-windows-msvc \
   --include "$PWD/installer/main.wxs" --bin-path "<WiX 3.14 bin folder>" \
   --output target/wix/tokenmon-windows-$(python installer/package.py version)-x64.msi
-python installer/package.py zip --exe target/x86_64-pc-windows-msvc/release/tokenmon.exe \
+python installer/package.py zip --exe target/x86_64-pc-windows-msvc/release/TokenMon.exe \
   --license ../LICENSE --readme installer/portable-README.txt --out target/wix/portable.zip
 ```
 
