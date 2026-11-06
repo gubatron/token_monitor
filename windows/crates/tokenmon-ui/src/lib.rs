@@ -5,4 +5,5 @@
 //! `ui/panels/` (ws-ui-panels) and `ui/settings/` (ws-ui-settings).
 
 pub mod panels;
+pub mod settings;
 pub mod tray_icon;
