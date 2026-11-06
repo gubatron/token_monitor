@@ -17,6 +17,7 @@ use slint::ComponentHandle;
 use tokenmon_core::alerts::{Notifier, ThresholdAlert};
 use tokenmon_core::polling::TokioSleeper;
 use tokenmon_core::storage::AppPaths;
+use tokenmon_core::update::UrlOpener;
 use tokenmon_core::{ProviderId, SystemClock};
 use tokenmon_platform::install::handle_startup_args;
 use tokenmon_platform::notify::windows::WinRtToastBackend;
@@ -36,6 +37,7 @@ use tray_icon::{Icon, MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, 
 use crate::app::{App, AppInputs};
 use crate::panel;
 use crate::tray::{TrayBackend, TrayController, TrayData, context_menu, panel_target};
+use crate::updates::UpdateService;
 
 mod theme;
 
@@ -46,6 +48,8 @@ struct Ui {
     panel: Rc<Panel>,
     app: Rc<App>,
     version: String,
+    updates: Arc<UpdateService>,
+    handle: tokio::runtime::Handle,
 }
 
 thread_local! {
@@ -66,6 +70,23 @@ impl Ui {
     fn show(&self) {
         self.panel.show(&self.app, &self.version);
     }
+}
+
+/// Opens release pages in the default browser through Explorer.
+struct ExplorerOpener;
+
+impl UrlOpener for ExplorerOpener {
+    fn open(&self, url: &str) {
+        // Only https URLs from the release feed reach here; Explorer takes the
+        // URL as one argument, so nothing is interpreted by a shell.
+        if url.starts_with("https://") {
+            let _ = std::process::Command::new("explorer").arg(url).spawn();
+        }
+    }
+}
+
+fn exe_path() -> std::path::PathBuf {
+    std::env::current_exe().unwrap_or_default()
 }
 
 /// Logs and drops threshold alerts when WinRT toasts are unavailable.
@@ -239,7 +260,20 @@ fn run_primary(pipe: &str, show_panel: bool, version: &str) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    let _tasks = app.launch();
+    let mut tasks = app.launch();
+    let updates = match UpdateService::production(
+        &app.settings,
+        version,
+        exe_path(),
+        Arc::new(ExplorerOpener),
+    ) {
+        Ok(u) => Arc::new(u),
+        Err(e) => {
+            tracing::error!(error = %e, "update service unavailable");
+            return ExitCode::FAILURE;
+        }
+    };
+    tasks.push(updates.spawn_loop(runtime.handle()));
 
     // Sleep pauses every loop; wake resumes them once the network is back.
     let events = WindowsEventSource::new();
@@ -264,6 +298,8 @@ fn run_primary(pipe: &str, show_panel: bool, version: &str) -> ExitCode {
         panel,
         app: Rc::clone(&app),
         version: version.to_owned(),
+        updates,
+        handle: runtime.handle().clone(),
     });
     UI.with(|u| *u.borrow_mut() = Some(Rc::clone(&ui)));
     wire_panel(&ui);
@@ -403,6 +439,11 @@ fn wire_tray(ui: &Rc<Ui>, show_panel: bool) {
             MenuAction::Quit => {
                 ui.app.model.quit();
                 let _ = slint::quit_event_loop();
+            }
+            MenuAction::CheckForUpdates => {
+                let checker = Arc::clone(&ui.updates.checker);
+                ui.handle
+                    .spawn(async move { checker.check_manually().await });
             }
             other if panel_target(other).is_some() => ui.show(),
             _ => {}

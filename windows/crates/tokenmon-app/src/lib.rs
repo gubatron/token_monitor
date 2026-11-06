@@ -19,6 +19,7 @@ pub mod signin;
 pub mod smoke;
 pub mod testing;
 pub mod tray;
+pub mod updates;
 
 #[cfg(windows)]
 pub mod shell;
