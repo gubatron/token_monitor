@@ -1,0 +1,567 @@
+name: Windows CI
+
+# Gates for the Rust Windows port in windows/ (see
+# windows/docs/IMPLEMENTATION_PLAN.md). Every job writes its results to the
+# run page (job summary): test tables per crate with failing-test output,
+# coverage per crate and per file with the delta against the latest
+# windows-port run, fuzz stats with crash inputs as hex/base64, and binary
+# sizes. Nothing needs an artifact download to read; artifacts exist only for
+# the next run's coverage baseline and for crash inputs.
+#
+# Jobs that need the cargo workspace are skipped (and say so in the Summary
+# job) until windows/Cargo.toml exists, so the workflow is green while the
+# workspace is being built up.
+
+on:
+  push:
+    branches: [windows-port]
+    paths:
+      - "windows/**"
+      - ".github/workflows/windows-ci.yml"
+  pull_request:
+    paths:
+      - "windows/**"
+      - ".github/workflows/windows-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Superseded pull-request runs are cancelled; windows-port pushes run to
+# completion so each one leaves a coverage baseline.
+concurrency:
+  group: windows-ci-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Every third-party action is pinned to a full commit SHA (version in the
+# trailing comment). Cargo tools come from taiki-e/install-action at a pinned
+# version (it checks each download against the SHA-256 in its manifest) or are
+# downloaded by version and checked against a SHA-256 here.
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  RUST_BACKTRACE: "1"
+  CARGO_NEXTEST_VERSION: "0.9.151"
+  CARGO_LLVM_COV_VERSION: "0.9.1"
+  CARGO_DENY_VERSION: "0.20.2"
+  CARGO_FUZZ_VERSION: "0.13.2"
+  CARGO_FUZZ_SHA256: "b5b704018b63e0f151c17a057ac53b5111e1db545d1b9f72fee79f08a545931c"
+  # Total line coverage may drop at most this many points vs windows-port.
+  COVERAGE_MAX_DROP: "0.5"
+  # Test, bench, fuzz and example code is not product code.
+  COVERAGE_IGNORE: '(^|[/\\])(tests|benches|fuzz|examples)[/\\]'
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  detect:
+    name: Detect workspace and test CI scripts
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      workspace: ${{ steps.detect.outputs.workspace }}
+      locked: ${{ steps.detect.outputs.locked }}
+      deny: ${{ steps.detect.outputs.deny }}
+      toolchain: ${{ steps.detect.outputs.toolchain }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Detect what exists under windows/
+        id: detect
+        run: bash windows/scripts/ci/detect.sh windows
+
+      # The scripts below render every summary on this page; test them first.
+      - name: Unit-test the CI report scripts
+        run: python3 -I -m unittest discover -s windows/scripts/ci/tests -v
+
+  lint:
+    name: Lint (fmt, clippy, cargo-deny)
+    needs: detect
+    if: needs.detect.outputs.workspace == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: windows
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master (2026-10-16)
+        with:
+          toolchain: ${{ needs.detect.outputs.toolchain }}
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: windows -> target
+          shared-key: lint
+
+      - uses: taiki-e/install-action@c509219cf42fba86913069efd0ade2458c59337b # v2.90.1
+        with:
+          tool: cargo-deny@${{ env.CARGO_DENY_VERSION }}
+
+      - name: cargo fmt --check
+        id: fmt
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          cargo fmt --all -- --check 2>&1 | tee "$RUNNER_TEMP/fmt.log"
+
+      - name: cargo clippy -D warnings
+        id: clippy
+        continue-on-error: true
+        env:
+          LOCKED: ${{ needs.detect.outputs.locked }}
+        run: |
+          set -o pipefail
+          # shellcheck disable=SC2086 # LOCKED is empty or one flag
+          cargo clippy $LOCKED --workspace --all-targets --message-format short -- -D warnings \
+            2>&1 | tee "$RUNNER_TEMP/clippy.log"
+
+      - name: cargo deny (advisories, bans, licenses, sources)
+        id: deny
+        if: needs.detect.outputs.deny == 'true'
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          cargo deny --manifest-path Cargo.toml check --config deny.toml \
+            advisories bans licenses sources 2>&1 | tee "$RUNNER_TEMP/deny.log"
+
+      - name: Lint summary
+        if: always()
+        env:
+          FMT: ${{ steps.fmt.outcome }}
+          CLIPPY: ${{ steps.clippy.outcome }}
+          DENY: ${{ steps.deny.outcome }}
+          HAS_DENY: ${{ needs.detect.outputs.deny }}
+        run: |
+          set -euo pipefail
+          mark() { case "$1" in success) echo ":white_check_mark: pass" ;; failure) echo ":x: fail" ;; *) echo "${2:-$1}" ;; esac; }
+          details() { # <title> <log> <outcome>
+            if [ "$3" = failure ] && [ -s "$2" ]; then
+              printf '\n<details open><summary>%s output (last 80 lines)</summary>\n\n````text\n' "$1"
+              tail -n 80 "$2"
+              printf '````\n\n</details>\n'
+            fi
+          }
+          deny_note=$([ "$HAS_DENY" = true ] && mark "$DENY" || echo "skipped: windows/deny.toml does not exist yet")
+          {
+            echo "### Lint"
+            echo
+            echo "| check | result |"
+            echo "|---|---|"
+            echo "| \`cargo fmt --all -- --check\` | $(mark "$FMT") |"
+            echo "| \`cargo clippy --workspace --all-targets -- -D warnings\` | $(mark "$CLIPPY") |"
+            echo "| \`cargo deny check\` (advisories, bans, licenses, sources) | $deny_note |"
+            details "cargo fmt" "$RUNNER_TEMP/fmt.log" "$FMT"
+            details "cargo clippy" "$RUNNER_TEMP/clippy.log" "$CLIPPY"
+            details "cargo deny" "$RUNNER_TEMP/deny.log" "$DENY"
+          } >> "$GITHUB_STEP_SUMMARY"
+          for outcome in "$FMT" "$CLIPPY" "$DENY"; do
+            [ "$outcome" != failure ] || exit 1
+          done
+
+  test:
+    name: Tests (${{ matrix.os }})
+    needs: detect
+    if: needs.detect.outputs.workspace == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      PYTHON: ${{ matrix.os == 'windows-latest' && 'python' || 'python3' }}
+    defaults:
+      run:
+        working-directory: windows
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master (2026-10-16)
+        with:
+          toolchain: ${{ needs.detect.outputs.toolchain }}
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: windows -> target
+          shared-key: test
+
+      - uses: taiki-e/install-action@c509219cf42fba86913069efd0ade2458c59337b # v2.90.1
+        with:
+          tool: cargo-nextest@${{ env.CARGO_NEXTEST_VERSION }}
+
+      - name: cargo nextest run
+        id: nextest
+        env:
+          LOCKED: ${{ needs.detect.outputs.locked }}
+        run: |
+          set -euo pipefail
+          cfg=$(bash scripts/ci/nextest-config.sh . "$RUNNER_TEMP/nextest.toml")
+          # shellcheck disable=SC2086 # LOCKED is empty or one flag
+          cargo nextest run $LOCKED --workspace --no-tests=warn --config-file "$cfg" --profile ws-ci
+
+      - name: Test summary
+        if: always() && steps.nextest.outcome != 'skipped'
+        run: |
+          set -uo pipefail
+          cargo nextest list --workspace --config-file "$RUNNER_TEMP/nextest.toml" --profile ws-ci \
+            --message-format json > "$RUNNER_TEMP/nextest-list.json" 2>/dev/null || true
+          "$PYTHON" -I scripts/ci/render_junit.py --junit target/nextest/ws-ci/junit.xml \
+            --list "$RUNNER_TEMP/nextest-list.json" --title "Tests (${{ matrix.os }})" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload JUnit report
+        if: always() && steps.nextest.outcome != 'skipped'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-junit-${{ matrix.os }}
+          path: windows/target/nextest/ws-ci/junit.xml
+          if-no-files-found: ignore
+          retention-days: 14
+
+  coverage:
+    name: Coverage (${{ matrix.os }})
+    needs: detect
+    if: needs.detect.outputs.workspace == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      actions: read # find and download the previous run's coverage summary
+    env:
+      PYTHON: ${{ matrix.os == 'windows-latest' && 'python' || 'python3' }}
+      SUMMARY_ARTIFACT: windows-coverage-summary-${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: windows
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master (2026-10-16)
+        with:
+          toolchain: ${{ needs.detect.outputs.toolchain }}
+          components: llvm-tools-preview
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: windows -> target
+          shared-key: coverage
+
+      - uses: taiki-e/install-action@c509219cf42fba86913069efd0ade2458c59337b # v2.90.1
+        with:
+          tool: cargo-llvm-cov@${{ env.CARGO_LLVM_COV_VERSION }},cargo-nextest@${{ env.CARGO_NEXTEST_VERSION }}
+
+      # Test failures are the test job's to report; coverage is measured
+      # whatever the outcome so the summary always has numbers.
+      - name: Run tests with coverage instrumentation
+        env:
+          LOCKED: ${{ needs.detect.outputs.locked }}
+        run: |
+          set -uo pipefail
+          cfg=$(bash scripts/ci/nextest-config.sh . "$RUNNER_TEMP/nextest.toml")
+          # shellcheck disable=SC2086 # LOCKED is empty or one flag
+          if ! cargo llvm-cov nextest $LOCKED --workspace --no-report --no-tests=warn \
+              --config-file "$cfg" --profile ws-ci; then
+            echo "::warning title=coverage::some tests failed; see the Tests job. Coverage is still reported."
+          fi
+          cargo llvm-cov report --ignore-filename-regex "$COVERAGE_IGNORE" \
+            --json --summary-only --output-path "$RUNNER_TEMP/cov.json"
+          cargo llvm-cov report --ignore-filename-regex "$COVERAGE_IGNORE" \
+            --lcov --output-path "$RUNNER_TEMP/lcov.info"
+
+      - name: Fetch the windows-port baseline
+        id: baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/ci/fetch_baseline.sh "$SUMMARY_ARTIFACT" "$RUNNER_TEMP/baseline" windows-port
+
+      - name: Coverage summary and gates
+        env:
+          BASE_FOUND: ${{ steps.baseline.outputs.found }}
+          BASE_URL: ${{ steps.baseline.outputs.run_url }}
+          BASE_SHA: ${{ steps.baseline.outputs.sha }}
+          BASE_RUN: ${{ steps.baseline.outputs.run_id }}
+        run: |
+          set -uo pipefail
+          baseline=()
+          if [ "$BASE_FOUND" = true ]; then
+            baseline=(--baseline "$RUNNER_TEMP/baseline/coverage-summary.json"
+                      --baseline-url "$BASE_URL" --baseline-label "run $BASE_RUN ($BASE_SHA)")
+          fi
+          mkdir -p "$RUNNER_TEMP/coverage-out"
+          "$PYTHON" -I scripts/ci/render_coverage.py --json "$RUNNER_TEMP/cov.json" --root . \
+            --floors .config/coverage-floors.toml "${baseline[@]}" --max-drop "$COVERAGE_MAX_DROP" \
+            --write-summary "$RUNNER_TEMP/coverage-out/coverage-summary.json" \
+            --commit "$GITHUB_SHA" --source "run $GITHUB_RUN_ID (${GITHUB_SHA:0:7})" \
+            --title "Coverage (${{ matrix.os }})" > "$RUNNER_TEMP/coverage.md"
+          status=$?
+          cat "$RUNNER_TEMP/coverage.md" >> "$GITHUB_STEP_SUMMARY"
+          cp "$RUNNER_TEMP/lcov.info" "$RUNNER_TEMP/cov.json" "$RUNNER_TEMP/coverage-out/"
+          exit $status
+
+      # Only a run that passed the gates becomes the next baseline.
+      - name: Upload coverage summary (next run's baseline)
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ env.SUMMARY_ARTIFACT }}
+          path: ${{ runner.temp }}/coverage-out/
+          retention-days: 90
+
+  fuzz-smoke:
+    name: Fuzz smoke (60 s per target)
+    needs: detect
+    if: needs.detect.outputs.workspace == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      # Fuzzing needs nightly (sanitizers); pin a dated one and bump it on
+      # purpose (same pin as windows-fuzz-nightly.yml). Setting it here
+      # overrides windows/rust-toolchain.toml for every cargo call in the job.
+      RUSTUP_TOOLCHAIN: nightly-2026-10-01
+    defaults:
+      run:
+        working-directory: windows
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Look for the fuzz crate
+        id: present
+        run: |
+          if [ -f fuzz/Cargo.toml ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Fuzz smoke"
+              echo
+              echo "No fuzz targets yet: \`windows/fuzz/\` does not exist. Each parser's workstream adds its target there."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master (2026-10-16)
+        if: steps.present.outputs.present == 'true'
+        with:
+          toolchain: ${{ env.RUSTUP_TOOLCHAIN }}
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        if: steps.present.outputs.present == 'true'
+        with:
+          workspaces: windows/fuzz -> target
+          shared-key: fuzz
+
+      - name: Install cargo-fuzz (pinned, checksummed)
+        if: steps.present.outputs.present == 'true'
+        run: |
+          set -euo pipefail
+          url="https://github.com/rust-fuzz/cargo-fuzz/releases/download/v${CARGO_FUZZ_VERSION}/cargo-fuzz-${CARGO_FUZZ_VERSION}-x86_64-unknown-linux-musl.tar.gz"
+          curl -fsSL --retry 3 "$url" -o "$RUNNER_TEMP/cargo-fuzz.tgz"
+          echo "${CARGO_FUZZ_SHA256}  $RUNNER_TEMP/cargo-fuzz.tgz" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/cargo-fuzz"
+          tar -xzf "$RUNNER_TEMP/cargo-fuzz.tgz" -C "$RUNNER_TEMP/cargo-fuzz"
+          install "$(find "$RUNNER_TEMP/cargo-fuzz" -type f -name cargo-fuzz | head -n 1)" "$HOME/.cargo/bin/cargo-fuzz"
+          cargo fuzz --version | grep -F "$CARGO_FUZZ_VERSION"
+
+      - name: Fuzz every target from its committed corpus
+        if: steps.present.outputs.present == 'true'
+        run: bash scripts/ci/fuzz_run.sh --seconds 60 --out "$RUNNER_TEMP/fuzz"
+
+      - name: Fuzz summary
+        if: always() && steps.present.outputs.present == 'true'
+        run: |
+          set -uo pipefail
+          shopt -s nullglob
+          rows=("$RUNNER_TEMP"/fuzz/rows/*.json)
+          python3 -I scripts/ci/fuzz_report.py table --title "Fuzz smoke (60 s per target, $RUSTUP_TOOLCHAIN)" \
+            --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            "${rows[@]}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload crash inputs
+        if: failure() && steps.present.outputs.present == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-fuzz-crashes
+          path: |
+            ${{ runner.temp }}/fuzz/crashes/
+            ${{ runner.temp }}/fuzz/logs/
+          if-no-files-found: ignore
+          retention-days: 30
+
+  windows-build:
+    name: Release build (x86_64-pc-windows-msvc)
+    needs: detect
+    if: needs.detect.outputs.workspace == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: windows
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master (2026-10-16)
+        with:
+          toolchain: ${{ needs.detect.outputs.toolchain }}
+          targets: x86_64-pc-windows-msvc
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: windows -> target
+          shared-key: release
+
+      - name: cargo build --release
+        env:
+          LOCKED: ${{ needs.detect.outputs.locked }}
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC2086 # LOCKED is empty or one flag
+          cargo build $LOCKED --release --workspace --target x86_64-pc-windows-msvc
+
+      - name: Build summary
+        if: always()
+        env:
+          LOCKED: ${{ needs.detect.outputs.locked }}
+        run: |
+          set -euo pipefail
+          dir=target/x86_64-pc-windows-msvc/release
+          shopt -s nullglob
+          bins=("$dir"/*.exe)
+          {
+            echo "### Release build (x86_64-pc-windows-msvc)"
+            echo
+            if [ -z "$LOCKED" ]; then
+              echo "> windows/Cargo.lock is not committed yet, so this build is not \`--locked\`."
+              echo
+            fi
+            if [ ${#bins[@]} -eq 0 ]; then
+              echo "No executables yet (the workspace has only library crates)."
+            else
+              echo "| binary | size | SHA-256 |"
+              echo "|---|---:|---|"
+              for b in "${bins[@]}"; do
+                bytes=$(stat -c %s "$b")
+                mib=$(awk -v b="$bytes" 'BEGIN { printf "%.2f", b / 1048576 }')
+                echo "| \`$(basename "$b")\` | $mib MiB ($bytes bytes) | \`$(sha256sum "$b" | cut -d' ' -f1)\` |"
+              done
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  secrets:
+    name: Secret scan of windows/ (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      # Same pinned version and checksum as ci.yml.
+      GITLEAKS_VERSION: "8.30.1"
+      GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install gitleaks (pinned, checksummed)
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 3 \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            -o /tmp/gitleaks.tgz
+          echo "${GITLEAKS_SHA256}  /tmp/gitleaks.tgz" | sha256sum -c -
+          sudo tar -xzf /tmp/gitleaks.tgz -C /usr/local/bin gitleaks
+          test "$(gitleaks version)" = "$GITLEAKS_VERSION"
+
+      # The repo's .gitleaks.toml (provider cookie and key rules) applies here too.
+      - name: Scan windows/ (working tree and history)
+        id: scan
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          status=0
+          gitleaks dir windows --config .gitleaks.toml --no-banner --redact -v \
+            --report-format json --report-path /tmp/gitleaks-dir.json || status=1
+          gitleaks detect --config .gitleaks.toml --no-banner --redact -v \
+            --log-opts="--all -- windows .github/workflows/windows-ci.yml .github/workflows/windows-fuzz-nightly.yml" \
+            --report-format json --report-path /tmp/gitleaks-git.json || status=1
+          exit $status
+
+      - name: Secret scan summary
+        if: always()
+        env:
+          OUTCOME: ${{ steps.scan.outcome }}
+        run: |
+          set -uo pipefail
+          count() { [ -s "$1" ] && jq length "$1" || echo 0; }
+          dir_n=$(count /tmp/gitleaks-dir.json)
+          git_n=$(count /tmp/gitleaks-git.json)
+          {
+            echo "### Secret scan (gitleaks $GITLEAKS_VERSION)"
+            echo
+            echo "| scope | findings |"
+            echo "|---|---:|"
+            echo "| working tree \`windows/\` | $dir_n |"
+            echo "| history of \`windows/\` and the windows workflows | $git_n |"
+            if [ "$dir_n" != 0 ] || [ "$git_n" != 0 ]; then
+              echo
+              echo "| rule | file | line | commit |"
+              echo "|---|---|---:|---|"
+              for f in /tmp/gitleaks-dir.json /tmp/gitleaks-git.json; do
+                [ -s "$f" ] && jq -r '.[] | "| \(.RuleID) | `\(.File)` | \(.StartLine) | \(.Commit[0:7] // "") |"' "$f"
+              done
+              echo
+              echo "Secrets are redacted. Rotate any real credential, then remove it from history."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          [ "$OUTCOME" != failure ]
+
+  summary:
+    name: Summary
+    needs: [detect, lint, test, coverage, fuzz-smoke, windows-build, secrets]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read # list this run's jobs for the table
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: windows/scripts/ci
+
+      - name: Aggregate job results
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NEEDS_JSON: ${{ toJSON(needs) }}
+          WORKSPACE: ${{ needs.detect.outputs.workspace }}
+        run: |
+          set -uo pipefail
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs?per_page=100" \
+            > /tmp/jobs.json 2>/dev/null || : > /tmp/jobs.json
+          note=""
+          if [ "$WORKSPACE" != true ]; then
+            note="Skipped jobs: \`windows/Cargo.toml\` does not exist on this commit yet, so there is nothing to build, test, measure or fuzz."
+          fi
+          python3 -I windows/scripts/ci/render_ci_summary.py --jobs /tmp/jobs.json --run-url "$run_url" \
+            --self Summary --skip-note "$note" > /tmp/summary.md
+          status=$?
+          cat /tmp/summary.md >> "$GITHUB_STEP_SUMMARY"
+          exit $status
