@@ -69,9 +69,18 @@ impl Money {
         Some((self.used? / 100.0, self.limit? / 100.0))
     }
 
-    fn percent(self) -> Option<f64> {
+    /// Plan percent: a missing `used` counts as 0 (Swift `planUsedCents`
+    /// defaults to 0).
+    fn plan_percent(self) -> Option<f64> {
         let limit = self.limit.filter(|l| *l > 0.0)?;
         Some(Percent::clamp(self.used.unwrap_or(0.0) / limit * 100.0))
+    }
+
+    /// Overall/pooled percent: needs both `used` and a positive `limit`, else
+    /// the precedence chain continues (Swift `CursorUsageClient`).
+    fn strict_percent(self) -> Option<f64> {
+        let limit = self.limit.filter(|l| *l > 0.0)?;
+        Some(Percent::clamp(self.used? / limit * 100.0))
     }
 }
 
@@ -154,9 +163,9 @@ fn total_percent(
         })
         .or(api)
         .or(auto)
-        .or_else(|| plan.percent())
-        .or_else(|| overall.percent())
-        .or_else(|| pooled.percent())
+        .or_else(|| plan.plan_percent())
+        .or_else(|| overall.strict_percent())
+        .or_else(|| pooled.strict_percent())
         .unwrap_or(0.0)
 }
 
