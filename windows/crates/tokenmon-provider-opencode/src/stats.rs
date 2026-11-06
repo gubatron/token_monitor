@@ -4,6 +4,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use chrono::{DateTime, Duration, FixedOffset, NaiveDate, Timelike, Utc};
+use tokenmon_core::usage::Calendar;
 
 use crate::bounds::{Bounds, monthly_bounds, weekly_bounds};
 use crate::db::{MessageRow, Scan};
@@ -280,6 +281,13 @@ pub struct LegendEntry {
 /// Today's hourly stacks.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DayHourlyUsage {
+    /// The local calendar day these hours belong to (the day containing the
+    /// `now` the stacks were built at). Consumers must compare it with the
+    /// current local day before recording: a stored value goes stale at
+    /// local midnight until the next poll rebuilds it.
+    pub day: NaiveDate,
+    /// Instant of local midnight starting [`Self::day`] (Swift `dayStart`).
+    pub day_start: DateTime<Utc>,
     /// Always 24 entries.
     pub hours: Vec<HourUsage>,
     /// Top models by recorded cost, at most the requested count.
@@ -287,6 +295,11 @@ pub struct DayHourlyUsage {
 }
 
 impl DayHourlyUsage {
+    /// Whether these hours belong to the local day containing `now`.
+    pub fn is_for_day_of(&self, now: DateTime<Utc>, cal: &Calendar<'_>) -> bool {
+        self.day == cal.date_of(now)
+    }
+
     /// No cost and no messages in any hour.
     pub fn is_empty(&self) -> bool {
         self.hours
@@ -296,19 +309,22 @@ impl DayHourlyUsage {
 }
 
 /// `buildDayHourlyUsage`: all providers, local day containing `now`.
+///
+/// Day and hour come from `cal`, which applies the offset in effect at each
+/// row's own instant, so a DST change inside the day cannot shift a row.
 pub fn build_day_hourly_usage(
     rows: &[MessageRow],
     now: DateTime<Utc>,
-    offset: FixedOffset,
+    cal: &Calendar<'_>,
     max_legend_models: usize,
 ) -> DayHourlyUsage {
-    let today = now.with_timezone(&offset).date_naive();
+    let today = cal.date_of(now);
     let mut buckets: Vec<HashMap<String, HourSegment>> = (0..24).map(|_| HashMap::new()).collect();
     let mut counts = [0_u32; 24];
     let mut totals: HashMap<String, f64> = HashMap::new();
     for r in rows {
-        let local = r.date.with_timezone(&offset);
-        if local.date_naive() != today {
+        let local = cal.local_naive(r.date);
+        if local.date() != today {
             continue;
         }
         let h = local.hour() as usize;
@@ -354,6 +370,8 @@ pub fn build_day_hourly_usage(
     let mut legend: Vec<(String, f64)> = totals.into_iter().collect();
     legend.sort_by(|a, b| b.1.total_cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
     DayHourlyUsage {
+        day: today,
+        day_start: cal.start_of_day(now),
         hours,
         legend: legend
             .into_iter()

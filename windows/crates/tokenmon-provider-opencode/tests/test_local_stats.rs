@@ -12,6 +12,7 @@ mod common;
 
 use chrono::{DateTime, FixedOffset, TimeZone, Utc};
 use common::{Fixture, Msg};
+use tokenmon_core::usage::Calendar;
 use tokenmon_provider_opencode::bounds::{monthly_bounds, weekly_bounds};
 use tokenmon_provider_opencode::db::{DbError, ScanCache, load_scan, open_read_only, scan_start};
 use tokenmon_provider_opencode::snapshot::WindowKind;
@@ -484,7 +485,7 @@ fn test_day_hourly_usage_stacks_models_by_local_hour() {
     f.message(Msg::go("s", day0 + 14 * H, "minimax-m3", 4.0));
     f.message(Msg::go("s", day0 - H, "old", 9.0));
     let scan = load_scan(&f.path, scan_start(now), &ScanCache::default()).expect("scan");
-    let day = build_day_hourly_usage(&scan.rows, now, utc(), 8);
+    let day = build_day_hourly_usage(&scan.rows, now, &Calendar::fixed(utc()), 8);
     assert_eq!(day.hours.len(), 24);
     let total: f64 = day.hours.iter().map(|h| h.total_usd()).sum();
     assert_close(total, 7.0);
@@ -512,7 +513,7 @@ fn test_hourly_and_models_track_mid_session_model_switch() {
     f.session("s", day0, "opencode-go", "minimax-m3", false);
     f.message(Msg::go("s", day0 + 15 * H, "gpt-5.6-luna", 0.5));
     let scan = load_scan(&f.path, scan_start(now), &ScanCache::default()).expect("scan");
-    let day = build_day_hourly_usage(&scan.rows, now, utc(), 8);
+    let day = build_day_hourly_usage(&scan.rows, now, &Calendar::fixed(utc()), 8);
     assert!(day.hours[15].total_usd() > 0.0);
     assert!(
         snapshot(&scan, now)
@@ -540,7 +541,7 @@ fn test_overview_counts_only_plan_usage() {
     );
     f.message(Msg::go("s", day0 + 11 * H, "grok", 5.0).provider("xai"));
     let scan = load_scan(&f.path, scan_start(now), &ScanCache::default()).expect("scan");
-    let day = build_day_hourly_usage(&scan.rows, now, utc(), 8);
+    let day = build_day_hourly_usage(&scan.rows, now, &Calendar::fixed(utc()), 8);
     assert_eq!(day.hours[10].segments.len(), 2);
     let w = overview_quota_hour_weights(&day, 10.0);
     let weekly = 10.0 / (365.2425 / 12.0 / 7.0);

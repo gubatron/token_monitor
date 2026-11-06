@@ -133,5 +133,6 @@ fn test_regression_far_future_row_is_skipped() {
     assert_eq!(scan.rows.len(), 1);
     let _ = snapshot(&scan, now);
     let off = chrono::FixedOffset::east_opt(14 * 3600).unwrap();
-    let _ = build_day_hourly_usage(&scan.rows, now, off, 8);
+    let cal = tokenmon_core::usage::Calendar::fixed(off);
+    let _ = build_day_hourly_usage(&scan.rows, now, &cal, 8);
 }
