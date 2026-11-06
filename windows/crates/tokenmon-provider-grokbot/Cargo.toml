@@ -14,3 +14,10 @@ workspace = true
 [dependencies]
 tokenmon-core = { workspace = true }
 tokenmon-provider-cursor = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "macros", "time"] }
+wiremock = { workspace = true }
