@@ -1,0 +1,21 @@
+
+# ---- appended by windows/scripts/ci/nextest-config.sh (ws-ci) ----
+# CI profile for windows-ci.yml. nextest-config.sh appends this file to
+# windows/.config/nextest.toml (owned by ws-foundation) and passes the result
+# with --config-file, so the workspace settings still apply and CI adds JUnit
+# output on top. (A nextest "tool config" would need a `tool:` profile name,
+# and the colon ends up in a directory name, which Windows rejects.)
+[profile.ws-ci]
+# Report every test; do not stop at the first failure.
+fail-fast = false
+# A test that runs for over 60 s is flagged slow; it is killed after 5 periods.
+slow-timeout = { period = "60s", terminate-after = 5 }
+failure-output = "final"
+success-output = "never"
+
+[profile.ws-ci.junit]
+# Written to <target-dir>/nextest/ws-ci/junit.xml; render_junit.py turns it
+# into the job summary.
+path = "junit.xml"
+store-success-output = false
+store-failure-output = true
