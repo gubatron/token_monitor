@@ -1900,6 +1900,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "chrono-tz",
+ "futures",
  "proptest",
  "reqwest",
  "rust_decimal",
