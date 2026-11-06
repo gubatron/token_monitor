@@ -233,6 +233,8 @@ pub fn organization_id_from_cookie_header(header: &str) -> Option<String> {
 pub struct ClaudeUsageRequest {
     /// `GET https://claude.ai/api/organizations/{org}/usage`.
     pub url: String,
+    /// The same endpoint as a path under [`crate::fetch::DEFAULT_BASE_URL`].
+    pub path: String,
     /// Stored (pruned) cookie header.
     pub cookie_header: String,
     /// [`REFERER`].
@@ -253,6 +255,7 @@ pub fn usage_request(cookie_header: &str) -> Result<ClaudeUsageRequest, Provider
         })?;
     Ok(ClaudeUsageRequest {
         url: format!("https://claude.ai/api/organizations/{org}/usage"),
+        path: format!("/api/organizations/{org}/usage"),
         cookie_header: cookie_header.to_owned(),
         referer: REFERER,
     })

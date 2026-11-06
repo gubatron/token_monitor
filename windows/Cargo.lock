@@ -5573,7 +5573,9 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "tokenmon-core",
+ "tokio",
  "tracing",
+ "wiremock",
 ]
 
 [[package]]
