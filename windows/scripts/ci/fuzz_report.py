@@ -77,10 +77,14 @@ def crash_excerpt(text: str) -> str:
     )
     if start is None:
         return ""
+    has_panic = "panicked at" in lines[start]
     picked = []
     for line in lines[start:]:
-        # Raw stack frames are noise next to the panic message; keep a few.
-        if re.match(r"^\s+#\d+ 0x", line) and sum(1 for p in picked if re.match(r"^\s+#\d+ 0x", p)) >= 8:
+        # Unsymbolized stack frames are noise when a Rust panic message says
+        # where it failed; without one (a sanitizer report), keep a few.
+        is_frame = re.match(r"^\s+#\d+ 0x", line)
+        frames = sum(1 for p in picked if re.match(r"^\s+#\d+ 0x", p))
+        if is_frame and (has_panic or frames >= 8):
             continue
         picked.append(line)
         if line.startswith("SUMMARY:") or len(picked) >= EXCERPT_LINES:
