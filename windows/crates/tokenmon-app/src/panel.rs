@@ -8,10 +8,10 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use chrono::{DateTime, FixedOffset, Utc};
-use tokenmon_core::ProviderId;
+use chrono::{DateTime, Utc};
 use tokenmon_core::settings::{PanelSection, Settings};
 use tokenmon_core::usage::Calendar;
+use tokenmon_core::{Clock, ProviderId};
 use tokenmon_ui::panels::claude_chatgpt::{
     ChatGptInput, ClaudeInput, ClaudePanelVm, build_chatgpt, build_claude,
 };
@@ -49,8 +49,8 @@ pub struct ViewEnv<'a> {
     pub version: &'a str,
     /// Current instant.
     pub now: DateTime<Utc>,
-    /// Local offset.
-    pub tz: FixedOffset,
+    /// Local offset source (DST aware).
+    pub clock: &'a dyn Clock,
 }
 
 /// One provider's panel, built and ready to apply to its window.
@@ -258,7 +258,7 @@ fn snapshot_view(
     let source = env.model.registry().view(provider)?;
     Some(source(&ViewQuery {
         now: env.now,
-        tz: env.tz,
+        clock: env.clock,
         week_offset: state.offset(provider),
         show_all_models: state.shows_all(provider),
         settings: settings.clone(),
@@ -315,7 +315,7 @@ fn openrouter_card_facts(
 /// The Overview panel's view model.
 pub fn overview(env: &ViewEnv<'_>, state: &PanelState) -> OverviewPanelVm {
     let settings = env.model.settings().snapshot();
-    let calendar = Calendar::fixed(env.tz);
+    let calendar = Calendar::local(env.clock);
     let today = calendar.date_of(env.now);
     let live = today_series(
         env.model.registry(),
@@ -339,7 +339,7 @@ pub fn overview(env: &ViewEnv<'_>, state: &PanelState) -> OverviewPanelVm {
         },
         &PanelContext {
             now: env.now,
-            tz: env.tz,
+            calendar,
         },
     )
 }
@@ -349,7 +349,7 @@ pub fn build_view(env: &ViewEnv<'_>, state: &PanelState, provider: ProviderId) -
     let settings = env.model.settings().snapshot();
     let ctx = PanelContext {
         now: env.now,
-        tz: env.tz,
+        calendar: Calendar::local(env.clock),
     };
     let status = status(env, provider);
     let view = snapshot_view(env, state, &settings, provider);

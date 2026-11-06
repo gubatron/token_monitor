@@ -15,13 +15,14 @@ use std::rc::{Rc, Weak};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use chrono::{DateTime, FixedOffset, Utc};
+use chrono::{DateTime, Utc};
 use slint::ComponentHandle;
 use tokenmon_core::alerts::{Notifier, ThresholdAlert};
 use tokenmon_core::polling::TokioSleeper;
 use tokenmon_core::storage::AppPaths;
 use tokenmon_core::update::UrlOpener;
-use tokenmon_core::{ProviderId, SystemClock};
+use tokenmon_core::usage::Calendar;
+use tokenmon_core::{Clock, ProviderId, SystemClock};
 use tokenmon_platform::install::handle_startup_args;
 use tokenmon_platform::notify::windows::WinRtToastBackend;
 use tokenmon_platform::notify::{AumidRegistration, ToastNotifier};
@@ -116,8 +117,11 @@ fn with_ui(f: impl FnOnce(&Rc<Ui>) + Send + 'static) {
     });
 }
 
-fn now_and_offset() -> (DateTime<Utc>, FixedOffset) {
-    (Utc::now(), *chrono::Local::now().offset())
+/// The OS clock: local offsets follow the zone's DST rules per instant.
+static LOCAL_CLOCK: SystemClock = SystemClock;
+
+fn now_and_clock() -> (DateTime<Utc>, &'static SystemClock) {
+    (Utc::now(), &LOCAL_CLOCK)
 }
 
 /// Opens release pages in the default browser through Explorer.
@@ -265,7 +269,7 @@ impl Ui {
     /// unless the view changed.
     fn render(&self, reveal: bool) {
         let provider = self.state.borrow().selected;
-        let (now, tz) = now_and_offset();
+        let (now, clock) = now_and_clock();
         let view = {
             let state = self.state.borrow();
             build_view(
@@ -275,7 +279,7 @@ impl Ui {
                     overview: &self.store,
                     version: &self.version,
                     now,
-                    tz,
+                    clock,
                 },
                 &state,
                 provider,
@@ -434,14 +438,14 @@ impl Ui {
     }
 
     fn quit(&self) {
-        let (now, tz) = now_and_offset();
+        let (now, clock) = now_and_clock();
         record_live(
             &self.store,
             self.app.model.registry(),
             &self.app.settings.snapshot(),
             &self.app.sessions,
             now,
-            tz,
+            clock,
         );
         self.app.model.quit();
         let _ = slint::quit_event_loop();
@@ -677,7 +681,7 @@ fn settings_view_model(
         desktop_verb: Arc::new(DesktopVerb::new(Arc::new(WinRegistry), exe)),
         history: app.model.registry().history(),
         version: version.to_owned(),
-        tz: Arc::new(|| *chrono::Local::now().offset()),
+        tz: Arc::new(|at| SystemClock.local_offset_at(at)),
         handle: handle.clone(),
         quit: Arc::new(|| with_ui(|ui| ui.quit())),
     });
@@ -765,7 +769,7 @@ fn wire_tray(ui: &Rc<Ui>, show_panel: bool) -> Result<(), StartupFailure> {
     let mut tick = TickState {
         controller: TrayController::new(TrayIconBackend(tray)),
         menu: entries,
-        next_midnight: next_midnight(Utc::now(), *chrono::Local::now().offset()),
+        next_midnight: next_midnight(Utc::now(), &Calendar::local(&LOCAL_CLOCK)),
     };
     let weak = Rc::downgrade(ui);
     ui.tick.start(slint::TimerMode::Repeated, TICK, move || {
@@ -786,7 +790,7 @@ fn wire_tray(ui: &Rc<Ui>, show_panel: bool) -> Result<(), StartupFailure> {
 /// provider set changed, keeps an open panel live, rolls the Overview over at
 /// local midnight and records the Overview history.
 fn on_tick(ui: &Rc<Ui>, tick: &mut TickState) {
-    let (now, tz) = now_and_offset();
+    let (now, clock) = now_and_clock();
     let settings = ui.app.settings.snapshot();
     let used: Vec<_> = ui
         .app
@@ -820,7 +824,7 @@ fn on_tick(ui: &Rc<Ui>, tick: &mut TickState) {
     }
 
     if now >= tick.next_midnight {
-        tick.next_midnight = next_midnight(now, tz);
+        tick.next_midnight = next_midnight(now, &Calendar::local(clock));
         ui.state.borrow_mut().reset_offsets();
     }
     // Cheap and written only when the series changed, so a poll just before
@@ -831,7 +835,7 @@ fn on_tick(ui: &Rc<Ui>, tick: &mut TickState) {
         &settings,
         &ui.app.sessions,
         now,
-        tz,
+        clock,
     );
     // A panel hidden by some other route (Alt+F4) must not keep the pollers
     // on the active cadence.

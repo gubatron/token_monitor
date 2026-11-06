@@ -48,7 +48,7 @@ async fn test_overview_cards_follow_visible_providers() {
         overview: &store,
         version: "1.2.3",
         now: chrono::Utc::now(),
-        tz: chrono::FixedOffset::east_opt(0).expect("utc"),
+        clock: &tokenmon_core::ManualClock::new(chrono::Utc::now()),
     };
     let vm = tokenmon_app::panel::overview(
         &env,

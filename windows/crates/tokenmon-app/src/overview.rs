@@ -9,16 +9,14 @@
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, PoisonError};
 
-use chrono::{DateTime, Duration, FixedOffset, NaiveDate, Utc};
-use tokenmon_core::ProviderId;
+use chrono::{DateTime, Duration, NaiveDate, Utc};
 use tokenmon_core::overview::{
     OverviewDaySeries, OverviewHistory, OverviewSeries, ProviderGate, TodayInputs,
     build_today_series, day_for_offset,
 };
 use tokenmon_core::usage::Calendar;
-use tokenmon_ui::panels::overview::{
-    HourActivityInput, HourSeries, OverviewDailyInput, midnight_schedule,
-};
+use tokenmon_core::{Clock, ProviderId};
+use tokenmon_ui::panels::overview::{HourActivityInput, HourSeries, OverviewDailyInput};
 
 use crate::registry::ProviderRegistry;
 use crate::sessions::Sessions;
@@ -120,9 +118,9 @@ pub fn record_live(
     settings: &Settings,
     sessions: &Sessions,
     now: DateTime<Utc>,
-    tz: FixedOffset,
+    clock: &dyn Clock,
 ) -> bool {
-    let calendar = Calendar::fixed(tz);
+    let calendar = Calendar::local(clock);
     let today = calendar.date_of(now);
     let live = today_series(registry, settings, sessions, &calendar, today);
     store.record(&live, today)
@@ -130,10 +128,15 @@ pub fn record_live(
 
 /// The first local midnight after `now`: when the Overview must roll to a new
 /// day.
-pub fn next_midnight(now: DateTime<Utc>, tz: FixedOffset) -> DateTime<Utc> {
-    midnight_schedule(now, tz)
-        .into_iter()
-        .find(|m| *m > now)
+///
+/// Computed from the next calendar date's own midnight, so a 23 or 25 hour
+/// day (DST change) still rolls over at local midnight.
+pub fn next_midnight(now: DateTime<Utc>, calendar: &Calendar<'_>) -> DateTime<Utc> {
+    calendar
+        .date_of(now)
+        .succ_opt()
+        .and_then(|d| calendar.start_of_date(d))
+        .filter(|m| *m > now)
         .unwrap_or_else(|| now + Duration::days(1))
 }
 
@@ -264,16 +267,16 @@ mod tests {
         assert_eq!(none.earliest_day, Some(day(9)));
     }
 
-    /// The next rollover is the following local midnight, DST-safe by using
-    /// the UI schedule.
+    /// The next rollover is the following local midnight, DST-safe in
+    /// tests/dst.rs.
     #[test]
     fn test_next_midnight_is_the_following_local_midnight() {
         use chrono::TimeZone;
-        let tz = FixedOffset::west_opt(7 * 3600).unwrap();
+        let tz = chrono::FixedOffset::west_opt(7 * 3600).unwrap();
         let now = Utc.with_ymd_and_hms(2026, 7, 10, 3, 0, 0).unwrap();
         // 03:00 UTC is 20:00 the previous local day; local midnight is 07:00 UTC.
         assert_eq!(
-            next_midnight(now, tz),
+            next_midnight(now, &Calendar::fixed(tz)),
             Utc.with_ymd_and_hms(2026, 7, 10, 7, 0, 0).unwrap()
         );
     }
