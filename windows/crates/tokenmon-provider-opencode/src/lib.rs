@@ -7,14 +7,19 @@
 //! * [`bounds`]: week and subscription-month windows.
 //! * [`auth`]: sign-in policy.
 //!
-//! Owner: ws-opencode. The polling wrapper (`OpenCodeUsagePoller`) is wired
-//! by ws-app once the core polling loop lands.
+//! * [`budget`]: monthly Daily Budget bars on core `DailyBudget`.
+//! * [`poller`]: `OpenCodeUsagePoller` (console with local fallback).
+//!
+//! Owner: ws-opencode.
 
 pub mod auth;
 pub mod bounds;
+pub mod budget;
 pub mod console;
 pub mod db;
 pub mod model_name;
+pub mod poller;
+mod preview;
 pub mod pricing;
 pub mod snapshot;
 pub mod stats;
