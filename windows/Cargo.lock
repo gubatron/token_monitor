@@ -1918,9 +1918,14 @@ dependencies = [
 name = "tokenmon-platform"
 version = "0.1.0"
 dependencies = [
+ "serde",
+ "serde_json",
+ "tempfile",
  "thiserror",
  "tokenmon-core",
+ "tracing",
  "windows-sys 0.61.2",
+ "zeroize",
 ]
 
 [[package]]
