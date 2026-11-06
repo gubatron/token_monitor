@@ -19,6 +19,7 @@ tokenmon-provider-claude = { path = "../crates/tokenmon-provider-claude" }
 tokenmon-provider-cursor = { path = "../crates/tokenmon-provider-cursor" }
 arbitrary = { version = "1", features = ["derive"] }
 serde_json = "1.0"
+tokenmon-provider-grokbot = { path = "../crates/tokenmon-provider-grokbot" }
 
 # Own workspace: nightly-only, never built by the stable workspace gate.
 [workspace]
@@ -192,6 +193,13 @@ bench = false
 [[bin]]
 name = "claude_cache_refresh"
 path = "fuzz_targets/claude_cache_refresh.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "tokenmon_provider_grokbot_parse_usage_status"
+path = "fuzz_targets/tokenmon_provider_grokbot_parse_usage_status.rs"
 test = false
 doc = false
 bench = false
