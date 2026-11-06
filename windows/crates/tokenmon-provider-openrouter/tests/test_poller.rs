@@ -1,4 +1,5 @@
 //! Poller state machine (spec 03 section 4.5).
+#![allow(clippy::unwrap_used)]
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -168,4 +169,61 @@ fn test_start_stop_and_menu_flags() {
     assert!(!r.poller.is_running());
     r.poller.set_menu_open(true);
     assert!(r.poller.is_menu_open());
+}
+
+/// A fetcher that replaces the key (bumping the generation) mid-flight, then
+/// answers 401, like a request issued with the old key.
+struct StaleFake {
+    auth: Arc<OpenRouterAuthSession>,
+}
+
+impl EndpointFetcher for StaleFake {
+    fn fetch(&self, _: Endpoint) -> BoxFuture<'_, Result<Vec<u8>, ProviderError>> {
+        self.auth.save_api_key("sk-or-v1-replacement").unwrap();
+        Box::pin(async {
+            Err(ProviderError::Unauthorized(
+                ProviderErrorContext::OpenRouter,
+            ))
+        })
+    }
+}
+
+/// A 401 for a key that was replaced mid-flight must not count against the
+/// new key (PollerSessionGuardTests.testOpenRouterStaleUnauthorizedDoesNotInvalidateNewKey).
+#[tokio::test]
+async fn test_stale_unauthorized_does_not_invalidate_new_key() {
+    let auth = Arc::new(OpenRouterAuthSession::new(Arc::new(
+        InMemoryCredentialStore::default(),
+    )));
+    auth.save_api_key("sk-or-v1-old").unwrap();
+    let a = auth.clone();
+    let factory = Arc::new(move |_: &_| {
+        Ok(OpenRouterUsageClient::new(
+            Arc::new(StaleFake { auth: a.clone() }),
+            Arc::new(NoCostEstimator),
+        ))
+    });
+    let poller = OpenRouterUsagePoller::new(
+        auth.clone(),
+        Arc::new(ManualClock::from_unix(0)),
+        factory,
+        Arc::new(|| true),
+    );
+    for _ in 0..5 {
+        poller.refresh().await;
+    }
+    assert!(auth.state().is_signed_in && !auth.state().needs_sign_in);
+}
+
+/// Three current 401s invalidate the key
+/// (testOpenRouterCurrentUnauthorizedInvalidatesKey).
+#[tokio::test]
+async fn test_current_unauthorized_invalidates_key() {
+    let r = rig();
+    r.auth.save_api_key("sk-or-v1-abc").unwrap();
+    r.unauthorized.store(true, Ordering::SeqCst);
+    for _ in 0..3 {
+        r.poller.refresh().await;
+    }
+    assert!(r.auth.state().needs_sign_in);
 }

@@ -113,15 +113,22 @@ pub fn models_from_rows(rows: &[ActivityRow], estimator: &dyn CostEstimator) -> 
             .total_cmp(&a.cost_usd)
             .then(b.total_tokens().cmp(&a.total_tokens()))
     });
-    let total = finite(groups.iter().map(|g| g.cost_usd).sum::<f64>());
-    for g in &mut groups {
-        g.percent_of_window = if total > 0.0 {
-            (g.cost_usd / total * 100.0).clamp(0.0, 100.0)
-        } else {
-            0.0
-        };
-    }
+    fill_shares(&mut groups);
     groups
+}
+
+/// Shares of the summed cost. Costs are normalised by the largest one first
+/// so the sum cannot overflow (found by fuzzing: several `f64::MAX` costs made
+/// shares add up to more than 100).
+fn fill_shares(groups: &mut [ModelUsage]) {
+    let max = groups.iter().map(|g| g.cost_usd).fold(0.0_f64, f64::max);
+    if max <= 0.0 {
+        return;
+    }
+    let sum: f64 = groups.iter().map(|g| g.cost_usd / max).sum();
+    for g in groups {
+        g.percent_of_window = (g.cost_usd / max / sum * 100.0).clamp(0.0, 100.0);
+    }
 }
 
 fn apply_estimate(g: &mut ModelUsage, estimator: &dyn CostEstimator) {

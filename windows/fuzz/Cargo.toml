@@ -8,6 +8,7 @@ publish = false
 cargo-fuzz = true
 
 [dependencies]
+tokenmon-provider-openrouter = { path = "../crates/tokenmon-provider-openrouter" }
 libfuzzer-sys = "0.4"
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
 reqwest = { version = "0.13", default-features = false }
@@ -87,6 +88,27 @@ bench = false
 [[bin]]
 name = "core_storage_ops"
 path = "fuzz_targets/core_storage_ops.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "openrouter_key"
+path = "fuzz_targets/openrouter_key.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "openrouter_credits"
+path = "fuzz_targets/openrouter_credits.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "openrouter_activity"
+path = "fuzz_targets/openrouter_activity.rs"
 test = false
 doc = false
 bench = false
