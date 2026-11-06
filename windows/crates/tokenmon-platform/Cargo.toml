@@ -50,6 +50,13 @@ tempfile = { workspace = true }
 url = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
+# WinRT toast notifications (ws-notify).
+windows = { version = "0.62", features = [
+    "Data_Xml_Dom",
+    "Foundation",
+    "UI_Notifications",
+    "Win32_UI_Shell",
+] }
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_Graphics_Gdi",
