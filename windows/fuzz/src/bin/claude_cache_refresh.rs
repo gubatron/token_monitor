@@ -9,6 +9,7 @@ use std::io::Write;
 use std::time::{Duration, SystemTime};
 
 use libfuzzer_sys::fuzz_target;
+use tokenmon_core::usage::Calendar;
 use tokenmon_provider_claude::ClaudeCodeFileCache;
 
 fn line(n: u8, crlf: bool) -> String {
