@@ -5479,6 +5479,9 @@ checksum = "fd3ca314f692efd6c868f8408f53fe444634a845f96c028b97d35f6a1f79f0ee"
 name = "tokenmon-app"
 version = "0.1.0"
 dependencies = [
+ "chrono",
+ "tempfile",
+ "thiserror 2.0.21",
  "tokenmon-core",
  "tokenmon-platform",
  "tokenmon-provider-chatgpt",
@@ -5489,6 +5492,7 @@ dependencies = [
  "tokenmon-provider-opencode",
  "tokenmon-provider-openrouter",
  "tokenmon-ui",
+ "tokio",
  "tracing",
  "tracing-subscriber",
 ]

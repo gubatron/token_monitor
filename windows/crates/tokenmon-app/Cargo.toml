@@ -24,7 +24,20 @@ tokenmon-provider-opencode = { workspace = true }
 tokenmon-provider-openrouter = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "time", "sync"] }
+chrono = { workspace = true }
+thiserror = { workspace = true }
 
+[dev-dependencies]
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "time", "sync", "macros", "test-util"] }
+
+[lib]
+name = "tokenmon_app"
+path = "src/lib.rs"
+
+# The shipped executable is TokenMon.exe (the updater, installer and release
+# workflow all expect that file name).
 [[bin]]
-name = "tokenmon"
+name = "TokenMon"
 path = "src/main.rs"
