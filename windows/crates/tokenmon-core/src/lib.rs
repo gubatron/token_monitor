@@ -14,6 +14,7 @@
 
 pub mod alerts;
 pub mod auth;
+pub mod auth_session;
 pub mod clock;
 pub mod net;
 pub mod overview;
@@ -29,6 +30,9 @@ pub use auth::{
     AUTH_FAILURE_THRESHOLD, AuthConfig, AuthEvent, AuthEventListener, AuthSession,
     AuthSessionState, CredentialKey, CredentialKind, CredentialStore, CredentialStoreError,
     InMemoryCredentialStore, SessionGeneration,
+};
+pub use auth_session::{
+    BrowserStateCleaner, CapturedSession, CookieAuthSession, ProviderAuthSession,
 };
 pub use clock::{Clock, FixedClock, ManualClock, SystemClock};
 pub use net::error::{ProviderError, ProviderErrorContext, UsageError};
