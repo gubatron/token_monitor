@@ -313,7 +313,9 @@ impl DailyQuotaDeltaStore {
     }
 
     fn convert_legacy_days(&self, flat: &[Num]) -> BTreeMap<String, f64> {
-        flat.as_chunks::<2>().0.iter()
+        flat.as_chunks::<2>()
+            .0
+            .iter()
             .filter_map(|pair| {
                 let instant = from_apple_seconds(pair[0].0)?;
                 let offset = self.clock.local_offset_at(instant).local_minus_utc();

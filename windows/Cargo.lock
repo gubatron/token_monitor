@@ -1904,7 +1904,14 @@ dependencies = [
 name = "tokenmon-provider-cursor"
 version = "0.1.0"
 dependencies = [
+ "chrono",
+ "futures",
+ "reqwest",
+ "serde_json",
  "tokenmon-core",
+ "tokio",
+ "tracing",
+ "wiremock",
 ]
 
 [[package]]
