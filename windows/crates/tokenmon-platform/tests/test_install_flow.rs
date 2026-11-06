@@ -484,3 +484,41 @@ fn test_msiexec_spec_uses_the_supplied_system_directory() {
     assert_ne!(program, "msiexec.exe");
     assert!(program.contains(r"\system32\"));
 }
+
+/// The MSI's recorded `InstallDir` (trailing backslash, any case) marks the app
+/// MSI-installed only when the running exe sits directly in that folder.
+#[test]
+fn test_installed_by_msi_follows_recorded_install_dir() {
+    use tokenmon_platform::install::installer::{MSI_INSTALL_DIR_VALUE, MSI_INSTALLER_KEY};
+    use tokenmon_platform::shell::{MemoryRegistry, Registry};
+
+    type Record = fn(&str) -> Option<String>;
+
+    let body = make_zip(&[("TokenMon.exe", &fake_pe("new"))]);
+    let cases: [(Record, bool); 5] = [
+        (|d| Some(format!("{}\\", d.to_uppercase())), true),
+        (|d| Some(d.to_owned()), true),
+        (|d| Some(format!("{d}-other")), false),
+        (|_| Some(String::new()), false),
+        (|_| None, false),
+    ];
+    for (record, expected) in cases {
+        let r = rig(body.clone(), false);
+        let dir = r.exe.parent().unwrap().to_str().unwrap().to_owned();
+        let registry = Arc::new(MemoryRegistry::new());
+        if let Some(value) = record(&dir) {
+            registry
+                .set_string(MSI_INSTALLER_KEY, MSI_INSTALL_DIR_VALUE, &value)
+                .unwrap();
+        }
+        let installer = r.installer.with_registry(registry);
+        assert_eq!(installer.installed_by_msi(), expected, "{dir}");
+    }
+}
+
+/// Without a registry the app is never MSI-installed.
+#[test]
+fn test_installed_by_msi_is_false_without_registry() {
+    let r = rig(make_zip(&[("TokenMon.exe", &fake_pe("new"))]), false);
+    assert!(!r.installer.installed_by_msi());
+}

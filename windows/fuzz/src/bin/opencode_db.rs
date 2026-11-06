@@ -42,8 +42,7 @@ fuzz_target!(|data: &[u8]| {
         let p = w.used_percent();
         assert!(p.is_finite() && (0.0..=100.0).contains(&p));
     }
-    let offset = chrono::FixedOffset::east_opt(0).unwrap();
-    let _ = build_day_hourly_usage(&scan.rows, now, offset, 8);
+    let _ = build_day_hourly_usage(&scan.rows, now, &Calendar::utc(), 8);
     let load = move |_| Ok(Arc::clone(&scan));
     let request = MonthBudgetRequest {
         limit_usd: 60.0,

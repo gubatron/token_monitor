@@ -21,7 +21,7 @@ pub mod version;
 
 pub use checker::{
     InstallOutcome, InstallRequest, UpdateChecker, UpdateInstaller, UpdateSettings, UpdateState,
-    UrlOpener,
+    UrlOpener, choose_asset,
 };
 pub use digest::{Sha256Stream, sha256_hex};
 pub use error::{InstallError, UpdateError};

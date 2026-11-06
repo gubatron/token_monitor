@@ -11,6 +11,8 @@ use tokenmon_core::update::{
     is_repository_release_download,
 };
 
+use crate::shell::Registry;
+
 use super::archive::{extract_zip, locate_exe};
 use super::download::Downloader;
 use super::pe_version::{PackageVersionReader, SystemVersionReader};
@@ -31,6 +33,7 @@ pub struct WindowsUpdateInstaller {
     verifier: Arc<dyn SignatureVerifier>,
     launcher: Arc<dyn ProcessLauncher>,
     versions: Arc<dyn PackageVersionReader>,
+    registry: Option<Arc<dyn Registry>>,
 }
 
 impl WindowsUpdateInstaller {
@@ -56,6 +59,7 @@ impl WindowsUpdateInstaller {
             verifier,
             launcher,
             versions: Arc::new(SystemVersionReader),
+            registry: None,
         }
     }
 
@@ -63,6 +67,14 @@ impl WindowsUpdateInstaller {
     #[must_use]
     pub fn with_version_reader(mut self, versions: Arc<dyn PackageVersionReader>) -> Self {
         self.versions = versions;
+        self
+    }
+
+    /// Supplies the registry the MSI's `InstallDir` record is read from. Without
+    /// it the app is never treated as MSI-installed.
+    #[must_use]
+    pub fn with_registry(mut self, registry: Arc<dyn Registry>) -> Self {
+        self.registry = Some(registry);
         self
     }
 
@@ -213,7 +225,59 @@ fn hash_file(path: &Path) -> Result<String, InstallError> {
     }
 }
 
+/// Key the MSI writes under `HKCU` (see `installer/main.wxs`).
+pub const MSI_INSTALLER_KEY: &str = r"Software\TokenMon\Installer";
+/// Value under [`MSI_INSTALLER_KEY`] holding the MSI's install folder.
+pub const MSI_INSTALL_DIR_VALUE: &str = "InstallDir";
+
+/// Lowercased path with `/` as `\` and no trailing separator, so the registry's
+/// `C:\...\TokenMon\` and the process's `C:\...\TokenMon` compare equal.
+fn normalized_dir(path: &str) -> String {
+    path.replace('/', "\\")
+        .trim_end_matches('\\')
+        .to_lowercase()
+}
+
+/// Whether `running_exe` lives directly in the folder the MSI recorded.
+///
+/// A portable copy elsewhere on disk, or a different folder, is not MSI-owned
+/// even when the MSI is also installed.
+///
+/// # Examples
+///
+/// ```
+/// use std::path::Path;
+/// use tokenmon_platform::install::installer::exe_in_msi_install_dir;
+///
+/// let exe = Path::new(r"C:\Users\a\AppData\Local\Programs\TokenMon\TokenMon.exe");
+/// assert!(exe_in_msi_install_dir(exe, r"C:\Users\a\AppData\Local\Programs\TokenMon\"));
+/// assert!(!exe_in_msi_install_dir(exe, r"D:\Portable"));
+/// ```
+#[must_use]
+pub fn exe_in_msi_install_dir(running_exe: &Path, install_dir: &str) -> bool {
+    let recorded = normalized_dir(install_dir);
+    if recorded.is_empty() {
+        return false;
+    }
+    // String-based so a Windows-style path splits the same way on any host.
+    running_exe.to_str().is_some_and(|exe| {
+        let exe = exe.replace('/', "\\");
+        exe.rsplit_once('\\')
+            .is_some_and(|(parent, _)| normalized_dir(parent) == recorded)
+    })
+}
+
 impl UpdateInstaller for WindowsUpdateInstaller {
+    fn installed_by_msi(&self) -> bool {
+        let Some(registry) = &self.registry else {
+            return false;
+        };
+        matches!(
+            registry.get_string(MSI_INSTALLER_KEY, MSI_INSTALL_DIR_VALUE),
+            Ok(Some(dir)) if exe_in_msi_install_dir(&self.running_exe, &dir)
+        )
+    }
+
     fn can_replace_running_app(&self) -> bool {
         can_replace_running_exe(&self.running_exe)
     }
