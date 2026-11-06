@@ -318,6 +318,8 @@ jobs:
   smoke:
     name: MSI install, upgrade and uninstall
     needs: [version, build]
+    # always(): a skipped gates job (dry run) would otherwise skip this one.
+    if: always() && needs.build.result == 'success'
     runs-on: windows-latest
     timeout-minutes: 20
     env:
@@ -369,7 +371,9 @@ jobs:
   publish:
     name: Draft GitHub release
     needs: [version, build, smoke]
-    if: needs.version.outputs.release == 'true'
+    if: >-
+      always() && needs.version.outputs.release == 'true' &&
+      needs.build.result == 'success' && needs.smoke.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
