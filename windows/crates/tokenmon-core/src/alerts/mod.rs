@@ -80,6 +80,14 @@ impl ThresholdAlert {
 pub trait Notifier: Send + Sync {
     /// Shows `alert` immediately. Failures are the implementation's to log.
     fn deliver(&self, alert: &ThresholdAlert);
+
+    /// As [`deliver`](Self::deliver), reporting whether the alert reached the
+    /// user. [`ThresholdNotifier`] forgets a crossing whose delivery returned
+    /// `false`, so the next evaluation retries it. The default assumes success.
+    fn try_deliver(&self, alert: &ThresholdAlert) -> bool {
+        self.deliver(alert);
+        true
+    }
 }
 
 /// A [`Notifier`] that records alerts, for tests and headless runs.
@@ -251,11 +259,19 @@ impl ThresholdNotifier {
         if let Some(unix) = resets_unix {
             self.store.set_f64(&period_key, unix);
         }
-        self.sink.deliver(&ThresholdAlert {
+        let delivered = self.sink.try_deliver(&ThresholdAlert {
             provider,
             used_percent,
             threshold,
         });
+        if !delivered {
+            // Swift records first and never retries; a failed toast here is
+            // forgotten so the next poll tries again.
+            match last {
+                Some(previous) => self.store.set_f64(&key, previous),
+                None => self.store.remove(&key),
+            }
+        }
     }
 
     /// Reads the last record, clearing it when `resets_unix` starts a later

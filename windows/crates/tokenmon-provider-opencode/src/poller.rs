@@ -34,7 +34,7 @@ use crate::budget::{
 };
 use crate::captions;
 use crate::console::{ConsoleClient, ConsoleTransport};
-use crate::db::{DataDirEnv, ScanCache, load_scan, locate_db, scan_start};
+use crate::db::{DataDirEnv, DbError, ScanCache, load_scan, locate_db, scan_start};
 use crate::snapshot::{OpenCodeSnapshot, WindowKind};
 use crate::stats::{DayHourlyUsage, build_day_hourly_usage, snapshot as local_snapshot};
 
@@ -108,6 +108,8 @@ struct Computed {
     snapshot: Option<OpenCodeSnapshot>,
     hourly: Option<DayHourlyUsage>,
     budget: Option<BudgetSource>,
+    /// Why the scan failed, so the caption can say so instead of hiding it.
+    scan_error: Option<DbError>,
 }
 
 #[derive(Default)]
@@ -282,9 +284,14 @@ impl OpenCodeUsagePoller {
     async fn compute(&self, now: DateTime<Utc>, console: Option<OpenCodeSnapshot>) -> Computed {
         let load = Arc::clone(&self.load_scan);
         let clock = Arc::clone(&self.clock);
+        // A panicked scan must not throw away a good console snapshot.
+        let console_backup = console.clone();
         tokio::task::spawn_blocking(move || {
             let cal = Calendar::local(clock.as_ref());
-            let scan = load(scan_start(now)).ok();
+            let (scan, scan_error) = match load(scan_start(now)) {
+                Ok(scan) => (Some(scan), None),
+                Err(e) => (None, Some(e)),
+            };
             let local = scan.as_ref().map(|s| local_snapshot(s, now));
             let snapshot = match console {
                 Some(c) => Some(c.merged_with_local(local.as_ref())),
@@ -300,13 +307,17 @@ impl OpenCodeUsagePoller {
                 snapshot,
                 hourly,
                 budget,
+                scan_error,
             }
         })
         .await
-        .unwrap_or(Computed {
-            snapshot: None,
+        .unwrap_or_else(|join_error| Computed {
+            snapshot: console_backup,
             hourly: None,
             budget: None,
+            scan_error: Some(DbError::QueryFailed(format!(
+                "scan task failed: {join_error}"
+            ))),
         })
     }
 
@@ -394,7 +405,7 @@ impl OpenCodeUsagePoller {
             state.day_hourly_usage = computed.hourly;
         }
         let Some(snapshot) = computed.snapshot else {
-            state.last_error_text = Some(captions::LOCAL_UNREADABLE.to_owned());
+            state.last_error_text = Some(unreadable_text(computed.scan_error.as_ref()));
             return console_outcome;
         };
         state.snapshot = Some(snapshot);
@@ -404,6 +415,17 @@ impl OpenCodeUsagePoller {
             Some(captions::fallback_error(has_cookie, self.auth.state().needs_sign_in).to_owned());
         state.last_refreshed_at = Some(self.clock.now());
         console_outcome
+    }
+}
+
+/// The unreadable caption, with the scan's reason appended unless the database
+/// is simply absent (the expected "OpenCode not installed" case).
+fn unreadable_text(error: Option<&DbError>) -> String {
+    match error {
+        Some(e) if !matches!(e, DbError::Missing(_)) => {
+            format!("{} ({e})", captions::LOCAL_UNREADABLE)
+        }
+        _ => captions::LOCAL_UNREADABLE.to_owned(),
     }
 }
 

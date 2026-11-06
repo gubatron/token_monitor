@@ -147,3 +147,18 @@ async fn test_set_menu_open_wakes_the_loop() {
     assert!(r.scheduler.cancelled_count() >= 1);
     r.provider.stop();
 }
+
+/// Regression (#73): a disabled Grok never fetches, not even through
+/// `refresh_now` (sign-in completion, "refresh all").
+#[tokio::test]
+async fn test_refresh_now_does_not_fetch_while_grok_is_disabled() {
+    let only_cursor = std::iter::once(ProviderId::Cursor).collect();
+    let disabled = Settings::default()
+        .with_selected_provider(ProviderId::Grok)
+        .with_enabled_providers(&only_cursor)
+        .unwrap();
+    let r = rig(disabled);
+    r.provider.refresh_now().await;
+    assert_eq!(r.fetch.0.load(Ordering::SeqCst), 0);
+    assert_eq!(r.provider.headline_used_percent(), None);
+}

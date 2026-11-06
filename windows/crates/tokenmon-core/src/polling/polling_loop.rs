@@ -1,10 +1,12 @@
 //! The refresh loop (spec 01 section 1.2.3).
 
 use std::future::Future;
+use std::panic::AssertUnwindSafe;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
+use futures::FutureExt;
 use tokio::runtime::Handle;
 use tokio::task::JoinHandle;
 
@@ -367,7 +369,17 @@ impl PollingLoop {
             owner: self,
             armed: true,
         };
-        let outcome = (self.refresh)().await;
+        // A panicking refresh (debug builds; release aborts) is a failure like
+        // any other: it backs off and the loop re-arms instead of staying dead
+        // until the next wake. The call itself is inside the async block so a
+        // synchronous panic in the closure is caught too.
+        let result = AssertUnwindSafe(async { (self.refresh)().await })
+            .catch_unwind()
+            .await;
+        let outcome = result.unwrap_or_else(|_| {
+            tracing::error!("provider refresh panicked; backing off and rescheduling");
+            PollOutcome::Failure { retry_after: None }
+        });
         self.record(outcome);
         guard.armed = false;
         self.schedule();

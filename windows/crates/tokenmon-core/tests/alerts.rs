@@ -209,3 +209,44 @@ fn test_non_numeric_records_are_ignored() {
     r.eval(Grok, 85.0);
     assert_eq!(r.sink.alerts().len(), 1);
 }
+
+/// A sink whose delivery fails until `ok` is set, counting attempts.
+struct FlakySink {
+    ok: std::sync::atomic::AtomicBool,
+    attempts: std::sync::atomic::AtomicUsize,
+}
+
+impl tokenmon_core::alerts::Notifier for FlakySink {
+    fn deliver(&self, _alert: &ThresholdAlert) {
+        self.try_deliver(_alert);
+    }
+    fn try_deliver(&self, _alert: &ThresholdAlert) -> bool {
+        self.attempts
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        self.ok.load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
+/// Regression (#73): a crossing whose toast failed is not recorded as
+/// announced, so the next poll retries; after a success it fires only once.
+#[test]
+fn test_failed_delivery_is_retried_then_recorded_once_delivered() {
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    let file = Arc::new(SettingsFile::in_memory());
+    let app = AppSettings::new(Arc::clone(&file));
+    app.set_threshold_enabled(true);
+    app.set_threshold_percent(80.0);
+    let sink = Arc::new(FlakySink {
+        ok: AtomicBool::new(false),
+        attempts: AtomicUsize::new(0),
+    });
+    let notifier = ThresholdNotifier::new(file, sink.clone());
+    let settings = app.snapshot();
+    notifier.evaluate(Grok, 85.0, &settings, None, None);
+    notifier.evaluate(Grok, 86.0, &settings, None, None);
+    assert_eq!(sink.attempts.load(Ordering::SeqCst), 2);
+    sink.ok.store(true, Ordering::SeqCst);
+    notifier.evaluate(Grok, 87.0, &settings, None, None);
+    notifier.evaluate(Grok, 88.0, &settings, None, None);
+    assert_eq!(sink.attempts.load(Ordering::SeqCst), 3);
+}
