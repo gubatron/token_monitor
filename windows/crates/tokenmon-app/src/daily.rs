@@ -7,7 +7,9 @@
 
 use chrono::{DateTime, Utc};
 use tokenmon_core::ProviderId;
-use tokenmon_core::usage::{Calendar, DailyBudget, DailyBudgetDay, DailyTokenUsage};
+use tokenmon_core::usage::{
+    AllowancePeriod, Calendar, DailyBudget, DailyBudgetDay, DailyTokenUsage, PaceHeadroom,
+};
 use tokenmon_provider_grok::models::{DAILY_CAP_PERCENT, DailyUsageWeek};
 use tokenmon_ui::panels::common::{
     AllowanceNoun, DailyBudgetInput, DayInput, FooterKind, TokensInput,
@@ -26,8 +28,12 @@ pub struct ChartContext<'a> {
     pub provider: ProviderId,
     /// Weekly or monthly wording.
     pub noun: AllowanceNoun,
-    /// Used percent of the pool, for the pace footer.
-    pub period_used_percent: f64,
+    /// Used percent of the pool, for the pace footer; `None` shows no pace
+    /// and the footer falls back to the bars' caption (Swift `nil`).
+    pub period_used_percent: Option<f64>,
+    /// Known start of the allowance period (Cursor's billing cycle start,
+    /// OpenCode's budget period start), when the provider reports one.
+    pub period_start: Option<DateTime<Utc>>,
     /// When the pool resets, if known.
     pub resets_at: Option<DateTime<Utc>>,
     /// Browsed period: `0` current, negative earlier.
@@ -76,6 +82,38 @@ fn day_input(day: &DailyBudgetDay, calendar: &Calendar<'_>) -> DayInput {
     }
 }
 
+/// Even-pace headroom as `DailyBudgetBarsView.pace` computes it.
+///
+/// Weekly pools earn from the first non-prior bar; monthly pools from the
+/// billing month start (the known start, else derived from `resets_at`), and
+/// show no pace when none resolves. Elapsed days count through today, so the
+/// final-day reset branch can fire.
+fn pace(days: &[DailyBudgetDay], ctx: &ChartContext<'_>) -> Option<PaceHeadroom> {
+    let used = ctx.period_used_percent?;
+    let period = match ctx.noun {
+        AllowanceNoun::Monthly => AllowancePeriod::Monthly,
+        AllowanceNoun::Weekly => AllowancePeriod::Weekly,
+    };
+    let start = DailyBudget::pace_period_start(
+        period,
+        days,
+        ctx.period_start,
+        ctx.resets_at,
+        ctx.now,
+        ctx.calendar,
+    );
+    let elapsed = match (start, period) {
+        (Some(s), _) => Some(DailyBudget::elapsed_days_through_today(
+            s,
+            ctx.now,
+            ctx.calendar,
+        )),
+        (None, AllowancePeriod::Weekly) => None,
+        (None, AllowancePeriod::Monthly) => return None,
+    };
+    DailyBudget::pace_headroom(days, used, elapsed, ctx.resets_at, ctx.now, ctx.calendar)
+}
+
 /// The chart for a provider's bars, or `None` when there are none.
 ///
 /// Pace is shown only for the current period; browsing earlier periods hides
@@ -85,18 +123,7 @@ pub fn daily_input(days: &[DailyBudgetDay], ctx: &ChartContext<'_>) -> Option<Da
         return None;
     }
     let current = ctx.week_offset >= 0;
-    let pace = current
-        .then(|| {
-            DailyBudget::pace_headroom(
-                days,
-                ctx.period_used_percent,
-                None,
-                ctx.resets_at,
-                ctx.now,
-                ctx.calendar,
-            )
-        })
-        .flatten();
+    let pace = current.then(|| pace(days, ctx)).flatten();
     Some(DailyBudgetInput {
         days: days.iter().map(|d| day_input(d, ctx.calendar)).collect(),
         accent: ctx.provider.panel_accent(),
@@ -121,18 +148,7 @@ pub fn grok_week_input(week: &DailyUsageWeek, ctx: &ChartContext<'_>) -> Option<
         .iter()
         .map(|d| DailyBudgetDay::new(d.day_start, d.total_percent(), DAILY_CAP_PERCENT))
         .collect();
-    let pace = current
-        .then(|| {
-            DailyBudget::pace_headroom(
-                &bars,
-                ctx.period_used_percent,
-                None,
-                ctx.resets_at,
-                ctx.now,
-                ctx.calendar,
-            )
-        })
-        .flatten();
+    let pace = current.then(|| pace(&bars, ctx)).flatten();
     Some(DailyBudgetInput {
         days: bars.iter().map(|d| day_input(d, ctx.calendar)).collect(),
         accent: ProviderId::Grok.panel_accent(),
@@ -157,7 +173,8 @@ mod tests {
         ChartContext {
             provider: ProviderId::Claude,
             noun: AllowanceNoun::Weekly,
-            period_used_percent: 30.0,
+            period_used_percent: Some(30.0),
+            period_start: None,
             resets_at: None,
             week_offset: offset,
             now: Utc.with_ymd_and_hms(2026, 7, 8, 12, 0, 0).unwrap(),
