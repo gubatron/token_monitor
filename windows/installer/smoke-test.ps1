@@ -9,7 +9,8 @@
   machine: it installs and removes TokenMon for the current user and deletes
   the app's HKCU registrations.
 
-  1. Install the release MSI (per user, no elevation): files, Start-menu
+  1. Install the release MSI (per user, no elevation): files, the installed
+     TokenMon.exe --smoke self-test, Start-menu
      shortcut with System.AppUserModel.ID "TokenMon", ARP entry.
   2. Simulate what the app writes at run time (Run value, StartupApproved
      value, desktop verb, AUMID key, user data, updater leftovers).
@@ -94,6 +95,14 @@ Set-Content -Path $DataFile -Value '{"kept": true}'
 $code = Invoke-Msi @('/i', $Msi) 'install.log'
 Check 'install exits 0' ($code -eq 0) "exit $code"
 Check 'TokenMon.exe in %LOCALAPPDATA%\Programs\TokenMon' (Test-Path $Exe)
+if (Test-Path $Exe) {
+  # The installed binary runs: one headless refresh cycle over a throwaway
+  # data dir (tokenmon-app smoke.rs), then exit 0.
+  $p = Start-Process -FilePath $Exe -ArgumentList '--smoke' -PassThru
+  $done = $p.WaitForExit(120000)
+  if (-not $done) { $p.Kill() }
+  Check 'installed TokenMon.exe --smoke exits 0' ($done -and $p.ExitCode -eq 0) "exit $(if ($done) { $p.ExitCode } else { 'timeout' })"
+}
 Check 'LICENSE.txt installed' (Test-Path (Join-Path $InstallDir 'LICENSE.txt'))
 Check 'Start-menu shortcut exists' (Test-Path $Lnk)
 if (Test-Path $Lnk) {
