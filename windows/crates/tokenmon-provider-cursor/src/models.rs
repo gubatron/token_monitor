@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 
 use chrono::{DateTime, NaiveDate, Utc};
 
-use tokenmon_core::usage::{DailyTokenUsage, Percent};
+use tokenmon_core::usage::{DailyTokenUsage, Percent, UsagePool};
 
 /// Which Cursor quota a pool tracks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -102,6 +102,11 @@ pub struct CursorSnapshot {
 }
 
 impl CursorSnapshot {
+    /// Cursor's allowance is always a monthly (billing-cycle) pool.
+    pub fn usage_pool(&self) -> UsagePool {
+        UsagePool::Monthly
+    }
+
     /// The headline reset: the billing cycle end.
     pub fn resets_at(&self) -> Option<DateTime<Utc>> {
         self.billing_cycle_end

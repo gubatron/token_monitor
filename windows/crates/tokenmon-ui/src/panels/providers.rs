@@ -275,7 +275,7 @@ impl OpenCodeSnapshotInput {
         daily: Option<DailyBudgetInput>,
     ) -> Self {
         Self {
-            pool_name: "Mixed".to_owned(),
+            pool_name: s.usage_pool().display_name().to_owned(),
             windows: s.windows.iter().map(window).collect(),
             is_estimated: s.is_estimated,
             daily,

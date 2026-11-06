@@ -151,3 +151,26 @@ fn test_opencode_snapshot_maps_windows() {
     assert_eq!(input.windows[0].used_percent, 50.0);
     assert!(input.local_stats.is_none());
 }
+
+/// The OpenCode pool title follows the stacked windows instead of a fixed
+/// "Mixed" (issue #57): one window keeps its cadence, several read Mixed.
+#[test]
+fn test_opencode_pool_name_follows_windows() {
+    let window = |kind| WindowUsage {
+        kind,
+        used_usd: 0.0,
+        limit_usd: 12.0,
+        resets_at: None,
+        session_count: 0,
+    };
+    let pool = |kinds: &[WindowKind]| {
+        let snap = OpenCodeSnapshot {
+            windows: kinds.iter().copied().map(window).collect(),
+            ..OpenCodeSnapshot::default()
+        };
+        OpenCodeSnapshotInput::from(&snap).pool_name
+    };
+    assert_eq!(pool(&[WindowKind::Monthly]), "Monthly");
+    assert_eq!(pool(&[WindowKind::Rolling5h]), "Hourly");
+    assert_eq!(pool(&[WindowKind::Weekly, WindowKind::Monthly]), "Mixed");
+}

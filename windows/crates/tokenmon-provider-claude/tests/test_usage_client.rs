@@ -211,3 +211,23 @@ fn test_snapshot_headline_resets_and_pool() {
     assert_eq!(s.usage_pool().section_title(), "Usage Pool Mixed");
     assert_eq!(s.seven_day.as_ref().unwrap().remaining_percent(), 70.0);
 }
+
+/// `testClaudePools`: both windows are Mixed, 5-hour alone Hourly, weekly alone Weekly.
+#[test]
+fn test_claude_pools() {
+    use tokenmon_core::usage::UsagePool;
+    let w = |p| ClaudeUsageWindow {
+        used_percent: p,
+        resets_at: None,
+        scope_name: None,
+    };
+    let snap = |five_hour, seven_day| ClaudeSnapshot {
+        fetched_at: Utc::now(),
+        five_hour,
+        seven_day,
+        account_email: None,
+    };
+    assert_eq!(snap(Some(w(10.0)), Some(w(20.0))).usage_pool(), UsagePool::Mixed);
+    assert_eq!(snap(Some(w(10.0)), None).usage_pool(), UsagePool::Hourly);
+    assert_eq!(snap(None, Some(w(20.0))).usage_pool(), UsagePool::Weekly);
+}

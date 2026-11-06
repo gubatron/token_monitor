@@ -202,3 +202,28 @@ fn test_window_labels_derive_from_window_seconds() {
     assert_eq!(label(None), "Fallback");
     assert_eq!(label(Some(-3_600)), "Fallback");
 }
+
+/// `testChatGPTPools`: both windows are Mixed; weekly alone stays Weekly.
+#[test]
+fn test_chatgpt_pools() {
+    use tokenmon_core::usage::UsagePool;
+    use tokenmon_provider_chatgpt::ChatGptSnapshot;
+    let window = |p| UsageWindow {
+        used_percent: p,
+        resets_at: None,
+        window_seconds: None,
+    };
+    let snap = |primary, secondary| ChatGptSnapshot {
+        fetched_at: chrono::DateTime::UNIX_EPOCH,
+        plan_name: None,
+        allowed: true,
+        limit_reached: false,
+        primary,
+        secondary,
+    };
+    assert_eq!(
+        snap(Some(window(10.0)), Some(window(20.0))).usage_pool(),
+        UsagePool::Mixed
+    );
+    assert_eq!(snap(None, Some(window(20.0))).usage_pool(), UsagePool::Weekly);
+}
