@@ -47,7 +47,8 @@ use webview2_com::{
     CreateCoreWebView2ControllerCompletedHandler, CreateCoreWebView2EnvironmentCompletedHandler,
     DownloadStartingEventHandler, GetCookiesCompletedHandler, HistoryChangedEventHandler,
     NavigationCompletedEventHandler, NavigationStartingEventHandler,
-    NewWindowRequestedEventHandler, PermissionRequestedEventHandler, SourceChangedEventHandler,
+    NewWindowRequestedEventHandler, PermissionRequestedEventHandler,
+    ServerCertificateErrorDetectedEventHandler, SourceChangedEventHandler,
     WindowCloseRequestedEventHandler, take_pwstr,
 };
 use windows::Win32::Foundation::{E_POINTER, HINSTANCE, HWND, LPARAM, LRESULT, RECT, WPARAM};
@@ -67,7 +68,7 @@ use windows::core::{BOOL, Interface, PCWSTR, PWSTR, w};
 
 use super::config::{SignInConfig, WINDOW_MIN_SIZE, WINDOW_SIZE};
 use super::cookies::WebCookie;
-use super::gate::is_navigation_allowed;
+use super::gate::NavigationPolicy;
 use super::host::{SignInDelegate, WebAuthError, WebAuthHost};
 use super::machine::{Action, Input, SignInMachine, TimerId, ViewKind, ViewModel};
 use super::nav::NavSnapshot;
@@ -166,9 +167,11 @@ impl WebAuthHost for WindowsWebAuthHost {
         config: SignInConfig,
         delegate: Arc<dyn SignInDelegate>,
     ) -> Result<(), WebAuthError> {
-        if !is_navigation_allowed(&config.start_url) || config.start_url == "about:blank" {
+        if config.start_url == "about:blank"
+            || !NavigationPolicy::from_config(&config).allows(&config.start_url)
+        {
             return Err(WebAuthError::InvalidConfig(
-                "start URL must be http(s)".into(),
+                "start URL must be https on a provider or identity host".into(),
             ));
         }
         if let Some(raw) = self.live_hwnd(&config.provider_slug) {
@@ -283,6 +286,7 @@ struct Ctx {
     busy: Cell<bool>,
     delegate: Arc<dyn SignInDelegate>,
     start_url: String,
+    nav: NavigationPolicy,
     env: RefCell<Option<ICoreWebView2Environment>>,
     cookie_manager: RefCell<Option<ICoreWebView2CookieManager>>,
     main: RefCell<Option<View>>,
@@ -325,6 +329,7 @@ fn run_window(
         busy: Cell::new(false),
         delegate,
         start_url: config.start_url.clone(),
+        nav: NavigationPolicy::from_config(&config),
         env: RefCell::new(None),
         cookie_manager: RefCell::new(None),
         main: RefCell::new(None),
@@ -985,7 +990,8 @@ impl Ctx {
         let mut token = 0i64;
         let weak: Weak<Ctx> = Rc::downgrade(self);
 
-        // Only http(s) may be loaded; everything else is cancelled.
+        // Only https on the provider's own or identity hosts may be loaded;
+        // everything else (other hosts, http, other schemes) is cancelled.
         let w = weak.clone();
         let l = Rc::clone(loading);
         let starting = NavigationStartingEventHandler::create(Box::new(move |_, args| {
@@ -994,13 +1000,13 @@ impl Ctx {
                 unsafe {
                     let mut uri = PWSTR::null();
                     args.Uri(&mut uri)?;
-                    if is_navigation_allowed(&take_pwstr(uri)) {
-                        l.set(true);
-                        if let Some(ctx) = w.upgrade() {
+                    let uri = take_pwstr(uri);
+                    match w.upgrade() {
+                        Some(ctx) if ctx.nav.allows(&uri) => {
+                            l.set(true);
                             ctx.publish_snapshot();
                         }
-                    } else {
-                        args.SetCancel(true)?;
+                        _ => args.SetCancel(true)?,
                     }
                 }
             }
@@ -1081,6 +1087,20 @@ impl Ctx {
             webview.add_NewWindowRequested(&new_window, &mut token)?;
             webview.add_WindowCloseRequested(&close_requested, &mut token)?;
             webview.add_PermissionRequested(&permission, &mut token)?;
+            // A credential-capture window never offers "continue anyway" on a
+            // certificate error: cancel, which leaves the interstitial error
+            // page without a bypass.
+            if let Ok(wv14) = webview.cast::<ICoreWebView2_14>() {
+                let cert =
+                    ServerCertificateErrorDetectedEventHandler::create(Box::new(|_, args| {
+                        if let Some(args) = args {
+                            // SAFETY: live event args (inside the enclosing unsafe block).
+                            args.SetAction(COREWEBVIEW2_SERVER_CERTIFICATE_ERROR_ACTION_CANCEL)?;
+                        }
+                        Ok(())
+                    }));
+                wv14.add_ServerCertificateErrorDetected(&cert, &mut token)?;
+            }
             if let Ok(wv4) = webview.cast::<ICoreWebView2_4>() {
                 let download = DownloadStartingEventHandler::create(Box::new(|_, args| {
                     if let Some(args) = args {
@@ -1104,7 +1124,7 @@ impl Ctx {
         unsafe {
             let mut uri = PWSTR::null();
             args.Uri(&mut uri)?;
-            if !is_navigation_allowed(&take_pwstr(uri)) {
+            if !self.nav.allows(&take_pwstr(uri)) {
                 return args.SetHandled(true);
             }
             let Some(env) = self.env.borrow().clone() else {

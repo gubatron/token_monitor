@@ -3,6 +3,7 @@
 
 use std::time::Duration;
 
+use tokenmon_core::net::Domain;
 use tokenmon_core::{AuthConfig, CredentialKey};
 
 use crate::console::workspace_id_from_path;
@@ -53,9 +54,9 @@ pub fn looks_like_auth_cookie(name: &str) -> bool {
 
 /// Host and path belong to the identity provider's login flow.
 pub fn is_auth_host(host: &str, path: &str) -> bool {
-    host.contains("auth.opencode.ai")
-        || path.contains("/auth/authorize")
-        || path.contains("/console/login")
+    Domain::matches(host, &["auth.opencode.ai"])
+        || (Domain::matches(host, &["opencode.ai"])
+            && (path.contains("/auth/authorize") || path.contains("/console/login")))
 }
 
 /// Whether navigation reached a signed-in console page (host lowercased,

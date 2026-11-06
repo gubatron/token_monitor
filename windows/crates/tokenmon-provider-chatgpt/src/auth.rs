@@ -1,6 +1,7 @@
 //! ChatGPT sign-in and cookie-session configuration (spec 03 section 2.1).
 
 use tokenmon_core::AuthConfig;
+use tokenmon_core::net::Domain;
 
 /// Hosts whose cookies belong to the ChatGPT session. Also the sign-out hosts;
 /// the first is the base host for parsing refreshed cookies.
@@ -76,7 +77,8 @@ pub fn looks_like_auth_cookie(name: &str) -> bool {
 }
 
 /// `isAuthHost(host:path:)`: OpenAI/Google/Apple/Microsoft identity hosts
-/// (substring match on the host exactly like Swift) or an in-page login path.
+/// (exact or dot-suffix host match, a deliberate fix of Swift's substring
+/// match) or an in-page login path on chatgpt.com.
 ///
 /// # Examples
 ///
@@ -85,20 +87,29 @@ pub fn looks_like_auth_cookie(name: &str) -> bool {
 /// assert!(is_auth_host("auth.openai.com", "/"));
 /// assert!(is_auth_host("chatgpt.com", "/auth/login"));
 /// assert!(!is_auth_host("chatgpt.com", "/c/abc"));
+/// assert!(!is_auth_host("evil.example", "/login"));
+/// assert!(!is_auth_host("auth.openai.com.evil.example", "/"));
 /// ```
 pub fn is_auth_host(host: &str, path: &str) -> bool {
-    [
-        "auth.openai",
-        "auth0.openai",
-        "accounts.google",
-        "appleid.apple",
-        "login.microsoft",
-    ]
-    .iter()
-    .any(|needle| host.contains(needle))
-        || path.contains("/login")
-        || path.contains("/signin")
+    let path = path.to_lowercase();
+    Domain::matches(host, &AUTH_IDP_HOSTS)
+        || (Domain::matches(host, &["chatgpt.com"])
+            && (path.contains("/login") || path.contains("/signin")))
 }
+
+/// Identity-provider hosts of the ChatGPT sign-in, matched exactly or by
+/// dot-suffix (never by substring: `auth.openai.com.evil.example` is not
+/// OpenAI).
+pub const AUTH_IDP_HOSTS: [&str; 8] = [
+    "auth.openai.com",
+    "auth0.openai.com",
+    "accounts.google.com",
+    "appleid.apple.com",
+    "idmsa.apple.com",
+    "login.microsoftonline.com",
+    "login.microsoft.com",
+    "login.live.com",
+];
 
 /// `isReturnPage`: on chatgpt.com (or a subdomain) and the lowercased path has
 /// none of `login`, `signin`, `/auth`.

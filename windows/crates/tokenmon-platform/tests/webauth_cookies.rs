@@ -401,3 +401,21 @@ fn prefers_explicit_email_cookie_over_fallback() {
     ];
     assert_eq!(extract_email(&jar).as_deref(), Some("mine@y.io"));
 }
+
+#[test]
+fn non_secure_cookies_are_never_captured_by_default() {
+    let mut insecure = cookie("sessionKey", "tok", ".claude.ai");
+    insecure.secure = false;
+    let policy = claude_policy();
+    assert!(policy.require_secure);
+    assert!(capture(&[insecure.clone()], &policy).is_none());
+    // A Secure session cookie is kept, a non-Secure sibling is dropped.
+    let mut other = cookie("lastActiveOrg", "org", ".claude.ai");
+    other.secure = false;
+    let got = capture(&[cookie("sessionKey", "tok", ".claude.ai"), other], &policy).unwrap();
+    assert_eq!(got.cookie_header, "sessionKey=tok");
+    // Opting out restores the old behavior.
+    let mut lax = claude_policy();
+    lax.require_secure = false;
+    assert!(capture(&[insecure], &lax).is_some());
+}

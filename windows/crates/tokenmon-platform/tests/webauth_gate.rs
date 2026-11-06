@@ -129,15 +129,13 @@ fn nav_state_derivations() {
 }
 
 #[test]
-fn only_http_and_https_navigation_is_allowed() {
-    for ok in [
-        "https://claude.ai/new",
-        "http://localhost:8080/x",
-        "about:blank",
-    ] {
+fn only_https_navigation_is_allowed() {
+    for ok in ["https://claude.ai/new", "about:blank"] {
         assert!(is_navigation_allowed(ok), "{ok}");
     }
     for bad in [
+        "http://claude.ai/new",
+        "http://localhost:8080/x",
         "file:///C:/Windows/win.ini",
         "javascript:alert(1)",
         "data:text/html,<script>1</script>",
@@ -237,4 +235,64 @@ fn adapter_never_overrides_the_user_agent_or_exposes_host_objects() {
     assert!(!code.contains("AddHostObjectToScript"), "no host objects");
     assert!(code.contains("SetAreHostObjectsAllowed(false)"));
     assert!(code.contains("SetIsWebMessageEnabled(false)"));
+}
+
+#[test]
+fn navigation_policy_allows_only_provider_and_identity_hosts_over_https() {
+    use tokenmon_platform::webauth::gate::NavigationPolicy;
+    let p = NavigationPolicy::from_config(&claude_config());
+    for ok in [
+        "https://claude.ai/new",
+        "https://www.claude.ai/chat/1",
+        "https://clerk.claude.ai/sign-in",
+        "https://CLAUDE.ai/new",
+        "about:blank",
+    ] {
+        assert!(p.allows(ok), "{ok}");
+    }
+    for bad in [
+        "http://claude.ai/new",
+        "https://evil.example/",
+        "https://evil.example/login",
+        "https://claude.ai.evil.example/",
+        "https://notclaude.ai/",
+        "https://claude.ai@evil.example/",
+        "https://evil.example/?u=https://claude.ai/",
+        "https://evil.example/#claude.ai",
+        "file:///C:/x",
+        "",
+    ] {
+        assert!(!p.allows(bad), "{bad}");
+    }
+}
+
+#[test]
+fn grok_navigation_enforces_auth_hosts() {
+    use tokenmon_core::net::Domain;
+    use tokenmon_platform::webauth::gate::NavigationPolicy;
+    const AUTH_HOSTS: [&str; 5] = [
+        "accounts.x.ai",
+        "auth.x.ai",
+        "api.x.com",
+        "twitter.com",
+        "x.com",
+    ];
+    let mut cfg = webauth_common::grok_config();
+    cfg.is_auth_host = Arc::new(|host, _| Domain::matches(host, &AUTH_HOSTS));
+    cfg.policy.is_domain = Arc::new(|d| Domain::matches(d, &["grok.com", "x.ai"]));
+    let p = NavigationPolicy::from_config(&cfg);
+    for ok in [
+        "https://accounts.x.ai/sign-in?redirect=https%3A%2F%2Fgrok.com%2F",
+        "https://x.com/i/oauth2",
+        "https://grok.com/",
+    ] {
+        assert!(p.allows(ok), "{ok}");
+    }
+    for bad in [
+        "https://x.com.evil.example/",
+        "https://evil.example/",
+        "http://x.com/",
+    ] {
+        assert!(!p.allows(bad), "{bad}");
+    }
 }

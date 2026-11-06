@@ -1,6 +1,7 @@
 //! Claude sign-in rules (`ClaudeAuthSession`, `ClaudeSignIn`).
 
 use tokenmon_core::AuthConfig;
+use tokenmon_core::net::Domain;
 
 /// Where the sign-in window starts.
 pub const SIGN_IN_START_URL: &str = "https://claude.ai/new";
@@ -43,21 +44,25 @@ pub fn claude_auth_config() -> AuthConfig {
 /// assert!(is_auth_host("clerk.claude.ai", "/sign-in"));
 /// assert!(is_auth_host("claude.ai", "/login"));
 /// assert!(!is_auth_host("claude.ai", "/new"));
+/// assert!(!is_auth_host("evil.example", "/login"));
+/// assert!(!is_auth_host("github.com.evil.example", "/"));
 /// ```
 pub fn is_auth_host(host: &str, path: &str) -> bool {
-    let h = host.to_lowercase();
     let p = path.to_lowercase();
-    [
-        "clerk.claude",
-        "accounts.google",
-        "github.com",
-        "appleid.apple",
-    ]
-    .iter()
-    .any(|m| h.contains(m))
-        || p.contains("/login")
-        || p.contains("/signin")
+    Domain::matches(host, &AUTH_IDP_HOSTS)
+        || (Domain::matches(host, &["claude.ai"])
+            && (p.contains("/login") || p.contains("/signin")))
 }
+
+/// Identity-provider hosts of the Claude sign-in, matched exactly or by
+/// dot-suffix (never by substring: `github.com.evil.example` is not GitHub).
+pub const AUTH_IDP_HOSTS: [&str; 5] = [
+    "clerk.claude.ai",
+    "accounts.google.com",
+    "github.com",
+    "appleid.apple.com",
+    "idmsa.apple.com",
+];
 
 /// Whether landing on `host`/`path` means sign-in finished and the session
 /// should be captured: exactly `claude.ai` or `www.claude.ai`, and a path

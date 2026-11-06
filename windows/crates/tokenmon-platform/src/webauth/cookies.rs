@@ -91,6 +91,11 @@ pub struct CapturePolicy {
     pub looks_like_auth_cookie: Predicate,
     /// Return every provider-domain cookie once a session cookie is found.
     pub include_all_domain_cookies_when_session_found: bool,
+    /// Only cookies carrying the `Secure` flag are captured. Every provider
+    /// signs in over https only, so a non-Secure cookie for a provider domain
+    /// can only have been set over cleartext or by a script and is never
+    /// trusted as a session. Defaults to `true`.
+    pub require_secure: bool,
 }
 
 impl fmt::Debug for CapturePolicy {
@@ -110,6 +115,7 @@ impl CapturePolicy {
             auth,
             looks_like_auth_cookie: Arc::new(|_| false),
             include_all_domain_cookies_when_session_found: true,
+            require_secure: true,
         }
     }
 
@@ -173,7 +179,11 @@ fn is_session_cookie(policy: &CapturePolicy, name: &str) -> bool {
 pub fn select(cookies: &[WebCookie], policy: &CapturePolicy) -> Option<Vec<WebCookie>> {
     let relevant: Vec<&WebCookie> = cookies
         .iter()
-        .filter(|c| c.is_header_safe() && (policy.is_domain)(&c.domain))
+        .filter(|c| {
+            c.is_header_safe()
+                && (policy.is_domain)(&c.domain)
+                && (c.secure || !policy.require_secure)
+        })
         .collect();
     if relevant.is_empty() {
         return None;

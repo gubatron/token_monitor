@@ -445,6 +445,8 @@ fn test_auth_policy() {
             && !looks_like_auth_cookie("theme")
     );
     assert!(is_auth_host("auth.opencode.ai", "/") && is_auth_host("opencode.ai", "/console/login"));
+    assert!(!is_auth_host("auth.opencode.ai.evil.example", "/"));
+    assert!(!is_auth_host("evil.example", "/console/login"));
     assert!(is_return_page("opencode.ai", "/console/wrk_1"));
     assert!(!is_return_page("opencode.ai", "/console/login"));
     assert!(!is_return_page("auth.opencode.ai", "/console"));

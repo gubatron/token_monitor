@@ -143,6 +143,14 @@ fn test_claude_policy_keeps_session_key_and_org() {
 #[test]
 fn test_claude_return_page_excludes_clerk_and_auth_paths() {
     assert!(is_auth_host("clerk.claude.ai", "/sign-in"));
+    // Exact or dot-suffix host matching, never substring (issue #41).
+    assert!(!is_auth_host("github.com.evil.example", "/"));
+    assert!(!is_auth_host("evilgithub.com", "/"));
+    assert!(!is_auth_host("accounts.google.com.evil.example", "/"));
+    assert!(!is_auth_host("clerk.claude.ai.evil.example", "/"));
+    assert!(!is_auth_host("evil.example", "/login"));
+    assert!(is_auth_host("github.com", "/login/oauth"));
+    assert!(is_auth_host("www.claude.ai", "/login"));
     assert!(!is_return_page("clerk.claude.ai", "/sign-in"));
     assert!(is_return_page("claude.ai", "/new"));
     assert!(is_return_page("www.claude.ai", "/chat/abc"));
