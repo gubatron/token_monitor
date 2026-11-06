@@ -1,0 +1,30 @@
+# Coverage floors for windows/, enforced by the coverage job of
+# .github/workflows/windows-ci.yml (windows/scripts/ci/render_coverage.py).
+#
+# Values are percentages (0-100). A run fails when the measured coverage is
+# below a floor, or when total line coverage drops more than 0.5 points below
+# the latest windows-port run (the delta gate; it needs no entry here).
+#
+# Raising a floor:
+#   1. Open the latest green windows-ci run on windows-port and read the
+#      "Coverage (ubuntu-latest)" summary: it lists the total and every crate.
+#   2. Set the floor a little (1-2 points) below the measured value, so normal
+#      refactoring noise does not fail CI, and commit it with the code that
+#      earned it ("ci(windows): raise tokenmon-core line floor to 80").
+#   3. Never lower a floor to make a change pass; add tests, or justify the
+#      exclusion next to --ignore-filename-regex in windows-ci.yml.
+#
+# Floors only ever go up. Start at 0 while the workspace is being built.
+
+[total]
+lines = 0
+regions = 0
+
+# One table per crate, keyed by the directory name under windows/crates/.
+# Crates without a table have no floor (the total and the delta still apply).
+# A crate listed here but not measured shows as "not measured" in the summary.
+#
+# [crates.tokenmon-core]
+# lines = 80
+# regions = 75
+[crates]

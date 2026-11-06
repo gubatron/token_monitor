@@ -1,0 +1,20 @@
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.01s
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.01s
+     Running `fuzz/target/aarch64-apple-darwin/release/parse_safe -artifact_prefix=fuzz/artifacts/parse_safe/ -max_total_time=5 -print_final_stats=1 fuzz/corpus/parse_safe`
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 1991917482
+INFO: Loaded 1 modules   (341 inline 8-bit counters): 341 [0x104769380, 0x1047694d5), 
+INFO: Loaded 1 PC tables (341 PCs): 341 [0x1047694d8,0x10476aa28), 
+INFO:        0 files found in fuzz/corpus/parse_safe
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+INFO: A corpus is not provided, starting from an empty corpus
+#2	INITED cov: 14 ft: 14 corp: 1/1b exec/s: 0 rss: 36Mb
+#4194304	pulse  cov: 14 ft: 14 corp: 1/1b lim: 4096 exec/s: 2097152 rss: 350Mb
+#8388608	pulse  cov: 14 ft: 14 corp: 1/1b lim: 4096 exec/s: 2097152 rss: 618Mb
+#10980852	DONE   cov: 14 ft: 14 corp: 1/1b lim: 4096 exec/s: 1830142 rss: 619Mb
+Done 10980852 runs in 6 second(s)
+stat::number_of_executed_units: 10980852
+stat::average_exec_per_sec:     1830142
+stat::new_units_added:          0
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              619

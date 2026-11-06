@@ -1,0 +1,91 @@
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.01s
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.01s
+     Running `fuzz/target/aarch64-apple-darwin/release/parse_alpha -artifact_prefix=fuzz/artifacts/parse_alpha/ -max_total_time=20 -print_final_stats=1 fuzz/corpus/parse_alpha`
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 1986596244
+INFO: Loaded 1 modules   (367 inline 8-bit counters): 367 [0x1004b5470, 0x1004b55df), 
+INFO: Loaded 1 PC tables (367 PCs): 367 [0x1004b55e0,0x1004b6cd0), 
+INFO:        0 files found in fuzz/corpus/parse_alpha
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+INFO: A corpus is not provided, starting from an empty corpus
+#2	INITED cov: 18 ft: 18 corp: 1/1b exec/s: 0 rss: 36Mb
+#5	NEW    cov: 20 ft: 20 corp: 2/5b lim: 4 exec/s: 0 rss: 36Mb L: 4/4 MS: 3 CrossOver-CopyPart-InsertByte-
+#465	NEW    cov: 22 ft: 22 corp: 3/13b lim: 8 exec/s: 0 rss: 36Mb L: 8/8 MS: 5 CopyPart-EraseBytes-ChangeBit-InsertRepeatedBytes-CopyPart-
+#7503	NEW    cov: 24 ft: 24 corp: 4/19b lim: 74 exec/s: 0 rss: 37Mb L: 6/8 MS: 3 InsertByte-InsertByte-CopyPart-
+#7519	NEW    cov: 25 ft: 25 corp: 5/27b lim: 74 exec/s: 0 rss: 37Mb L: 8/8 MS: 1 CMP- DE: "\001\000"-
+#7595	REDUCE cov: 25 ft: 25 corp: 5/26b lim: 74 exec/s: 0 rss: 37Mb L: 5/8 MS: 1 EraseBytes-
+#7732	REDUCE cov: 25 ft: 25 corp: 5/25b lim: 74 exec/s: 0 rss: 37Mb L: 4/8 MS: 2 ShuffleBytes-EraseBytes-
+#11933	REDUCE cov: 27 ft: 27 corp: 6/29b lim: 110 exec/s: 0 rss: 37Mb L: 4/8 MS: 1 ChangeByte-
+#12266	NEW    cov: 28 ft: 28 corp: 7/37b lim: 110 exec/s: 0 rss: 37Mb L: 8/8 MS: 3 PersAutoDict-ChangeByte-PersAutoDict- DE: "\001\000"-"\001\000"-
+#31387	NEW    cov: 30 ft: 30 corp: 8/41b lim: 293 exec/s: 0 rss: 39Mb L: 4/8 MS: 1 ChangeByte-
+#31619	NEW    cov: 31 ft: 31 corp: 9/53b lim: 293 exec/s: 0 rss: 39Mb L: 12/12 MS: 2 CopyPart-InsertRepeatedBytes-
+#33598	REDUCE cov: 31 ft: 31 corp: 9/52b lim: 309 exec/s: 0 rss: 39Mb L: 11/11 MS: 4 ChangeBit-ChangeBinInt-ChangeBinInt-EraseBytes-
+#34189	REDUCE cov: 31 ft: 31 corp: 9/50b lim: 309 exec/s: 0 rss: 39Mb L: 9/9 MS: 1 EraseBytes-
+#34931	REDUCE cov: 31 ft: 31 corp: 9/49b lim: 309 exec/s: 0 rss: 39Mb L: 8/8 MS: 2 CopyPart-EraseBytes-
+
+thread '<unnamed>' (138921543) panicked at /work/windows/crates/alpha/src/lib.rs:4:13:
+boom
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+==55124== ERROR: libFuzzer: deadly signal
+    #0 0x000100e53654 in __sanitizer_print_stack_trace+0x28 (librustc-nightly_rt.asan.dylib:arm64+0x87654)
+    #1 0x00010043a6bc in fuzzer::PrintStackTrace()+0x30 (parse_alpha:arm64+0x1000126bc)
+    #2 0x00010042dffc in fuzzer::Fuzzer::CrashCallback()+0x54 (parse_alpha:arm64+0x100005ffc)
+    #3 0x00019c630140 in _sigtramp+0x34 (libsystem_platform.dylib:arm64e+0x4140)
+    #4 0x00019c625978 in pthread_kill+0x124 (libsystem_pthread.dylib:arm64e+0x6978)
+    #5 0x00019c528454 in abort+0x90 (libsystem_c.dylib:arm64e+0x7b454)
+    #6 0x000100495d98 in _RNvNtNtNtCsgneyKrj87uf_3std3sys3pal4unix14abort_internal+0x8 (parse_alpha:arm64+0x10006dd98)
+    #7 0x000100495b34 in _RNvNtCsgneyKrj87uf_3std7process5abort+0x8 (parse_alpha:arm64+0x10006db34)
+    #8 0x000100490fb0 in _RNCNvCs4KNW9BDNwzc_13libfuzzer_sys10initialize0B3_+0xb8 (parse_alpha:arm64+0x100068fb0)
+    #9 0x00010047a434 in _RNvNtCsgneyKrj87uf_3std9panicking15panic_with_hook+0x26c (parse_alpha:arm64+0x100052434)
+    #10 0x00010046c794 in _RNCNvNtCsgneyKrj87uf_3std9panicking13panic_handler0B5_+0x6c (parse_alpha:arm64+0x100044794)
+    #11 0x0001004663c0 in _RINvNtNtCsgneyKrj87uf_3std3sys9backtrace26___rust_end_short_backtraceNCNvNtB6_9panicking13panic_handler0zEB6_+0x8 (parse_alpha:arm64+0x10003e3c0)
+    #12 0x00010046cd6c in _RNvCs8kYXCe6bXIp_7___rustc17rust_begin_unwind+0x1c (parse_alpha:arm64+0x100044d6c)
+    #13 0x00010049652c in _RNvNtCshIDsKH5exNL_4core9panicking9panic_fmt+0x24 (parse_alpha:arm64+0x10006e52c)
+    #14 0x00010042bc24 in _RNvCs5rykNw88W4o_5alpha5parse+0x3b4 (parse_alpha:arm64+0x100003c24)
+    #15 0x00010042b244 in rust_fuzzer_test_input lib.rs:276
+    #16 0x00010042c614 in _RINvNvNtCsgneyKrj87uf_3std9panicking12catch_unwind7do_callNCNvCs4KNW9BDNwzc_13libfuzzer_sys15test_input_wrap0lEBY_+0xc4 (parse_alpha:arm64+0x100004614)
+    #17 0x00010042d24c in __rust_try+0x18 (parse_alpha:arm64+0x10000524c)
+    #18 0x00010042bee4 in LLVMFuzzerTestOneInput+0x16c (parse_alpha:arm64+0x100003ee4)
+    #19 0x00010042f878 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long)+0x158 (parse_alpha:arm64+0x100007878)
+    #20 0x00010042ef1c in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long, bool, fuzzer::InputInfo*, bool, bool*)+0x48 (parse_alpha:arm64+0x100006f1c)
+    #21 0x000100430e20 in fuzzer::Fuzzer::MutateAndTestOne()+0x22c (parse_alpha:arm64+0x100008e20)
+    #22 0x000100431b7c in fuzzer::Fuzzer::Loop(std::__1::vector<fuzzer::SizedFile, std::__1::allocator<fuzzer::SizedFile>>&)+0x354 (parse_alpha:arm64+0x100009b7c)
+    #23 0x000100450e44 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long))+0x1a3c (parse_alpha:arm64+0x100028e44)
+    #24 0x00010045e9e8 in main+0x24 (parse_alpha:arm64+0x1000369e8)
+    #25 0x00019c24fe7c in start+0x1a1c (dyld:arm64e+0x31e7c)
+
+NOTE: libFuzzer has rudimentary signal handlers.
+      Combine libFuzzer with AddressSanitizer or similar for better crash reports.
+SUMMARY: libFuzzer: deadly signal
+MS: 1 ChangeByte-; base unit: fa514bd0d742886ad5d8ed44488033b37ac8d5e5
+0x46,0x55,0x5a,0x21,
+FUZ!
+artifact_prefix='fuzz/artifacts/parse_alpha/'; Test unit written to fuzz/artifacts/parse_alpha/crash-74f75f08f12c5294d384d52d2f4cd08a4b43af2d
+Base64: RlVaIQ==
+stat::number_of_executed_units: 36527
+stat::average_exec_per_sec:     0
+stat::new_units_added:          13
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              40
+
+────────────────────────────────────────────────────────────────────────────────
+
+Failing input:
+
+	fuzz/artifacts/parse_alpha/crash-74f75f08f12c5294d384d52d2f4cd08a4b43af2d
+
+Output of `std::fmt::Debug`:
+
+	[70, 85, 90, 33]
+
+Reproduce with:
+
+	cargo fuzz run parse_alpha fuzz/artifacts/parse_alpha/crash-74f75f08f12c5294d384d52d2f4cd08a4b43af2d
+
+Minimize test case with:
+
+	cargo fuzz tmin parse_alpha fuzz/artifacts/parse_alpha/crash-74f75f08f12c5294d384d52d2f4cd08a4b43af2d
+
+────────────────────────────────────────────────────────────────────────────────
+
+Error: Fuzz target exited with exit status: 77

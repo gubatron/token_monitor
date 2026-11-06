@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="nextest-run" tests="4" skipped="0" failures="0" errors="0" uuid="6ca7cde5-fe36-42be-a993-61e03d0d4ff4" timestamp="2026-11-06T11:04:55.891-07:00" time="0.007">
+    <testsuite name="alpha::test_alpha" tests="3" skipped="0" errors="0" failures="0">
+        <testcase name="parses" classname="alpha::test_alpha" timestamp="2026-11-06T11:04:55.891-07:00" time="0.007"/>
+        <testcase name="adds" classname="alpha::test_alpha" timestamp="2026-11-06T11:04:55.891-07:00" time="0.007"/>
+        <testcase name="fails_on_demand" classname="alpha::test_alpha" timestamp="2026-11-06T11:04:55.891-07:00" time="0.007"/>
+    </testsuite>
+    <testsuite name="beta::test_beta" tests="1" skipped="0" errors="0" failures="0">
+        <testcase name="muls" classname="beta::test_beta" timestamp="2026-11-06T11:04:55.891-07:00" time="0.007"/>
+    </testsuite>
+</testsuites>
