@@ -10,25 +10,31 @@
 //!   ledger and single-entry cache.
 //! * [`client`]: [`CursorUsageClient`], the fetch pipeline.
 //! * [`budget`]: the daily-budget blending math.
+//! * [`bars`]: the Monday-week bars built from it.
+//! * [`poller`]: [`CursorUsagePoller`] on core polling.
 //! * [`models`]: snapshot types.
 //! * [`publish`]: poller-side carry-over rules.
 
 pub mod aggregate;
 pub mod auth;
+pub mod bars;
 pub mod budget;
 pub mod client;
 pub mod events;
 pub mod http;
 pub mod models;
+pub mod poller;
 pub mod publish;
 pub mod summary;
 
 pub use aggregate::*;
 pub use auth::*;
+pub use bars::*;
 pub use budget::*;
 pub use client::*;
 pub use events::*;
 pub use http::*;
 pub use models::*;
+pub use poller::*;
 pub use publish::*;
 pub use summary::*;
