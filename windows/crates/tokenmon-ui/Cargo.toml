@@ -24,3 +24,5 @@ slint-build = { workspace = true }
 [dev-dependencies]
 # Offscreen snapshot tests decode/encode PNGs.
 png = "0.17"
+# Text in the software renderer needs fontique; the tests register the bundled Inter fonts.
+slint = { workspace = true, features = ["software-renderer-systemfonts", "unstable-fontique-011"] }
