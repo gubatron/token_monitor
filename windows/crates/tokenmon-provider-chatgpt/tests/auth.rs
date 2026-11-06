@@ -99,6 +99,12 @@ fn test_config_matches_spec_and_ignores_foreign_domains() {
 #[test]
 fn test_chatgpt_return_page_excludes_login_and_auth() {
     assert!(is_auth_host("auth.openai.com", "/"));
+    // Exact or dot-suffix host matching, never substring (issue #41).
+    assert!(is_auth_host("login.microsoftonline.com", "/"));
+    assert!(!is_auth_host("auth.openai.com.evil.example", "/"));
+    assert!(!is_auth_host("evilaccounts.google.com", "/"));
+    assert!(!is_auth_host("evil.example", "/login"));
+    assert!(!is_auth_host("evil.example", "/signin"));
     assert!(is_auth_host("chatgpt.com", "/auth/login"));
     assert!(is_return_page("chatgpt.com", "/"));
     assert!(is_return_page("chatgpt.com", "/c/abc"));
