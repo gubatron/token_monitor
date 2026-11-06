@@ -156,7 +156,7 @@ async fn test_installs_verified_update_in_place() {
     let names = siblings(&r);
     assert_eq!(names.len(), 2, "{names:?}");
     assert_eq!(names[0], "TokenMon.exe");
-    assert!(names[1].starts_with("TokenMon.old-") && names[1].ends_with(".exe"));
+    assert!(names[1].starts_with("TokenMon.old-") && names[1].to_lowercase().ends_with(".exe"));
     assert_eq!(fs::read_dir(&r.work).unwrap().count(), 0);
     let spawned = r.launcher.spawned.lock().unwrap();
     assert_eq!(spawned[0].program, r.exe.as_os_str());
