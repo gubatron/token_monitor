@@ -522,6 +522,22 @@ impl ProviderUsagePoller for ClaudeUsagePoller {
             .and_then(ClaudeSnapshot::resets_at)
     }
 
+    /// Swift `claudeUsageCard`: the seven-day window, 0% when absent.
+    fn overview_used_percent(&self) -> Option<f64> {
+        self.state()
+            .snapshot
+            .as_ref()
+            .map(|s| s.seven_day.as_ref().map_or(0.0, |w| w.used_percent))
+    }
+
+    fn overview_resets_at(&self) -> Option<DateTime<Utc>> {
+        self.state()
+            .snapshot
+            .as_ref()
+            .and_then(|s| s.seven_day.as_ref())
+            .and_then(|w| w.resets_at)
+    }
+
     fn alert_account(&self) -> Option<String> {
         self.auth.state().account_email
     }

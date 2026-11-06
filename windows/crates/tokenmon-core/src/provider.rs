@@ -372,6 +372,18 @@ pub trait ProviderUsagePoller: Send + Sync {
     /// When the headline quota resets.
     fn headline_resets_at(&self) -> Option<DateTime<Utc>>;
 
+    /// Used percentage shown on the Overview card. Defaults to the headline;
+    /// Claude overrides it with the 7-day window (the tray headline is the
+    /// 5-hour one).
+    fn overview_used_percent(&self) -> Option<f64> {
+        self.headline_used_percent()
+    }
+
+    /// When the quota behind [`Self::overview_used_percent`] resets.
+    fn overview_resets_at(&self) -> Option<DateTime<Utc>> {
+        self.headline_resets_at()
+    }
+
     /// Account label for alert text, if known.
     fn alert_account(&self) -> Option<String>;
 

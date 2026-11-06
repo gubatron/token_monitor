@@ -779,3 +779,29 @@ async fn test_headline_values_follow_the_snapshot() {
     assert_eq!(rig.poller.headline_resets_at(), Some(reset));
     assert_eq!(rig.poller.last_refreshed_at(), Some(t0()));
 }
+
+/// #55: the Overview card shows the seven-day percent and reset, not the
+/// five-hour headline used by the tray.
+#[tokio::test]
+async fn test_overview_values_use_the_seven_day_window() {
+    let weekly_reset = t0() + chrono::Duration::days(3);
+    let mut r = response(Some(80.0), Some((30.0, Some(weekly_reset))));
+    r.five_hour.as_mut().unwrap().resets_at = Some(t0() + chrono::Duration::hours(2));
+    let rig = RigBuilder::scripted(vec![Ok((r, t0()))]).build();
+    assert_eq!(rig.poller.overview_used_percent(), None);
+
+    rig.poller.refresh_now().await;
+
+    assert_eq!(rig.poller.headline_used_percent(), Some(80.0));
+    assert_eq!(rig.poller.overview_used_percent(), Some(30.0));
+    assert_eq!(rig.poller.overview_resets_at(), Some(weekly_reset));
+}
+
+/// Without a seven-day window the card shows 0% and no reset (Swift `?? 0`).
+#[tokio::test]
+async fn test_overview_values_without_seven_day_window() {
+    let rig = RigBuilder::scripted(vec![Ok((response(Some(80.0), None), t0()))]).build();
+    rig.poller.refresh_now().await;
+    assert_eq!(rig.poller.overview_used_percent(), Some(0.0));
+    assert_eq!(rig.poller.overview_resets_at(), None);
+}

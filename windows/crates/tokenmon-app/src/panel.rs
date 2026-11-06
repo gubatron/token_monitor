@@ -277,7 +277,7 @@ pub fn card_inputs(
         .into_iter()
         .filter_map(|p| {
             let poller = &model.registry().entry(p)?.poller;
-            let percent = poller.headline_used_percent();
+            let percent = poller.overview_used_percent();
             let state = sessions.signed_in(p);
             let (key_usage_usd, has_budget_source, remaining_usd) = openrouter
                 .filter(|_| p == ProviderId::OpenRouter)
@@ -286,7 +286,7 @@ pub fn card_inputs(
                 provider: p,
                 has_snapshot: percent.is_some(),
                 percent,
-                reset_at: poller.headline_resets_at(),
+                reset_at: poller.overview_resets_at(),
                 signed_in: state,
                 needs_sign_in: !state,
                 key_usage_usd,
