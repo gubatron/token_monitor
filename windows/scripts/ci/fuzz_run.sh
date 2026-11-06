@@ -33,6 +33,11 @@ done
 
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 fuzz_dir=fuzz
+# cargo-fuzz defaults --target to the triple it was itself built for; the
+# release binary is musl, and ASan cannot link a static musl libc. Always
+# fuzz for the toolchain's host triple instead.
+host=$(rustc -vV | sed -n 's/^host: //p')
+target_args=(--target "$host")
 mkdir -p "$out/rows" "$out/logs" "$out/crashes"
 
 if [ ${#targets[@]} -eq 0 ]; then
@@ -56,7 +61,7 @@ fi
 build_args=()
 [ ${#targets[@]} -eq 1 ] && build_args=("${targets[0]}")
 echo "::group::cargo fuzz build"
-if ! cargo fuzz build --fuzz-dir "$fuzz_dir" "${build_args[@]}" 2>&1 | tee "$out/logs/build.log"; then
+if ! cargo fuzz build --fuzz-dir "$fuzz_dir" "${target_args[@]}" "${build_args[@]}" 2>&1 | tee "$out/logs/build.log"; then
   echo "::endgroup::"
   # fuzz_report.py table --build-failed-log shows this instead of an empty table.
   cp "$out/logs/build.log" "$out/build-failed.log"
@@ -74,7 +79,7 @@ for target in "${targets[@]}"; do
 
   echo "::group::fuzz $target (${seconds}s, corpus $before)"
   started=$SECONDS
-  cargo fuzz run --fuzz-dir "$fuzz_dir" "$target" "$corpus" -- \
+  cargo fuzz run --fuzz-dir "$fuzz_dir" "${target_args[@]}" "$target" "$corpus" -- \
     -max_total_time="$seconds" -print_final_stats=1 -timeout=10 -rss_limit_mb=2048 \
     >"$log" 2>&1
   status=$?
@@ -90,7 +95,7 @@ for target in "${targets[@]}"; do
     cp "$original" "$out/crashes/$target/"
     reported=$original
     # Minimize; tmin keeps the original when it cannot shrink it.
-    if timeout 120 cargo fuzz tmin --fuzz-dir "$fuzz_dir" -r 2000 "$target" "$original" \
+    if timeout 120 cargo fuzz tmin --fuzz-dir "$fuzz_dir" "${target_args[@]}" -r 2000 "$target" "$original" \
         >"$out/logs/$target.tmin.log" 2>&1; then
       minimized=$(find "$artifacts" -maxdepth 1 -type f -name 'minimized-from-*' | head -n 1)
       if [ -n "$minimized" ]; then
@@ -101,7 +106,7 @@ for target in "${targets[@]}"; do
     crash_args=(--crash "$reported" --original-crash "$original")
   elif [ "$cmin" = 1 ] && [ "$status" = 0 ]; then
     echo "::group::cmin $target"
-    cargo fuzz cmin --fuzz-dir "$fuzz_dir" "$target" "$corpus" >"$out/logs/$target.cmin.log" 2>&1 \
+    cargo fuzz cmin --fuzz-dir "$fuzz_dir" "${target_args[@]}" "$target" "$corpus" >"$out/logs/$target.cmin.log" 2>&1 \
       || echo "cmin failed for $target (corpus kept as is)"
     tail -n 5 "$out/logs/$target.cmin.log"
     echo "::endgroup::"
