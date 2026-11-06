@@ -36,7 +36,12 @@ fuzz_target!(|ops: Vec<Op>| {
     let mut latest = base;
     for op in ops.iter().take(256) {
         match op {
-            Op::Record { pct, hours, start, reset } => {
+            Op::Record {
+                pct,
+                hours,
+                start,
+                reset,
+            } => {
                 let at = base + Duration::hours(i64::from(*hours));
                 latest = latest.max(at);
                 let used = f64::from(*pct) / 100.0;
@@ -56,8 +61,18 @@ fuzz_target!(|ops: Vec<Op>| {
                 daily.clear();
             }
         }
-        assert!(hourly.hour_weights().iter().all(|w| w.is_finite() && *w >= 0.0));
-        assert!(daily.day_totals().values().all(|v| v.is_finite() && *v >= 0.0));
+        assert!(
+            hourly
+                .hour_weights()
+                .iter()
+                .all(|w| w.is_finite() && *w >= 0.0)
+        );
+        assert!(
+            daily
+                .day_totals()
+                .values()
+                .all(|v| v.is_finite() && *v >= 0.0)
+        );
     }
     let reloaded = DailyQuotaDeltaStore::new(db, "d", clock);
     assert_eq!(reloaded.day_totals(), daily.day_totals());
