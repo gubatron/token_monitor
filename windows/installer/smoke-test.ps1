@@ -70,10 +70,12 @@ function Get-ValueOrNull([string] $Key, [string] $Name) {
 # MSI registers through Windows Installer, not HKCU\...\Uninstall, so ask it.
 function Get-ArpEntries {
   $installer = New-Object -ComObject WindowsInstaller.Installer
-  foreach ($code in (Get-RelatedProducts)) {
+  foreach ($related in (Get-RelatedProducts)) {
+    # COM wants plain BSTRs; a PSObject-wrapped string is a type mismatch.
+    $code = [string] $related
     $info = @{}
     foreach ($prop in @('ProductName', 'VersionString', 'InstallLocation', 'AssignmentType')) {
-      $info[$prop] = $installer.GetType().InvokeMember('ProductInfo', 'GetProperty', $null, $installer, @($code, $prop))
+      $info[$prop] = $installer.GetType().InvokeMember('ProductInfo', 'GetProperty', $null, $installer, [object[]] @($code, [string] $prop))
     }
     [pscustomobject]@{
       ProductCode     = $code
@@ -88,7 +90,7 @@ function Get-ArpEntries {
 function Get-RelatedProducts {
   $installer = New-Object -ComObject WindowsInstaller.Installer
   $products = $installer.GetType().InvokeMember('RelatedProducts', 'GetProperty', $null, $installer, @($UpgradeCode))
-  return @($products | ForEach-Object { $_ })
+  return @($products | ForEach-Object { [string] $_ })
 }
 
 function Get-Aumid([string] $Path) {
