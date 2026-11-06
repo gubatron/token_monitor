@@ -66,10 +66,23 @@ function Get-ValueOrNull([string] $Key, [string] $Name) {
   return $item.$Name
 }
 
+# Installed TokenMon products as Programs and Features shows them. A per-user
+# MSI registers through Windows Installer, not HKCU\...\Uninstall, so ask it.
 function Get-ArpEntries {
-  Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' -ErrorAction SilentlyContinue |
-    ForEach-Object { Get-ItemProperty $_.PSPath } |
-    Where-Object { $_.PSObject.Properties['DisplayName'] -and $_.DisplayName -eq 'TokenMon' }
+  $installer = New-Object -ComObject WindowsInstaller.Installer
+  foreach ($code in (Get-RelatedProducts)) {
+    $info = @{}
+    foreach ($prop in @('ProductName', 'VersionString', 'InstallLocation', 'AssignmentType')) {
+      $info[$prop] = $installer.GetType().InvokeMember('ProductInfo', 'GetProperty', $null, $installer, @($code, $prop))
+    }
+    [pscustomobject]@{
+      ProductCode     = $code
+      DisplayName     = $info['ProductName']
+      DisplayVersion  = $info['VersionString']
+      InstallLocation = $info['InstallLocation']
+      PerUser         = ($info['AssignmentType'] -eq '0')
+    }
+  }
 }
 
 function Get-RelatedProducts {
@@ -112,8 +125,10 @@ if (Test-Path $Lnk) {
   Check 'shortcut System.AppUserModel.ID is TokenMon' ($aumid -ceq 'TokenMon') "'$aumid'"
 }
 $arp = @(Get-ArpEntries)
-Check 'one per-user ARP entry' ($arp.Count -eq 1) "count $($arp.Count)"
+Check 'one ARP entry' ($arp.Count -eq 1) "count $($arp.Count)"
 if ($arp.Count -ge 1) {
+  Check 'ARP name is TokenMon' ($arp[0].DisplayName -eq 'TokenMon') $arp[0].DisplayName
+  Check 'installed per user' $arp[0].PerUser
   Check "ARP version is $Version" ($arp[0].DisplayVersion -eq $Version) $arp[0].DisplayVersion
   Check 'ARP install location' ($arp[0].InstallLocation -ieq "$InstallDir\") $arp[0].InstallLocation
 }
@@ -121,9 +136,11 @@ Check 'nothing installed per machine' (-not (Test-Path (Join-Path $env:ProgramFi
 $related = @(Get-RelatedProducts)
 Check 'installed under the recorded UpgradeCode' ($related.Count -eq 1) "$UpgradeCode -> $($related -join ', ')"
 
-# 2. What the app writes at run time.
+# 2. What the app writes at run time (a fresh runner may lack these keys).
+foreach ($k in @($RunKey, $ApprovedKey)) {
+  if (-not (Test-Path $k)) { New-Item -Path $k -Force | Out-Null }
+}
 Set-ItemProperty -Path $RunKey -Name TokenMon -Value "`"$Exe`" --background"
-New-Item -Force $ApprovedKey | Out-Null
 New-ItemProperty -Force -Path $ApprovedKey -Name TokenMon -PropertyType Binary -Value ([byte[]](2,0,0,0,0,0,0,0,0,0,0,0)) | Out-Null
 New-Item -Force "$VerbKey\command" | Out-Null
 Set-ItemProperty -Path "$VerbKey\command" -Name '(default)' -Value "`"$Exe`" --show"
