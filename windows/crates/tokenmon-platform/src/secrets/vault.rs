@@ -103,6 +103,11 @@ impl Vault {
         );
         if self.write(&next) {
             inner.state = State::Loaded(next);
+            // A queued removal predates this write; replaying it after a
+            // restart would delete the secret just saved (#39).
+            if inner.pending.remove(account) {
+                self.persist_pending(&inner.pending);
+            }
             true
         } else {
             false
