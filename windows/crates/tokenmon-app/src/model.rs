@@ -152,6 +152,18 @@ impl AppModel {
         }
     }
 
+    /// Makes the menu-open state match whether a panel window is actually
+    /// visible. A window can disappear without the shell's own hide path
+    /// (Alt+F4, a close request), which would leave the pollers on the active
+    /// cadence for good. Returns whether the state changed.
+    pub fn sync_menu_open(&self, panel_visible: bool) -> bool {
+        if self.is_menu_open() == panel_visible {
+            return false;
+        }
+        self.set_menu_open(panel_visible);
+        true
+    }
+
     /// `signInCompleted(p)`: refreshes every poller sharing `p`'s session, so a
     /// Cursor sign-in refreshes Cursor and Grokbot.
     pub fn sign_in_completed(&self, provider: ProviderId) -> Vec<JoinHandle<()>> {
@@ -222,8 +234,10 @@ impl AppModel {
     pub fn watch_settings(self: &Arc<Self>) -> JoinHandle<()> {
         let model = Arc::clone(self);
         let mut rx = self.settings.subscribe();
+        // Read the starting value here, not in the task: a change between this
+        // call and the task's first run must still count as a change.
+        let initial = rx.borrow_and_update().clone();
         self.handle.spawn(async move {
-            let initial = rx.borrow_and_update().clone();
             let mut polling = PollingInputs::of(&initial);
             let mut graphs = graph_providers(&initial);
             while rx.changed().await.is_ok() {
