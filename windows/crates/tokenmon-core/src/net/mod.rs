@@ -11,9 +11,9 @@
 //! * `request`: header building and the status to [`UsageError`] mapping.
 //! * `http`: [`ProviderHttp`], the `reqwest` wrapper providers call.
 //!
-//! Cancellation: Swift throws `CancellationError`; in Rust a cancelled request
-//! is a dropped future, so there is no error value. Pollers that need the
-//! "skipped" outcome decide that from their own cancellation signal.
+//! Cancellation: Swift throws `CancellationError`. Here [`with_cancellation`]
+//! drops the request future and returns [`ProviderError::Cancelled`], which
+//! pollers classify as skipped (`ProviderError::is_cancelled`).
 
 pub mod detect;
 pub mod domain;
@@ -27,7 +27,10 @@ pub use detect::{
 };
 pub use domain::Domain;
 pub use error::{ProviderError, ProviderErrorContext, UsageError};
-pub use http::{HttpResponse, ProviderHttp, RequestOptions, json_object, set_cookie_headers};
+pub use http::{
+    HttpResponse, ProviderHttp, RequestOptions, json_object, set_cookie_headers,
+    split_folded_set_cookie, with_cancellation,
+};
 pub use request::{
     HeaderBuildError, apply_extra_headers, bot_challenge_message, build_headers, map_error,
     response_error, user_agent,

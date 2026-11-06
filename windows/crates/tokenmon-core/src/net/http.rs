@@ -92,6 +92,72 @@ pub fn set_cookie_headers(headers: &HeaderMap) -> Vec<String> {
         .collect()
 }
 
+/// Splits one comma-folded `Set-Cookie` value (Foundation joins repeated
+/// headers with `, `) back into individual cookies.
+///
+/// A comma separates cookies only when the text after it, up to the next `;`
+/// or `,`, contains `=`; this keeps `Expires=Wed, 21 Oct 2015 ...` intact.
+/// Total over arbitrary input; empty pieces are dropped.
+///
+/// # Examples
+///
+/// ```
+/// use tokenmon_core::net::split_folded_set_cookie;
+///
+/// let v = "a=1; Expires=Wed, 21 Oct 2015 07:28:00 GMT; Path=/, b=2; Secure";
+/// assert_eq!(
+///     split_folded_set_cookie(v),
+///     ["a=1; Expires=Wed, 21 Oct 2015 07:28:00 GMT; Path=/", "b=2; Secure"]
+/// );
+/// ```
+pub fn split_folded_set_cookie(value: &str) -> Vec<String> {
+    let mut parts = Vec::new();
+    let mut start = 0;
+    for (i, _) in value.match_indices(',') {
+        let rest = &value[i + 1..];
+        let seg_end = rest.find([';', ',']).unwrap_or(rest.len());
+        if rest[..seg_end].contains('=') {
+            parts.push(&value[start..i]);
+            start = i + 1;
+        }
+    }
+    parts.push(&value[start..]);
+    parts
+        .into_iter()
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+        .map(str::to_owned)
+        .collect()
+}
+
+/// Runs `request` until it finishes or `cancel` resolves, whichever is first.
+///
+/// When `cancel` wins the request future is dropped (aborting the transfer)
+/// and [`ProviderError::Cancelled`] is returned.
+///
+/// # Examples
+///
+/// ```
+/// use tokenmon_core::{ProviderError, net::with_cancellation};
+///
+/// # futures::executor::block_on(async {
+/// let r: Result<u8, _> = with_cancellation(async {}, std::future::pending()).await;
+/// assert_eq!(r, Err(ProviderError::Cancelled));
+/// let r = with_cancellation(std::future::pending(), async { Ok::<_, ProviderError>(1) }).await;
+/// assert_eq!(r, Ok(1));
+/// # });
+/// ```
+pub async fn with_cancellation<T>(
+    cancel: impl Future<Output = ()>,
+    request: impl Future<Output = Result<T, ProviderError>>,
+) -> Result<T, ProviderError> {
+    use futures::future::{Either, select};
+    match select(Box::pin(cancel), Box::pin(request)).await {
+        Either::Left(_) => Err(ProviderError::Cancelled),
+        Either::Right((result, _)) => result,
+    }
+}
+
 /// Parses a body that must be a JSON **object** (spec `ProviderHTTP.jsonObject`).
 ///
 /// # Errors

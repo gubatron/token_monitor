@@ -9,10 +9,10 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
-tokenmon-core = { path = "../crates/tokenmon-core" }
+chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
+reqwest = { version = "0.13", default-features = false }
 tokenmon-platform = { path = "../crates/tokenmon-platform" }
 tokenmon-core = { path = "../crates/tokenmon-core" }
-chrono = { version = "0.4", default-features = false, features = ["std"] }
 
 # Own workspace: nightly-only, never built by the stable workspace gate.
 [workspace]
@@ -51,3 +51,21 @@ path = "fuzz_targets/tokenmon_core_overview_history.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "net_retry_after"
+path = "fuzz_targets/net_retry_after.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "net_challenge"
+path = "fuzz_targets/net_challenge.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "net_set_cookie"
+path = "fuzz_targets/net_set_cookie.rs"
+test = false
+doc = false

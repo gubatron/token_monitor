@@ -175,9 +175,18 @@ pub enum ProviderError {
         /// The original error.
         usage: UsageError,
     },
+    /// The request future was cancelled (see `with_cancellation`). Pollers
+    /// classify this as a skipped refresh, not a failure.
+    #[error("Request cancelled")]
+    Cancelled,
 }
 
 impl ProviderError {
+    /// True for [`ProviderError::Cancelled`]: the poller reports `Skipped`.
+    pub fn is_cancelled(&self) -> bool {
+        matches!(self, Self::Cancelled)
+    }
+
     /// Wraps a generic [`UsageError`] in the wording of `context` (spec
     /// `ProviderError.init(usageError:context:)`).
     ///
@@ -223,6 +232,7 @@ impl ProviderError {
             Self::BadResponse(_, m) => UsageError::BadResponse(m.clone()),
             Self::Network(_, m) => UsageError::Network(m.clone()),
             Self::Custom { usage, .. } => usage.clone(),
+            Self::Cancelled => UsageError::Network("Request cancelled".into()),
         }
     }
 }
