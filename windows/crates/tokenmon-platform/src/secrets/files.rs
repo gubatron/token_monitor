@@ -7,10 +7,13 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use tokenmon_core::{CredentialKey, CredentialStore, CredentialStoreError};
 
+use super::secure_file::create_new_owner_only;
+
 static TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 /// Writes `bytes` to `path` atomically: a staging file in the same directory
-/// (owner-only mode 0600 on Unix; inherited per-user ACL on Windows), synced,
+/// (created owner-only: mode 0600 on Unix, a protected current-user-only DACL
+/// on Windows, applied at creation so there is no window with a wider ACL), synced,
 /// then renamed over the target. On failure no staging file is left behind and
 /// a missing directory is an error (it is never created).
 pub fn atomic_write(path: &Path, bytes: &[u8]) -> io::Result<()> {
@@ -21,11 +24,7 @@ pub fn atomic_write(path: &Path, bytes: &[u8]) -> io::Result<()> {
     let n = TMP_COUNTER.fetch_add(1, Ordering::Relaxed);
     let tmp = path.with_file_name(format!(".{name}.{}-{n}.tmp", std::process::id()));
     let result = (|| {
-        let mut opts = fs::OpenOptions::new();
-        opts.write(true).create_new(true);
-        #[cfg(unix)]
-        std::os::unix::fs::OpenOptionsExt::mode(&mut opts, 0o600);
-        let mut f = opts.open(&tmp)?;
+        let mut f = create_new_owner_only(&tmp)?;
         f.write_all(bytes)?;
         f.sync_all()?;
         drop(f);
