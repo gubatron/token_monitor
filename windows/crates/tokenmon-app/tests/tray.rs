@@ -121,3 +121,91 @@ fn test_menu_and_panel_targets() {
     );
     assert_eq!(panel_target(MenuAction::Quit), None);
 }
+
+/// Every menu item maps to one command, Settings included.
+#[test]
+fn test_menu_items_map_to_commands() {
+    use tokenmon_app::tray::{MenuCommand, menu_command};
+    assert_eq!(
+        menu_command(MenuAction::OpenProvider(ProviderId::Claude)),
+        MenuCommand::Show(ProviderId::Claude)
+    );
+    assert_eq!(
+        menu_command(MenuAction::OpenOverview),
+        MenuCommand::Show(ProviderId::Overview)
+    );
+    assert_eq!(
+        menu_command(MenuAction::Settings),
+        MenuCommand::OpenSettings
+    );
+    assert_eq!(
+        menu_command(MenuAction::CheckForUpdates),
+        MenuCommand::CheckForUpdates
+    );
+    assert_eq!(menu_command(MenuAction::Quit), MenuCommand::Quit);
+}
+
+/// The menu lists Open items only for enabled providers, then Overview,
+/// Settings, Check for Updates and Quit.
+#[test]
+fn test_context_menu_lists_enabled_providers_and_fixed_items() {
+    let all = context_menu(&Settings::default());
+    let labels = |m: &[MenuEntry]| -> Vec<String> {
+        m.iter()
+            .filter_map(|e| match e {
+                MenuEntry::Item { label, .. } => Some(label.clone()),
+                MenuEntry::Separator => None,
+            })
+            .collect()
+    };
+    let l = labels(&all);
+    assert!(l.contains(&"Open Overview".to_owned()));
+    assert!(l.contains(&"Settings\u{2026}".to_owned()));
+    assert!(l.contains(&"Check for Updates".to_owned()));
+    assert_eq!(l.last().map(String::as_str), Some("Quit TokenMon"));
+    assert_eq!(l.iter().filter(|x| x.starts_with("Open ")).count(), 8);
+}
+
+/// The icon size follows `SM_CXSMICON` and falls back to DPI scaling.
+#[test]
+fn test_icon_size_follows_the_system_metric_and_dpi() {
+    use tokenmon_app::tray::icon_size;
+    assert_eq!(icon_size(16, 96), TrayIconSize::Px16);
+    assert_eq!(icon_size(20, 120), TrayIconSize::Px20);
+    assert_eq!(icon_size(0, 192), TrayIconSize::Px32);
+    assert_eq!(icon_size(0, 0), TrayIconSize::Px16);
+}
+
+/// The panel opens above the icon when it fits, below when it does not, and
+/// never leaves the work area.
+#[test]
+fn test_panel_placement_clamps_to_the_work_area() {
+    use tokenmon_app::tray::{PANEL_GAP, Rect, place_panel};
+    let work = Rect {
+        x: 0,
+        y: 0,
+        width: 1920,
+        height: 1040,
+    };
+    // Bottom taskbar: anchor at the icon's top, room above; the 8 px gap would
+    // reach into the taskbar, so the panel is held to the work area's bottom.
+    let (x, y) = place_panel((1000, 1050), (420, 600), work);
+    assert_eq!((x, y), (790, 440));
+    let (_, y) = place_panel((1000, 800), (420, 600), work);
+    assert_eq!(y, 800 - 600 - PANEL_GAP);
+    // Icon near the right edge: clamp so the panel stays on screen.
+    let (x, _) = place_panel((1915, 1050), (420, 600), work);
+    assert_eq!(x, 1920 - 420);
+    // Top taskbar: not enough room above, so it opens below.
+    let top = Rect {
+        x: 0,
+        y: 40,
+        width: 1920,
+        height: 1040,
+    };
+    let (_, y) = place_panel((900, 40), (420, 600), top);
+    assert_eq!(y, 40 + PANEL_GAP);
+    // Taller than the work area: pinned to the top left.
+    let (x, y) = place_panel((100, 500), (420, 5000), work);
+    assert_eq!((x, y), (0, 0));
+}
