@@ -20,7 +20,9 @@ use tokenmon_provider_grok::provider_poller::GrokProviderPoller;
 use tokenmon_provider_grokbot::GrokbotUsagePoller;
 use tokenmon_provider_opencode::poller::OpenCodeUsagePoller;
 use tokenmon_provider_opencode::snapshot::WindowKind;
-use tokenmon_provider_opencode::stats::{overview_hour_token_counts, overview_quota_hour_weights};
+use tokenmon_provider_opencode::stats::{
+    DayHourlyUsage, overview_hour_token_counts, overview_quota_hour_weights,
+};
 use tokenmon_provider_openrouter::OpenRouterUsagePoller;
 use tokenmon_ui::panels::claude_chatgpt::{
     ChatGptSnapshotInput, ClaudeCodeInput, ClaudeSnapshotInput,
@@ -310,17 +312,36 @@ pub fn opencode_hourly(poller: &Arc<OpenCodeUsagePoller>, clock: Arc<dyn Clock>)
                     .map(|w| w.limit_usd)
             })
             .unwrap_or(DEFAULT_MONTHLY_LIMIT_USD);
-        let weights = overview_quota_hour_weights(&usage, limit);
-        let tokens = overview_hour_token_counts(&usage);
-        let as_tokens = |v: [f64; 24]| v.iter().map(|t| *t as i64).collect::<Vec<_>>();
-        Some(TodayPart::OpenCode(OpenCodeDay {
-            day: cal.date_of(clock.now()),
-            go_weights: weights.go.to_vec(),
-            zen_weights: weights.zen.to_vec(),
-            go_tokens: as_tokens(tokens.go),
-            zen_tokens: as_tokens(tokens.zen),
-        }))
+        opencode_today_part(&usage, limit, clock.now(), cal)
     })
+}
+
+/// OpenCode's Overview part for `now`, or `None` when the stacks were built
+/// for another local day (#68).
+///
+/// The poller's stacks go stale at local midnight until its next poll
+/// rebuilds them (up to an hour when idle); stamping them with today's date
+/// would record yesterday's hours as today's, and the history merges by max so
+/// the wrong values would stay.
+pub fn opencode_today_part(
+    usage: &DayHourlyUsage,
+    monthly_limit_usd: f64,
+    now: DateTime<Utc>,
+    cal: &Calendar<'_>,
+) -> Option<TodayPart> {
+    if !usage.is_for_day_of(now, cal) {
+        return None;
+    }
+    let weights = overview_quota_hour_weights(usage, monthly_limit_usd);
+    let tokens = overview_hour_token_counts(usage);
+    let as_tokens = |v: [f64; 24]| v.iter().map(|t| *t as i64).collect::<Vec<_>>();
+    Some(TodayPart::OpenCode(OpenCodeDay {
+        day: usage.day,
+        go_weights: weights.go.to_vec(),
+        zen_weights: weights.zen.to_vec(),
+        go_tokens: as_tokens(tokens.go),
+        zen_tokens: as_tokens(tokens.zen),
+    }))
 }
 
 /// Grokbot's hourly weights from its publisher's store.
