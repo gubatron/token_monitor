@@ -112,3 +112,24 @@ path = "fuzz_targets/openrouter_activity.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "opencode_console"
+path = "fuzz_targets/opencode_console.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "opencode_model_name"
+path = "fuzz_targets/opencode_model_name.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "opencode_bounds"
+path = "fuzz_targets/opencode_bounds.rs"
+test = false
+doc = false
+bench = false

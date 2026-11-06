@@ -32,7 +32,8 @@ pub mod captions {
     /// Local database could not be read.
     pub const LOCAL_UNREADABLE: &str = "Could not read local OpenCode usage.";
     /// Panel caption under the bars when estimated.
-    pub const ESTIMATED_BAR: &str = "Estimated from local sessions \u{2014} sign in for console accuracy.";
+    pub const ESTIMATED_BAR: &str =
+        "Estimated from local sessions \u{2014} sign in for console accuracy.";
     /// Data source label for console data.
     pub const SOURCE_CONSOLE: &str = "OpenCode console";
     /// Data source label for local data.
