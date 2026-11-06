@@ -310,10 +310,14 @@ fn test_zen_does_not_count_toward_go_limits() {
 #[test]
 fn test_rolling_reset_tracks_last_eligible_session() {
     let mut f = Fixture::new();
-    f.insert("g", Msg::go("", NOW - H, "minimax-m3", 1.0), false);
+    // Two Go sessions (4h and 1h ago): the reset follows the later one, so
+    // "first eligible" would give a different answer.
+    f.insert("first", Msg::go("", NOW - 4 * H, "m", 1.0), false);
+    f.insert("g", Msg::go("", NOW - H, "m", 1.0), false);
+    // Zen activity does not drive the Go rolling reset clock.
     f.insert(
         "z",
-        Msg::go("", NOW - 600, "minimax-m3", 1.0).provider("opencode"),
+        Msg::go("", NOW - 600, "free", 5.0).provider("opencode"),
         false,
     );
     let snap = snapshot(&scan_of(&f), at(NOW));
