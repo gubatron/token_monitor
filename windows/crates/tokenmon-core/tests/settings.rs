@@ -157,6 +157,25 @@ fn test_threshold_alert_keeps_alert_providers_polling() {
     assert_eq!(polling(&s), vec![Claude]);
 }
 
+/// Swift `testAlertProvidersLimitAlertPolling`, step for step on persisted
+/// settings: leaving a provider out of the alert stops polling for it,
+/// `alertWatches` follows, and the choice survives a reopen.
+#[test]
+fn test_alert_providers_limit_alert_polling_and_persist() {
+    let (dir, settings) = fresh();
+    settings.set_selected_provider(Grok);
+    settings.set_threshold_enabled(true);
+    assert!(settings.snapshot().needs_polling(ChatGpt));
+    let mut remaining = settings.snapshot().alert_providers;
+    remaining.remove(&ChatGpt);
+    settings.set_alert_providers(&remaining);
+    let now = settings.snapshot();
+    assert!(!now.needs_polling(ChatGpt));
+    assert!(!now.alert_watches(ChatGpt));
+    assert!(now.alert_watches(Claude));
+    assert!(!reopen(&dir).snapshot().alert_providers.contains(&ChatGpt));
+}
+
 /// A disabled provider never polls, even with its bar pinned.
 #[test]
 fn test_disabled_provider_does_not_poll() {
