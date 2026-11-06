@@ -141,3 +141,62 @@ fn test_session_persists_in_the_vault() {
     open().grok.save("sso=1; sso-rw=2").expect("saved");
     assert!(open().grok.state().is_signed_in);
 }
+
+/// A full Grok sign-in through the headless window: landing on grok.com with
+/// an `sso` cookie adopts the session, signs it in and reports completion.
+#[test]
+fn test_grok_sign_in_adopts_the_captured_session_and_completes() {
+    use std::time::Duration;
+    use tokenmon_platform::webauth::{Input, ViewKind, WebCookie};
+
+    let r = rig();
+    r.service.start(ProviderId::Grok).expect("opens");
+    let headless = r
+        .host
+        .sessions
+        .lock()
+        .expect("lock")
+        .get("grok")
+        .cloned()
+        .expect("window");
+    {
+        let mut w = headless.lock().expect("lock");
+        w.set_cookies(vec![WebCookie::new("sso", "token", ".grok.com")]);
+        for url in ["https://accounts.x.ai/sign-in", "https://grok.com/"] {
+            w.send(Input::NavigationFinished {
+                view: ViewKind::Main,
+                url: url.to_owned(),
+            });
+        }
+        w.advance(Duration::from_secs(5));
+    }
+    assert!(r.sessions.grok.state().is_signed_in);
+    assert_eq!(*r.completed.lock().expect("lock"), vec![ProviderId::Grok]);
+}
+
+/// Each provider's predicates tell sign-in pages from the signed-in return
+/// page.
+#[test]
+fn test_return_page_predicates_follow_each_provider() {
+    let page = |p: ProviderId, url: &str| {
+        let c = sign_in_config(p).expect("config");
+        (c.is_return_page)(&url::Url::parse(url).expect("url"))
+    };
+    assert!(page(ProviderId::Grok, "https://grok.com/"));
+    assert!(!page(ProviderId::Grok, "https://accounts.x.ai/sign-in"));
+    assert!(page(ProviderId::Claude, "https://claude.ai/new"));
+    assert!(!page(ProviderId::Claude, "https://claude.ai/login"));
+    assert!(page(ProviderId::ChatGpt, "https://chatgpt.com/"));
+    assert!(page(
+        ProviderId::Cursor,
+        "https://cursor.com/dashboard/usage"
+    ));
+    assert!(page(
+        ProviderId::OpenCode,
+        "https://opencode.ai/console/wrk_1"
+    ));
+    assert!(!page(
+        ProviderId::OpenCode,
+        "https://opencode.ai/console/login"
+    ));
+}
