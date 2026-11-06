@@ -84,7 +84,7 @@ impl Encryptor for DpapiEncryptor {
         let ok = unsafe {
             CryptUnprotectData(
                 &raw const input,
-                null(),
+                null_mut(),
                 &raw const entropy,
                 null(),
                 null(),

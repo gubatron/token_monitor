@@ -136,3 +136,10 @@ path = "fuzz_targets/opencode_bounds.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "platform_vault_decode"
+path = "fuzz_targets/platform_vault_decode.rs"
+test = false
+doc = false
+bench = false
