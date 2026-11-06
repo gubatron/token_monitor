@@ -41,9 +41,10 @@ target_args=(--target "$host")
 mkdir -p "$out/rows" "$out/logs" "$out/crashes"
 
 if [ ${#targets[@]} -eq 0 ]; then
-  # A failing `cargo fuzz list` (e.g. a broken manifest) must not read as
-  # "no targets": record it as a build failure.
-  if ! listing=$(cargo fuzz list --fuzz-dir "$fuzz_dir" 2>"$out/logs/list.log"); then
+  # Targets are src/bin/*.rs (autodiscovered; `cargo fuzz list` only sees
+  # [[bin]] entries). A failing listing (e.g. a broken manifest) must not read
+  # as "no targets": record it as a build failure.
+  if ! listing=$(python3 -I "$(dirname "$0")/fuzz_targets.py" --names "$fuzz_dir/Cargo.toml" 2>"$out/logs/list.log"); then
     cat "$out/logs/list.log"
     cp "$out/logs/list.log" "$out/build-failed.log"
     exit 1
