@@ -131,18 +131,24 @@ impl Sessions {
         }
     }
 
-    /// Whether `provider` has a usable session (signed in and not asked to
-    /// sign in again).
-    pub fn signed_in(&self, provider: ProviderId) -> bool {
+    /// The auth state of the session `provider` authenticates with (Grokbot
+    /// reports Cursor's).
+    pub fn auth_state(&self, provider: ProviderId) -> tokenmon_core::AuthSessionState {
         use tokenmon_core::AuthSession;
-        let state = match provider.sign_in_provider() {
+        match provider.sign_in_provider() {
             ProviderId::Grok => self.grok.state(),
             ProviderId::Cursor => self.cursor.state(),
             ProviderId::Claude => self.claude.state(),
             ProviderId::ChatGpt => self.chatgpt.state(),
             ProviderId::OpenCode => self.opencode.state(),
             _ => self.openrouter.state(),
-        };
+        }
+    }
+
+    /// Whether `provider` has a usable session (signed in and not asked to
+    /// sign in again).
+    pub fn signed_in(&self, provider: ProviderId) -> bool {
+        let state = self.auth_state(provider);
         state.is_signed_in && !state.needs_sign_in
     }
 

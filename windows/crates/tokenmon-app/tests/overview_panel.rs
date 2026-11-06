@@ -34,19 +34,25 @@ fn build(dir: &std::path::Path) -> App {
 async fn test_overview_cards_follow_visible_providers() {
     let dir = tempfile::tempdir().expect("tempdir");
     let app = build(dir.path());
-    let cards = tokenmon_app::panel::card_inputs(&app.model, &app.sessions);
+    let cards = tokenmon_app::panel::card_inputs(&app.model, &app.sessions, None);
     let visible = app.settings.snapshot().visible_usage_providers();
     assert_eq!(
         cards.iter().map(|c| c.provider).collect::<Vec<_>>(),
         visible
     );
     assert!(cards.iter().all(|c| !c.signed_in && c.needs_sign_in));
+    let store = tokenmon_app::overview::OverviewStore::open(dir.path());
+    let env = tokenmon_app::panel::ViewEnv {
+        model: &app.model,
+        sessions: &app.sessions,
+        overview: &store,
+        version: "1.2.3",
+        now: chrono::Utc::now(),
+        tz: chrono::FixedOffset::east_opt(0).expect("utc"),
+    };
     let vm = tokenmon_app::panel::overview(
-        &app.model,
-        &app.sessions,
-        "1.2.3",
-        chrono::Utc::now(),
-        chrono::FixedOffset::east_opt(0).expect("utc"),
+        &env,
+        &tokenmon_app::panel::PanelState::new(tokenmon_core::ProviderId::Overview),
     );
     assert_eq!(vm.cards.len(), visible.len());
     assert_eq!(vm.version_text, "v1.2.3");
