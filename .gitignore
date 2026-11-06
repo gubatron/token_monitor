@@ -28,3 +28,6 @@ auth.json
 
 # Local-only plan
 PLAN.md
+
+# fuzz seed corpora are committed even when they are zips
+!windows/fuzz/corpus/**/*.zip
