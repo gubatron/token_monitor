@@ -20,6 +20,8 @@ pub enum StartupFailure {
     /// The single-instance pipe could not be created, so a second launch could
     /// never reach this instance.
     Pipe(String),
+    /// The runtime, data folder or services could not be set up.
+    Assembly(String),
 }
 
 impl StartupFailure {
@@ -35,6 +37,10 @@ impl StartupFailure {
             Self::Tray(e) => format!(
                 "TokenMon could not create its tray icon ({e}).\n\nIf Windows Explorer is \
                  still starting, start TokenMon again in a moment. The log is in \
+                 %LOCALAPPDATA%\\TokenMon\\logs."
+            ),
+            Self::Assembly(e) => format!(
+                "TokenMon could not set itself up ({e}).\n\nThe log is in \
                  %LOCALAPPDATA%\\TokenMon\\logs."
             ),
             Self::Pipe(e) => format!(

@@ -50,6 +50,7 @@ use crate::app::{App, AppInputs};
 use crate::overview::{OverviewStore, next_midnight, record_live};
 use crate::panel::{Action, PanelState, PanelView, ViewEnv, build_view, commit_api_key};
 use crate::settings_host::{AppHost, AppSettingsBackend, HostParts};
+use crate::startup::{PendingShow, StartupFailure, retry};
 use crate::tray::{
     MenuCommand, PANEL_GAP, TrayBackend, TrayController, TrayData, context_menu, icon_size,
     menu_command, place_panel,
@@ -58,6 +59,7 @@ use crate::updates::UpdateService;
 
 mod display;
 mod panels;
+mod system;
 mod theme;
 
 use panels::PanelWindow;
@@ -69,9 +71,15 @@ const REOPEN_GUARD: Duration = Duration::from_millis(300);
 /// How often the UI tick runs (tray state, live panel, rollover).
 const TICK: Duration = Duration::from_secs(2);
 
-/// The Overview history is saved every this many ticks while the panel is
-/// closed.
-const RECORD_EVERY_TICKS: u32 = 30;
+/// Tray icon creation is retried this many times (one second apart) before
+/// giving up: right after logon Explorer's taskbar may not exist yet.
+const TRAY_ATTEMPTS: u32 = 5;
+
+/// Longest the exit waits for blocking scans (transcripts, SQLite) to end.
+const RUNTIME_SHUTDOWN: Duration = Duration::from_secs(2);
+
+/// A "show the panel" request from the pipe that may precede the UI.
+static SHOW_REQUEST: PendingShow = PendingShow::new();
 
 /// What the UI thread owns. `Rc` state is not `Send`, so background callbacks
 /// (tray, menu, pipe, toast) never capture it: they post a closure that
@@ -142,14 +150,24 @@ impl Notifier for LogNotifier {
 struct TrayIconBackend(TrayIcon);
 
 impl TrayBackend for TrayIconBackend {
-    fn update(&mut self, bitmap: &TrayBitmap, tooltip: &str) {
-        match Icon::from_rgba(bitmap.rgba.clone(), bitmap.size, bitmap.size) {
-            Ok(icon) => {
-                let _ = self.0.set_icon(Some(icon));
+    fn update(&mut self, bitmap: &TrayBitmap, tooltip: &str) -> bool {
+        let icon = match Icon::from_rgba(bitmap.rgba.clone(), bitmap.size, bitmap.size) {
+            Ok(icon) => icon,
+            Err(e) => {
+                tracing::warn!(error = %e, "tray icon bitmap rejected");
+                return false;
             }
-            Err(e) => tracing::warn!(error = %e, "tray icon bitmap rejected"),
+        };
+        // Both are attempted; a failure of either is retried on the next tick.
+        let icon_set = self.0.set_icon(Some(icon));
+        let tip_set = self.0.set_tooltip(Some(tooltip));
+        for e in [icon_set.as_ref().err(), tip_set.as_ref().err()]
+            .into_iter()
+            .flatten()
+        {
+            tracing::warn!(error = %e, "tray icon update failed; will retry");
         }
-        let _ = self.0.set_tooltip(Some(tooltip));
+        icon_set.is_ok() && tip_set.is_ok()
     }
 }
 
@@ -315,14 +333,22 @@ impl Ui {
     }
 
     fn hide_all(&self) {
-        if !self.is_panel_visible() {
-            return;
+        if self.is_panel_visible() {
+            for w in self.windows.borrow().values() {
+                w.hide();
+            }
+            self.dismissed_at.set(Some(Instant::now()));
         }
-        for w in self.windows.borrow().values() {
-            w.hide();
+        // Also when nothing is visible: a window closed another way (Alt+F4)
+        // must not leave the pollers on the active cadence.
+        self.app.model.sync_menu_open(false);
+    }
+
+    /// Acts on a "show" request that arrived over the pipe.
+    fn show_pending(&self) {
+        if SHOW_REQUEST.take() {
+            self.show_selected();
         }
-        self.dismissed_at.set(Some(Instant::now()));
-        self.app.model.set_menu_open(false);
     }
 
     fn recently_dismissed(&self) -> bool {
@@ -350,9 +376,10 @@ impl Ui {
                 self.open_settings();
             }
             Action::SignIn(p) => {
-                if let Err(e) = self.app.signin.start(p) {
-                    tracing::warn!(error = %e, provider = %p, "sign-in could not open");
-                }
+                // A failure is logged and kept with the session; the redraw
+                // shows it in the panel.
+                let _ = self.app.signin.start(p);
+                self.render(false);
             }
             Action::SignOut(p) => {
                 self.app.signin.sign_out(p);
@@ -434,6 +461,9 @@ pub fn run(args: &[String], version: &str) -> ExitCode {
     // First: wait out a replaced predecessor and tidy update leftovers.
     handle_startup_args(args.iter().map(String::as_str), &exe);
     let launch = LaunchArgs::parse_lenient(args.iter().skip(1));
+    // A second launch asks the running instance to show its panel; that
+    // instance needs foreground rights for the window to come to the front.
+    system::allow_any_process_foreground();
     // Before the first AppPaths: data files are created owner-only.
     register_owner_only_permissions();
     let (pipe, client) = match current_user_pipe_name()
@@ -463,21 +493,42 @@ pub fn run(args: &[String], version: &str) -> ExitCode {
     }
 }
 
+/// Tells the user startup failed (the app has no console), then the caller
+/// returns, which releases the single-instance lock.
+fn fail(failure: &StartupFailure) -> ExitCode {
+    tracing::error!("{}", failure.message());
+    system::error_box(crate::startup::FAILURE_TITLE, &failure.message());
+    ExitCode::FAILURE
+}
+
 fn run_primary(pipe: &str, show_panel: bool, version: &str) -> ExitCode {
-    let Ok(runtime) = tokio::runtime::Builder::new_multi_thread()
+    let runtime = match tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
         .enable_all()
         .build()
-    else {
-        return ExitCode::FAILURE;
+    {
+        Ok(r) => r,
+        Err(e) => return fail(&StartupFailure::Assembly(e.to_string())),
     };
-    let _enter = runtime.enter();
-    let Ok(paths) = AppPaths::production() else {
-        tracing::error!("no local app data directory");
-        return ExitCode::FAILURE;
+    let enter = runtime.enter();
+    // The pipe goes up right after the lock so a second launch during the
+    // (slower) rest of startup is not refused; a request that arrives before
+    // the UI exists is kept in `SHOW_REQUEST`.
+    let server = match PipeServer::start(pipe, |message| {
+        if message == IpcMessage::Show && SHOW_REQUEST.request() {
+            with_ui(|ui| ui.show_pending());
+        }
+    }) {
+        Ok(s) => s,
+        Err(e) => return fail(&StartupFailure::Pipe(e.to_string())),
     };
-    let Ok(dir) = paths.directory() else {
-        return ExitCode::FAILURE;
+    let paths = match AppPaths::production() {
+        Ok(p) => p,
+        Err(e) => return fail(&StartupFailure::Assembly(e.to_string())),
+    };
+    let dir = match paths.directory() {
+        Ok(d) => d,
+        Err(e) => return fail(&StartupFailure::Assembly(e.to_string())),
     };
     if let Err(e) = AumidRegistration::new(Arc::new(WinRegistry), None).ensure() {
         tracing::warn!(error = %e, "AUMID registration failed; toasts may not show");
@@ -512,10 +563,7 @@ fn run_primary(pipe: &str, show_panel: bool, version: &str) -> ExitCode {
         runtime.handle().clone(),
     ) {
         Ok(app) => Rc::new(app),
-        Err(e) => {
-            tracing::error!(error = %e, "assembly failed");
-            return ExitCode::FAILURE;
-        }
+        Err(e) => return fail(&StartupFailure::Assembly(e.to_string())),
     };
     let mut tasks = app.launch();
     let updates = match UpdateService::production(
@@ -525,10 +573,7 @@ fn run_primary(pipe: &str, show_panel: bool, version: &str) -> ExitCode {
         Arc::new(ExplorerOpener),
     ) {
         Ok(u) => Arc::new(u),
-        Err(e) => {
-            tracing::error!(error = %e, "update service unavailable");
-            return ExitCode::FAILURE;
-        }
+        Err(e) => return fail(&StartupFailure::Assembly(e)),
     };
     tasks.push(updates.spawn_loop(runtime.handle()));
 
@@ -576,18 +621,32 @@ fn run_primary(pipe: &str, show_panel: bool, version: &str) -> ExitCode {
     });
     *ui.me.borrow_mut() = Rc::downgrade(&ui);
     UI.with(|u| *u.borrow_mut() = Some(Rc::clone(&ui)));
-    wire_tray(&ui, show_panel);
-
-    // A second launch with --show asks the running instance to open the panel.
-    let _server = PipeServer::start(pipe, move |message| {
-        if message == IpcMessage::Show {
-            with_ui(|ui| ui.show_selected());
+    // Logoff, shutdown and restart must run the quit path too.
+    if let Err(e) = system::create_session_window(|| {
+        if let Some(ui) = UI.with(|u| u.borrow().clone()) {
+            ui.quit();
         }
-    });
+    }) {
+        tracing::warn!(error = %e, "session-end window unavailable; logoff will not flush");
+    }
+    let show_panel = SHOW_REQUEST.mark_ready() || show_panel;
+    if let Err(failure) = wire_tray(&ui, show_panel) {
+        return fail(&failure);
+    }
 
     let result = slint::run_event_loop_until_quit();
     ui.quit();
-    drop(tasks);
+    // Drop the UI (its timer owns the tray icon, so NIM_DELETE runs) before
+    // the process ends, then stop the workers without waiting forever for a
+    // blocking scan.
+    UI.with(|u| u.borrow_mut().take());
+    drop(ui);
+    drop(server);
+    for t in &tasks {
+        t.abort();
+    }
+    drop(enter);
+    runtime.shutdown_timeout(RUNTIME_SHUTDOWN);
     if result.is_ok() {
         ExitCode::SUCCESS
     } else {
@@ -634,29 +693,34 @@ struct TickState {
     controller: TrayController<TrayIconBackend>,
     menu: Vec<MenuEntry>,
     next_midnight: DateTime<Utc>,
-    ticks: u32,
 }
 
 /// Creates the tray icon and routes its clicks and menu.
-fn wire_tray(ui: &Rc<Ui>, show_panel: bool) {
+///
+/// # Errors
+/// [`StartupFailure::Tray`] when the icon cannot be created after retries.
+fn wire_tray(ui: &Rc<Ui>, show_panel: bool) -> Result<(), StartupFailure> {
     let settings = ui.app.settings.snapshot();
     let entries = context_menu(&settings);
-    let Ok(icon) = Icon::from_rgba(vec![0; 16 * 16 * 4], 16, 16) else {
-        return;
+    let build = || -> Result<TrayIcon, String> {
+        let icon = Icon::from_rgba(vec![0; 16 * 16 * 4], 16, 16).map_err(|e| e.to_string())?;
+        TrayIconBuilder::new()
+            .with_icon(icon)
+            .with_tooltip("TokenMon")
+            .with_menu(Box::new(tray_menu(&entries)))
+            .with_menu_on_left_click(false)
+            .build()
+            .map_err(|e| e.to_string())
     };
-    let tray = match TrayIconBuilder::new()
-        .with_icon(icon)
-        .with_tooltip("TokenMon")
-        .with_menu(Box::new(tray_menu(&entries)))
-        .with_menu_on_left_click(false)
-        .build()
-    {
-        Ok(t) => t,
-        Err(e) => {
-            tracing::error!(error = %e, "tray icon failed");
-            return;
-        }
-    };
+    let tray = retry(
+        TRAY_ATTEMPTS,
+        |failures| {
+            tracing::warn!(failures, "tray icon not created yet; retrying");
+            std::thread::sleep(Duration::from_secs(1));
+        },
+        build,
+    )
+    .map_err(StartupFailure::Tray)?;
 
     // Any tray event tells where the icon is; a left click toggles the panel.
     TrayIconEvent::set_event_handler(Some(|event: TrayIconEvent| {
@@ -702,7 +766,6 @@ fn wire_tray(ui: &Rc<Ui>, show_panel: bool) {
         controller: TrayController::new(TrayIconBackend(tray)),
         menu: entries,
         next_midnight: next_midnight(Utc::now(), *chrono::Local::now().offset()),
-        ticks: 0,
     };
     let weak = Rc::downgrade(ui);
     ui.tick.start(slint::TimerMode::Repeated, TICK, move || {
@@ -714,13 +777,14 @@ fn wire_tray(ui: &Rc<Ui>, show_panel: bool) {
     if show_panel {
         ui.show_selected();
     }
+    Ok(())
 }
 
 /// The 2 s tick: re-renders the tray (usage, settings, taskbar theme, DPI and
 /// icon-size changes all show up as a different render key; the controller
 /// touches the OS only when it changed), swaps the context menu when the
 /// provider set changed, keeps an open panel live, rolls the Overview over at
-/// local midnight and saves the Overview history.
+/// local midnight and records the Overview history.
 fn on_tick(ui: &Rc<Ui>, tick: &mut TickState) {
     let (now, tz) = now_and_offset();
     let settings = ui.app.settings.snapshot();
@@ -759,17 +823,19 @@ fn on_tick(ui: &Rc<Ui>, tick: &mut TickState) {
         tick.next_midnight = next_midnight(now, tz);
         ui.state.borrow_mut().reset_offsets();
     }
-    tick.ticks = tick.ticks.wrapping_add(1);
-    if tick.ticks.is_multiple_of(RECORD_EVERY_TICKS) {
-        record_live(
-            &ui.store,
-            ui.app.model.registry(),
-            &settings,
-            &ui.app.sessions,
-            now,
-            tz,
-        );
-    }
+    // Cheap and written only when the series changed, so a poll just before
+    // midnight reaches yesterday's row within one tick.
+    record_live(
+        &ui.store,
+        ui.app.model.registry(),
+        &settings,
+        &ui.app.sessions,
+        now,
+        tz,
+    );
+    // A panel hidden by some other route (Alt+F4) must not keep the pollers
+    // on the active cadence.
+    ui.app.model.sync_menu_open(ui.is_panel_visible());
     if ui.is_panel_visible() {
         ui.render(false);
     }
