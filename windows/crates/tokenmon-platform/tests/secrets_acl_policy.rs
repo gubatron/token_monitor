@@ -8,7 +8,8 @@ use tempfile::TempDir;
 use tokenmon_core::{CredentialKey, CredentialStore};
 use tokenmon_platform::secrets::{
     APP_FALLBACK_POLICY, FakeEncryptor, FallbackPolicy, SecretRoutingCredentialStore,
-    SecretStoreError, VAULT_UNAVAILABLE_REASON, Vault, create_new_owner_only, owner_only_sddl,
+    SecretStoreError, VAULT_UNAVAILABLE_REASON, Vault, create_new_owner_only,
+    owner_only_directory_sddl, owner_only_sddl,
 };
 
 #[test]
@@ -114,4 +115,34 @@ fn windows_file_gets_only_the_current_user_ace_at_creation() {
     }
     // Protected: no inherited ACE "(I)" survives.
     assert!(!text.contains("(I)"), "inherited ACE present:\n{text}");
+}
+
+/// #47: the data-directory DACL is protected and grants one SID, inherited by
+/// children, with no dependency on `USERNAME`/`USERDOMAIN` or a child process.
+#[test]
+fn directory_sddl_is_protected_single_inheritable_ace() {
+    let sddl = owner_only_directory_sddl("S-1-5-21-1-2-3-1001");
+    assert_eq!(sddl, "D:P(A;OICI;FA;;;S-1-5-21-1-2-3-1001)");
+    assert_eq!(sddl.matches("(A;").count(), 1);
+}
+
+#[test]
+fn owner_only_implementation_restricts_and_stays_usable() {
+    use tokenmon_core::storage::OwnerOnlyPermissions;
+    use tokenmon_platform::secrets::WindowsOwnerOnly;
+    let dir = TempDir::new().unwrap();
+    let file = dir.path().join("f");
+    fs::write(&file, b"x").unwrap();
+    WindowsOwnerOnly.restrict_directory(dir.path()).unwrap();
+    WindowsOwnerOnly.restrict_file(&file).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = |p: &std::path::Path| fs::metadata(p).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode(dir.path()), 0o700);
+        assert_eq!(mode(&file), 0o600);
+    }
+    // On every OS the owner keeps full access afterwards.
+    fs::write(dir.path().join("new"), b"y").unwrap();
+    assert_eq!(fs::read(&file).unwrap(), b"x");
 }

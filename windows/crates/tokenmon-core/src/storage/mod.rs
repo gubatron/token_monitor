@@ -41,6 +41,9 @@ pub use paths::{
     AppPaths, DIRECTORY_NAME, LEGACY_DIRECTORY_NAME, PathsError, home_directory_from_env,
     migrate_legacy_directory_if_needed,
 };
-pub use permissions::{NoopPermissions, OwnerOnlyPermissions, PlatformPermissions, icacls_args};
+pub use permissions::{
+    NoopPermissions, OwnerOnlyPermissions, PlatformPermissions, icacls_args, icacls_program,
+    register_platform_permissions,
+};
 pub use quota::{DEFAULT_PERIOD_DAYS, QuotaWindow, QuotaWindowTransition};
 pub use string_store::{FileBackedStringStore, InMemoryStringStore, TextStore};

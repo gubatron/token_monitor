@@ -11,7 +11,9 @@
 //!   the file carries the inherited ACL. This is why the `icacls` helper in
 //!   `tokenmon_core::storage` (a child process run after creation, and one that
 //!   depends on `USERNAME`/`USERDOMAIN` environment variables an attacker or a
-//!   service account may not have) is not used for secrets. A rename keeps the
+//!   service account may not have) is not used for secrets; the data directory
+//!   itself is restricted through the same SID with `SetNamedSecurityInfoW`
+//!   ([`WindowsOwnerOnly`]), which core's `PlatformPermissions` delegates to. A rename keeps the
 //!   DACL, so the staging file's ACL becomes the target's.
 
 use std::fs::File;
@@ -38,6 +40,64 @@ pub fn owner_only_sddl(sid: &str) -> String {
 #[cfg(windows)]
 pub(crate) fn current_user_sid() -> io::Result<String> {
     windows_impl::current_user_sid()
+}
+
+/// SDDL for "protected DACL, full access to exactly this SID", with the ACE
+/// inherited by files and subdirectories (`OI`/`CI`): for the data directory.
+///
+/// # Examples
+///
+/// ```
+/// use tokenmon_platform::secrets::owner_only_directory_sddl;
+/// assert_eq!(
+///     owner_only_directory_sddl("S-1-5-21-1-2-3-1001"),
+///     "D:P(A;OICI;FA;;;S-1-5-21-1-2-3-1001)"
+/// );
+/// ```
+pub fn owner_only_directory_sddl(sid: &str) -> String {
+    format!("D:P(A;OICI;FA;;;{sid})")
+}
+
+/// Owner-only permissions with a SID-based protected DACL (Windows) or modes
+/// (elsewhere): the implementation `tokenmon_core::storage` delegates to.
+///
+/// Call [`register_owner_only_permissions`] once at startup. No child process
+/// and no environment variables are involved: the principal is the SID of the
+/// process token.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct WindowsOwnerOnly;
+
+impl tokenmon_core::storage::OwnerOnlyPermissions for WindowsOwnerOnly {
+    fn restrict_directory(&self, path: &Path) -> io::Result<()> {
+        #[cfg(windows)]
+        {
+            windows_impl::restrict(path, true)
+        }
+        #[cfg(not(windows))]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700))
+        }
+    }
+
+    fn restrict_file(&self, path: &Path) -> io::Result<()> {
+        #[cfg(windows)]
+        {
+            windows_impl::restrict(path, false)
+        }
+        #[cfg(not(windows))]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
+        }
+    }
+}
+
+/// Installs [`WindowsOwnerOnly`] as the process-wide implementation behind
+/// `tokenmon_core::storage::PlatformPermissions`. Returns `false` when one is
+/// already installed. Call it before the first `AppPaths` is created.
+pub fn register_owner_only_permissions() -> bool {
+    tokenmon_core::storage::register_platform_permissions(std::sync::Arc::new(WindowsOwnerOnly))
 }
 
 /// Creates `path` (it must not exist) readable and writable by the current
@@ -72,18 +132,19 @@ mod windows_impl {
     };
     use windows_sys::Win32::Security::Authorization::{
         ConvertSidToStringSidW, ConvertStringSecurityDescriptorToSecurityDescriptorW,
-        SDDL_REVISION_1,
+        SDDL_REVISION_1, SE_FILE_OBJECT, SetNamedSecurityInfoW,
     };
     use windows_sys::Win32::Security::{
-        GetTokenInformation, PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES, TOKEN_QUERY, TOKEN_USER,
-        TokenUser,
+        ACL, DACL_SECURITY_INFORMATION, GetSecurityDescriptorDacl, GetTokenInformation,
+        PROTECTED_DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES,
+        TOKEN_QUERY, TOKEN_USER, TokenUser,
     };
     use windows_sys::Win32::Storage::FileSystem::{
         CREATE_NEW, CreateFileW, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ,
     };
     use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
 
-    use super::owner_only_sddl;
+    use super::{owner_only_directory_sddl, owner_only_sddl};
 
     fn last_error() -> io::Error {
         // SAFETY: GetLastError has no preconditions.
@@ -144,6 +205,77 @@ mod windows_impl {
         // SAFETY: allocated by ConvertSidToStringSidW with LocalAlloc.
         unsafe { LocalFree(wide_sid.cast()) };
         Ok(text)
+    }
+
+    /// Replaces the DACL of an existing file or directory with the protected
+    /// owner-only one (no inherited ACEs).
+    pub(super) fn restrict(path: &Path, directory: bool) -> io::Result<()> {
+        let sid = current_user_sid()?;
+        let text = if directory {
+            owner_only_directory_sddl(&sid)
+        } else {
+            owner_only_sddl(&sid)
+        };
+        let sddl = wide(OsStr::new(&text));
+        let mut descriptor: PSECURITY_DESCRIPTOR = null_mut();
+        // SAFETY: `sddl` is NUL terminated; `descriptor` is freed below.
+        if unsafe {
+            ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                sddl.as_ptr(),
+                SDDL_REVISION_1,
+                &raw mut descriptor,
+                null_mut(),
+            )
+        } == 0
+        {
+            return Err(last_error());
+        }
+        let result = apply_dacl(path, descriptor);
+        // SAFETY: allocated by the SDDL conversion with LocalAlloc.
+        unsafe { LocalFree(descriptor) };
+        result
+    }
+
+    fn apply_dacl(path: &Path, descriptor: PSECURITY_DESCRIPTOR) -> io::Result<()> {
+        let mut present = 0;
+        let mut defaulted = 0;
+        let mut dacl: *mut ACL = null_mut();
+        // SAFETY: `descriptor` is a valid self-relative descriptor; the out
+        // pointers are locals. `dacl` points inside `descriptor`.
+        if unsafe {
+            GetSecurityDescriptorDacl(
+                descriptor,
+                &raw mut present,
+                &raw mut dacl,
+                &raw mut defaulted,
+            )
+        } == 0
+            || present == 0
+            || dacl.is_null()
+        {
+            return Err(io::Error::other("owner-only descriptor has no DACL"));
+        }
+        let mut name = wide(path.as_os_str());
+        // SAFETY: `name` is NUL terminated and `dacl` stays valid until the
+        // caller frees `descriptor`, after this call returns.
+        let status = unsafe {
+            SetNamedSecurityInfoW(
+                name.as_mut_ptr(),
+                SE_FILE_OBJECT,
+                DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+                null_mut(),
+                null_mut(),
+                dacl,
+                null_mut(),
+            )
+        };
+        if status == 0 {
+            Ok(())
+        } else {
+            Err(io::Error::from_raw_os_error(
+                i32::try_from(status).unwrap_or(i32::MAX),
+            ))
+        }
     }
 
     pub(super) fn create_new(path: &Path) -> io::Result<File> {
