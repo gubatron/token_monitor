@@ -1,9 +1,14 @@
 //! Port of `ChatGPTAccessTokenCacheTests.swift` (now = 1_790_000_000).
+#![allow(
+    clippy::unwrap_used,
+    clippy::unused_async,
+    clippy::unused_async_trait_impl,
+    clippy::option_option
+)]
 
 mod common;
 
 use std::sync::Arc;
-use std::time::Duration;
 
 use chrono::{DateTime, TimeZone, Utc};
 use common::{FakeTransport, jwt_exp};
@@ -49,12 +54,9 @@ async fn test_session_cookies_are_returned_only_with_an_exchange() {
         c.fetch_usage(at(T)).await.unwrap().set_cookie_headers,
         ["session=renewed"]
     );
-    assert!(
-        c.fetch_usage(at(T + 60))
-            .await
-            .unwrap()
-            .set_cookie_headers
-            .is_empty()
+    assert_eq!(
+        c.fetch_usage(at(T + 60)).await.unwrap().set_cookie_headers,
+        Vec::<String>::new()
     );
 }
 
@@ -152,8 +154,6 @@ async fn test_token_is_reused_after_cookie_renewal() {
         .await
         .unwrap();
     assert_eq!(transport.exchanges(), 1);
-    // `Duration` kept in scope for readability of the 30-minute rule above.
-    let _ = Duration::from_secs(1800);
 }
 
 /// The account id from the JWT is forwarded to the usage call when present.

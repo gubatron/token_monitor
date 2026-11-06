@@ -8,6 +8,7 @@ publish = false
 cargo-fuzz = true
 
 [dependencies]
+tokenmon-provider-chatgpt = { path = "../crates/tokenmon-provider-chatgpt" }
 tokenmon-provider-openrouter = { path = "../crates/tokenmon-provider-openrouter" }
 libfuzzer-sys = "0.4"
 tokenmon-provider-grok = { path = "../crates/tokenmon-provider-grok" }
@@ -299,6 +300,20 @@ bench = false
 [[bin]]
 name = "core_day_key"
 path = "fuzz_targets/core_day_key.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "chatgpt_usage_parse"
+path = "fuzz_targets/chatgpt_usage_parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "chatgpt_jwt_claims"
+path = "fuzz_targets/chatgpt_jwt_claims.rs"
 test = false
 doc = false
 bench = false
