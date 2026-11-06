@@ -44,7 +44,7 @@ impl HistoryAccess for FakeHistory {
 const EXE: &str = r"C:\Program Files\TokenMon\TokenMon.exe";
 
 struct Fixture {
-    _dir: tempfile::TempDir,
+    dir: tempfile::TempDir,
     app: App,
     host: AppHost,
     registry: Arc<MemoryRegistry>,
@@ -92,7 +92,7 @@ fn fixture() -> Fixture {
         quit: Arc::new(move || q.store(true, Ordering::SeqCst)),
     });
     Fixture {
-        _dir: dir,
+        dir,
         app,
         host,
         registry,
@@ -151,7 +151,7 @@ async fn test_host_toggles_autostart_and_desktop_verb() {
     f.host.set_desktop_menu(true).expect("install");
     let status = f.host.status();
     assert!(status.launch_at_login && status.desktop_menu_enabled);
-    assert!(!f.registry.keys().is_empty());
+    assert_ne!(f.registry.keys().len(), 0);
     f.host.set_launch_at_login(false).expect("unregister");
     f.host.set_desktop_menu(false).expect("uninstall");
     let status = f.host.status();
@@ -203,14 +203,14 @@ async fn test_host_exports_clears_and_quits() {
         .lock()
         .expect("lock")
         .push(WeeklyUsageSnapshot::new(chrono::Utc::now(), 12.5));
-    let out = f._dir.path().join("grok.csv");
+    let out = f.dir.path().join("grok.csv");
     f.host
         .export_history(ExportFormat::Csv, &out)
         .expect("export");
     let text = std::fs::read_to_string(&out).expect("read");
     assert!(text.starts_with("fetchedAt,usedPercent"));
     assert_eq!(text.lines().count(), 2);
-    let json = f._dir.path().join("grok.json");
+    let json = f.dir.path().join("grok.json");
     f.host
         .export_history(ExportFormat::Json, &json)
         .expect("json");
@@ -220,16 +220,16 @@ async fn test_host_exports_clears_and_quits() {
             .contains("12.5")
     );
     f.host.clear_history();
-    assert!(f.history.snapshots().is_empty());
+    assert_eq!(f.history.snapshots().len(), 0);
     f.host.quit();
     assert!(f.quit.load(Ordering::SeqCst));
 }
 
 /// An unwritable destination is an error message, not a panic.
 #[tokio::test]
-async fn test_host_export_to_a_missing_directory_fails_cleanly() {
+async fn test_host_export_to_a_missingdirectory_fails_cleanly() {
     let f = fixture();
-    let bad = f._dir.path().join("no").join("such").join("dir.csv");
+    let bad = f.dir.path().join("no").join("such").join("dir.csv");
     assert!(f.host.export_history(ExportFormat::Csv, &bad).is_err());
 }
 

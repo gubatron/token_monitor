@@ -55,6 +55,11 @@ impl<B: TrayBackend> TrayController<B> {
         &self.backend
     }
 
+    /// The backend, mutably (the shell swaps the context menu on it).
+    pub fn backend_mut(&mut self) -> &mut B {
+        &mut self.backend
+    }
+
     /// Recomputes the icon and tooltip; updates the backend only when the
     /// render key or the tooltip changed. Returns whether it did.
     ///
