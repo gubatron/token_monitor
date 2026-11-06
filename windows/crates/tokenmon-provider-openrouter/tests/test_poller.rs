@@ -3,6 +3,9 @@
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::time::Duration;
+
+use tokenmon_core::polling::PollOutcome;
 
 use tokenmon_core::{
     AuthSession, BoxFuture, InMemoryCredentialStore, ManualClock, ProviderError,
@@ -10,7 +13,7 @@ use tokenmon_core::{
 };
 use tokenmon_provider_openrouter::{
     Endpoint, EndpointFetcher, NoCostEstimator, OpenRouterAuthSession, OpenRouterUsageClient,
-    OpenRouterUsagePoller, RefreshOutcome,
+    OpenRouterUsagePoller,
 };
 
 struct Fake {
@@ -36,7 +39,7 @@ impl EndpointFetcher for Fake {
 
 struct Rig {
     auth: Arc<OpenRouterAuthSession>,
-    poller: OpenRouterUsagePoller,
+    poller: Arc<OpenRouterUsagePoller>,
     calls: Arc<AtomicUsize>,
     unauthorized: Arc<AtomicBool>,
     enabled: Arc<AtomicBool>,
@@ -65,6 +68,7 @@ fn rig() -> Rig {
         Arc::new(ManualClock::from_unix(1_700_000_000)),
         factory,
         Arc::new(move || e.load(Ordering::SeqCst)),
+        Arc::new(|open| open.then_some(Duration::from_secs(60))),
     );
     Rig {
         auth,
@@ -79,7 +83,7 @@ fn rig() -> Rig {
 #[tokio::test]
 async fn test_no_key_skips_with_hint() {
     let r = rig();
-    assert_eq!(r.poller.refresh().await, RefreshOutcome::Skipped);
+    assert_eq!(r.poller.perform_refresh().await, PollOutcome::Skipped);
     assert!(r.auth.state().needs_sign_in);
     assert_eq!(
         r.poller.last_error().unwrap().to_string(),
@@ -93,7 +97,7 @@ async fn test_no_key_skips_with_hint() {
 async fn test_refresh_publishes_snapshot() {
     let r = rig();
     r.auth.save_api_key("sk-or-v1-abc").unwrap();
-    assert_eq!(r.poller.refresh().await, RefreshOutcome::Success);
+    assert_eq!(r.poller.perform_refresh().await, PollOutcome::Success);
     assert_eq!(r.poller.headline_used_percent(), Some(25.0));
     assert!(r.poller.last_refreshed_at().is_some() && r.poller.last_error().is_none());
     assert_eq!(r.poller.provider(), ProviderId::OpenRouter);
@@ -106,7 +110,7 @@ async fn test_disabled_provider_is_skipped() {
     let r = rig();
     r.auth.save_api_key("sk-or-v1-abc").unwrap();
     r.enabled.store(false, Ordering::SeqCst);
-    assert_eq!(r.poller.refresh().await, RefreshOutcome::Skipped);
+    assert_eq!(r.poller.perform_refresh().await, PollOutcome::Skipped);
     assert_eq!(r.calls.load(Ordering::SeqCst), 0);
 }
 
@@ -117,7 +121,10 @@ async fn test_three_strikes_stop_polling_until_new_key() {
     r.auth.save_api_key("sk-or-v1-abc").unwrap();
     r.unauthorized.store(true, Ordering::SeqCst);
     for _ in 0..3 {
-        assert_eq!(r.poller.refresh().await, RefreshOutcome::Failure);
+        assert_eq!(
+            r.poller.perform_refresh().await,
+            PollOutcome::Failure { retry_after: None }
+        );
     }
     assert!(r.auth.state().needs_sign_in);
     assert_eq!(
@@ -125,11 +132,11 @@ async fn test_three_strikes_stop_polling_until_new_key() {
         "OpenRouter rejected the API key. Check or replace it."
     );
     let before = r.calls.load(Ordering::SeqCst);
-    assert_eq!(r.poller.refresh().await, RefreshOutcome::Skipped);
+    assert_eq!(r.poller.perform_refresh().await, PollOutcome::Skipped);
     assert_eq!(r.calls.load(Ordering::SeqCst), before);
     r.unauthorized.store(false, Ordering::SeqCst);
     r.auth.save_api_key("sk-or-v1-new").unwrap();
-    assert_eq!(r.poller.refresh().await, RefreshOutcome::Success);
+    assert_eq!(r.poller.perform_refresh().await, PollOutcome::Success);
 }
 
 /// A success resets the strike count.
@@ -138,13 +145,13 @@ async fn test_success_resets_strikes() {
     let r = rig();
     r.auth.save_api_key("sk-or-v1-abc").unwrap();
     r.unauthorized.store(true, Ordering::SeqCst);
-    r.poller.refresh().await;
-    r.poller.refresh().await;
+    r.poller.perform_refresh().await;
+    r.poller.perform_refresh().await;
     r.unauthorized.store(false, Ordering::SeqCst);
-    r.poller.refresh().await;
+    r.poller.perform_refresh().await;
     r.unauthorized.store(true, Ordering::SeqCst);
-    r.poller.refresh().await;
-    r.poller.refresh().await;
+    r.poller.perform_refresh().await;
+    r.poller.perform_refresh().await;
     assert!(!r.auth.state().needs_sign_in);
 }
 
@@ -153,22 +160,45 @@ async fn test_success_resets_strikes() {
 async fn test_sign_out_clears_snapshot() {
     let r = rig();
     r.auth.save_api_key("sk-or-v1-abc").unwrap();
-    r.poller.refresh().await;
+    r.poller.perform_refresh().await;
     r.auth.sign_out();
     assert!(r.poller.snapshot().is_none());
     assert!(r.poller.last_refreshed_at().is_none() && r.poller.last_error().is_none());
 }
 
-/// Start, stop and menu flags are observable.
-#[test]
-fn test_start_stop_and_menu_flags() {
+/// The poller drives itself on core's `PollingLoop`: a parked loop refreshes
+/// as soon as the menu opens (the settings interval appears), only a change
+/// wakes it, and `stop` ends the loop.
+#[tokio::test]
+async fn test_polling_loop_runs_on_menu_open_and_stops() {
     let r = rig();
+    r.auth.save_api_key("sk-or-v1-abc").unwrap();
     r.poller.start();
-    assert!(r.poller.is_running());
-    r.poller.stop();
-    assert!(!r.poller.is_running());
+    assert_eq!(r.poller.polling_loop().delay_until_due(), None);
+    assert_eq!(r.calls.load(Ordering::SeqCst), 0);
     r.poller.set_menu_open(true);
     assert!(r.poller.is_menu_open());
+    for _ in 0..200 {
+        if r.calls.load(Ordering::SeqCst) > 0 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    assert_eq!(r.calls.load(Ordering::SeqCst), 1);
+    r.poller.stop();
+}
+
+/// A provider disabled in settings never fetches, even from the loop.
+#[tokio::test]
+async fn test_loop_respects_the_enabled_flag() {
+    let r = rig();
+    r.auth.save_api_key("sk-or-v1-abc").unwrap();
+    r.enabled.store(false, Ordering::SeqCst);
+    r.poller.set_menu_open(true);
+    r.poller.start();
+    r.poller.refresh_now().await;
+    assert_eq!(r.calls.load(Ordering::SeqCst), 0);
+    r.poller.stop();
 }
 
 /// A fetcher that replaces the key (bumping the generation) mid-flight, then
@@ -208,9 +238,10 @@ async fn test_stale_unauthorized_does_not_invalidate_new_key() {
         Arc::new(ManualClock::from_unix(0)),
         factory,
         Arc::new(|| true),
+        Arc::new(|_| None),
     );
     for _ in 0..5 {
-        poller.refresh().await;
+        poller.perform_refresh().await;
     }
     assert!(auth.state().is_signed_in && !auth.state().needs_sign_in);
 }
@@ -223,7 +254,7 @@ async fn test_current_unauthorized_invalidates_key() {
     r.auth.save_api_key("sk-or-v1-abc").unwrap();
     r.unauthorized.store(true, Ordering::SeqCst);
     for _ in 0..3 {
-        r.poller.refresh().await;
+        r.poller.perform_refresh().await;
     }
     assert!(r.auth.state().needs_sign_in);
 }

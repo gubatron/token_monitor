@@ -20,5 +20,5 @@ pub use activity::{CostEstimator, ModelUsage, NoCostEstimator, canonical_slug, m
 pub use auth::{ApiKey, OpenRouterAuthSession, SaveKeyError, looks_like_api_key};
 pub use client::{Endpoint, EndpointFetcher, OpenRouterUsageClient, ReqwestFetcher};
 pub use models::{ActivityRow, CreditsData, KeyData, parse_activity, parse_credits, parse_key};
-pub use poller::{OpenRouterUsagePoller, RefreshOutcome};
+pub use poller::{ClientFactory, OpenRouterUsagePoller};
 pub use snapshot::{BudgetSource, LimitReset, OpenRouterSnapshot};

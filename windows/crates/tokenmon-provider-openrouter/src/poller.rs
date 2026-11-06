@@ -1,13 +1,15 @@
 //! `OpenRouterUsagePoller` (spec 03 section 4.5): the refresh state machine.
 //!
-//! The timed loop belongs to the core polling module and the app; this type
-//! owns what one refresh does and the published state, and implements
-//! [`ProviderUsagePoller`] so the registry can hold it.
+//! This type owns what one refresh does and the published state, drives
+//! itself on core's [`PollingLoop`] and implements [`ProviderUsagePoller`] so
+//! the registry can hold it.
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
+use std::time::Duration;
 
 use chrono::{DateTime, Utc};
+use tokenmon_core::polling::{PollOutcome, PollingLoop, ProviderRefresh};
 use tokenmon_core::{
     AuthEvent, AuthEventListener, AuthSession, BoxFuture, Clock, ProviderError,
     ProviderErrorContext, ProviderId, ProviderUsagePoller,
@@ -16,17 +18,6 @@ use tokenmon_core::{
 use crate::auth::{ApiKey, OpenRouterAuthSession};
 use crate::client::OpenRouterUsageClient;
 use crate::snapshot::OpenRouterSnapshot;
-
-/// Result of one refresh attempt.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RefreshOutcome {
-    /// Disabled, already refreshing, no key, or key rejected.
-    Skipped,
-    /// A snapshot was published.
-    Success,
-    /// The fetch failed; the error is in `last_error`.
-    Failure,
-}
 
 /// Builds a usage client for a key (live: reqwest; tests: fakes).
 pub type ClientFactory =
@@ -46,7 +37,7 @@ impl State {
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
-    m.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+    m.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 struct SignedOutClears(Arc<Mutex<State>>);
@@ -68,37 +59,76 @@ impl Drop for RefreshGuard<'_> {
 }
 
 /// Polls OpenRouter usage for the saved API key.
+///
+/// The timing (interval, backoff, `Retry-After`, wake gate) is core's
+/// [`PollingLoop`]; the stale-session and error step is core's
+/// [`ProviderRefresh`]. The loop's closures hold only a [`Weak`] reference, so
+/// dropping the poller ends the loop.
 pub struct OpenRouterUsagePoller {
     auth: Arc<OpenRouterAuthSession>,
     clock: Arc<dyn Clock>,
     factory: ClientFactory,
     is_enabled: Arc<dyn Fn() -> bool + Send + Sync>,
+    poll_interval: Arc<dyn Fn(bool) -> Option<Duration> + Send + Sync>,
     state: Arc<Mutex<State>>,
     refreshing: AtomicBool,
     menu_open: AtomicBool,
-    running: AtomicBool,
+    polling: Arc<PollingLoop>,
 }
 
 impl OpenRouterUsagePoller {
-    /// Wires the poller to its session and registers the sign-out listener.
+    /// Wires the poller to its session, registers the sign-out listener and
+    /// builds (but does not start) its polling loop.
+    ///
+    /// `is_enabled` is `AppSettings.isProviderEnabled(.openRouter)` and
+    /// `poll_interval` is `AppSettings.pollInterval(for:menuIsOpen:)`
+    /// (`None` parks the loop).
+    ///
+    /// # Panics
+    /// Outside a tokio runtime (the loop spawns its waits on it).
     pub fn new(
         auth: Arc<OpenRouterAuthSession>,
         clock: Arc<dyn Clock>,
         factory: ClientFactory,
         is_enabled: Arc<dyn Fn() -> bool + Send + Sync>,
-    ) -> Self {
+        poll_interval: Arc<dyn Fn(bool) -> Option<Duration> + Send + Sync>,
+    ) -> Arc<Self> {
         let state = Arc::new(Mutex::new(State::default()));
         auth.add_listener(Arc::new(SignedOutClears(Arc::clone(&state))));
-        Self {
-            auth,
-            clock,
-            factory,
-            is_enabled,
-            state,
-            refreshing: AtomicBool::new(false),
-            menu_open: AtomicBool::new(false),
-            running: AtomicBool::new(false),
-        }
+        Arc::new_cyclic(|weak: &Weak<Self>| {
+            let for_interval = weak.clone();
+            let for_refresh = weak.clone();
+            let polling = PollingLoop::builder(
+                move || for_interval.upgrade().and_then(|p| p.current_interval()),
+                move || {
+                    let weak = for_refresh.clone();
+                    async move {
+                        match weak.upgrade() {
+                            Some(poller) => poller.perform_refresh().await,
+                            None => PollOutcome::Skipped,
+                        }
+                    }
+                },
+            )
+            .clock(Arc::clone(&clock))
+            .build();
+            Self {
+                auth,
+                clock,
+                factory,
+                is_enabled,
+                poll_interval,
+                state,
+                refreshing: AtomicBool::new(false),
+                menu_open: AtomicBool::new(false),
+                polling,
+            }
+        })
+    }
+
+    /// The polling loop (wake, pause and resume for the app shell).
+    pub fn polling_loop(&self) -> &Arc<PollingLoop> {
+        &self.polling
     }
 
     /// The latest snapshot.
@@ -106,20 +136,22 @@ impl OpenRouterUsagePoller {
         lock(&self.state).snapshot.clone()
     }
 
-    /// Whether the app asked this poller to run.
-    pub fn is_running(&self) -> bool {
-        self.running.load(Ordering::SeqCst)
-    }
-
-    /// Whether the menu is open (selects the poll interval upstream).
+    /// Whether the menu is open (selects the poll interval).
     pub fn is_menu_open(&self) -> bool {
         self.menu_open.load(Ordering::SeqCst)
     }
 
+    fn current_interval(&self) -> Option<Duration> {
+        (self.poll_interval)(self.is_menu_open())
+    }
+
     /// One refresh attempt.
-    pub async fn refresh(&self) -> RefreshOutcome {
+    ///
+    /// Skips when the provider is disabled, a refresh is running, there is no
+    /// key (flags `needs_sign_in`) or the key was already rejected.
+    pub async fn perform_refresh(&self) -> PollOutcome {
         if !(self.is_enabled)() || self.refreshing.swap(true, Ordering::SeqCst) {
-            return RefreshOutcome::Skipped;
+            return PollOutcome::Skipped;
         }
         let _guard = RefreshGuard(&self.refreshing);
         let Some(key) = self.auth.api_key() else {
@@ -128,47 +160,40 @@ impl OpenRouterUsagePoller {
             if s.snapshot.is_none() {
                 s.last_error = Some(ProviderError::NotSignedIn(ProviderErrorContext::OpenRouter));
             }
-            return RefreshOutcome::Skipped;
+            return PollOutcome::Skipped;
         };
         let session = self.auth.state();
         if !session.is_signed_in || session.needs_sign_in {
-            return RefreshOutcome::Skipped;
+            return PollOutcome::Skipped;
         }
-        self.fetch_and_publish(&key, session.session_generation)
-            .await
+        let failure: Mutex<Option<ProviderError>> = Mutex::new(None);
+        ProviderRefresh::run(
+            &*self.auth,
+            "OpenRouter",
+            || async {
+                let result = match (self.factory)(&key) {
+                    Ok(client) => client.fetch_snapshot(self.clock.now()).await,
+                    Err(e) => Err(e),
+                };
+                if let Err(error) = &result {
+                    *lock(&failure) = Some(error.clone());
+                }
+                result
+            },
+            |snapshot| self.publish(snapshot),
+            || {},
+            |_message| lock(&self.state).last_error = lock(&failure).take(),
+        )
+        .await
     }
 
-    async fn fetch_and_publish(
-        &self,
-        key: &ApiKey,
-        generation: tokenmon_core::SessionGeneration,
-    ) -> RefreshOutcome {
-        let result = match (self.factory)(key) {
-            Ok(client) => client.fetch_snapshot(self.clock.now()).await,
-            Err(e) => Err(e),
-        };
-        if !self.auth.is_current(generation) {
-            return RefreshOutcome::Skipped;
-        }
-        match result {
-            Ok(snapshot) => {
-                self.auth.record_auth_success();
-                self.auth.mark_fetch_succeeded();
-                let mut s = lock(&self.state);
-                s.snapshot = Some(snapshot);
-                s.last_error = None;
-                s.last_refreshed_at = Some(self.clock.now());
-                RefreshOutcome::Success
-            }
-            Err(e) => {
-                if matches!(e, ProviderError::Unauthorized(_)) {
-                    self.auth.record_auth_failure(&e.to_string());
-                }
-                tracing::warn!("OpenRouter refresh failed: {e}");
-                lock(&self.state).last_error = Some(e);
-                RefreshOutcome::Failure
-            }
-        }
+    fn publish(&self, snapshot: OpenRouterSnapshot) -> PollOutcome {
+        self.auth.mark_fetch_succeeded();
+        let mut s = lock(&self.state);
+        s.snapshot = Some(snapshot);
+        s.last_error = None;
+        s.last_refreshed_at = Some(self.clock.now());
+        PollOutcome::Success
     }
 }
 
@@ -178,7 +203,9 @@ impl ProviderUsagePoller for OpenRouterUsagePoller {
     }
 
     fn set_menu_open(&self, open: bool) {
-        self.menu_open.store(open, Ordering::SeqCst);
+        if self.menu_open.swap(open, Ordering::SeqCst) != open {
+            self.polling.wake();
+        }
     }
 
     fn last_refreshed_at(&self) -> Option<DateTime<Utc>> {
@@ -205,16 +232,16 @@ impl ProviderUsagePoller for OpenRouterUsagePoller {
     }
 
     fn start(&self) {
-        self.running.store(true, Ordering::SeqCst);
+        self.polling.start();
     }
 
     fn stop(&self) {
-        self.running.store(false, Ordering::SeqCst);
+        self.polling.stop();
     }
 
     fn refresh_now(&self) -> BoxFuture<'_, ()> {
         Box::pin(async move {
-            self.refresh().await;
+            self.polling.refresh_now().await;
         })
     }
 
