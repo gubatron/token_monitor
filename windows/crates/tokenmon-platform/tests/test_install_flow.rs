@@ -272,6 +272,28 @@ async fn test_same_version_and_downgrade_are_refused() {
     assert_eq!(r.downloader.calls.load(Ordering::SeqCst), 0);
 }
 
+/// Swift `testDowngradeIsRefused`: the check is on the downloaded app's own
+/// version, not the release tag. The tag says 1.6.0 but the exe inside is
+/// 1.4.0 (the stand-in version resource is `version=1.4.0` after the PE
+/// header; the fix for #77 decides how the real resource is read). The
+/// installed exe stays untouched and no siblings or work files remain.
+#[tokio::test]
+#[ignore = "blocked on #77: installer never reads the downloaded exe's version"]
+async fn test_downgrade_of_the_downloaded_exe_is_refused() {
+    for downloaded in ["1.4.0", "1.5.0"] {
+        let body = make_zip(&[("TokenMon.exe", &fake_pe(&format!("version={downloaded}")))]);
+        let r = rig(body.clone(), false);
+        let e = r.installer.install(zip_req(&body)).await.unwrap_err();
+        assert_eq!(
+            e,
+            InstallError::Verification("The download is not newer than this version.".into()),
+            "downloaded exe {downloaded} must be refused"
+        );
+        assert_untouched(&r);
+        assert!(r.launcher.spawned.lock().unwrap().is_empty());
+    }
+}
+
 /// An unwritable/missing exe location is refused without a request.
 #[tokio::test]
 async fn test_not_replaceable_is_refused_without_request() {
