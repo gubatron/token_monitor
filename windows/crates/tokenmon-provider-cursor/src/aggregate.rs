@@ -9,15 +9,12 @@ use std::fmt;
 use std::sync::Mutex;
 use std::time::Duration;
 
-use chrono::{DateTime, Days, NaiveDate, Utc};
+use chrono::{DateTime, Days, NaiveDate, Timelike, Utc};
 use tokenmon_core::Clock;
+use tokenmon_core::usage::{Calendar, DailyBudget, DailyTokenUsage, TokenCounts};
 
 use crate::events::CursorUsageEvent;
-use crate::models::{CursorCostStats, CursorSnapshot, DayTokenUsage};
-use crate::time::{
-    local_date, local_hour, local_midnight, start_of_day, start_of_day_minus_days,
-    subscription_month,
-};
+use crate::models::{CursorCostStats, CursorSnapshot};
 
 /// Aggregates younger than this are served without any network.
 pub const EVENTS_REFRESH_INTERVAL: Duration = Duration::from_mins(5);
@@ -34,6 +31,12 @@ pub const EVENTS_WINDOW_CAP_DAYS: u64 = 31;
 /// `QuotaNormalization.averageWeeksPerMonth`.
 pub const AVERAGE_WEEKS_PER_MONTH: f64 = 365.2425 / 12.0 / 7.0;
 
+/// Local midnight of `date` (the date's UTC midnight if the offset overflows).
+fn midnight(cal: &Calendar<'_>, date: NaiveDate) -> DateTime<Utc> {
+    cal.start_of_date(date)
+        .unwrap_or_else(|| date.and_time(chrono::NaiveTime::MIN).and_utc())
+}
+
 /// Keeps a float sum finite: hostile input could otherwise overflow to infinity.
 fn cap(value: f64) -> f64 {
     value.min(f64::MAX)
@@ -46,7 +49,9 @@ pub fn events_window_start(
     cycle_start: Option<DateTime<Utc>>,
     now: DateTime<Utc>,
 ) -> DateTime<Utc> {
-    let cap = start_of_day_minus_days(clock, now, EVENTS_WINDOW_CAP_DAYS);
+    let cal = Calendar::local(clock);
+    let back = cal.add_days(now, -i64::try_from(EVENTS_WINDOW_CAP_DAYS).unwrap_or(31));
+    let cap = cal.start_of_day(back.unwrap_or(now));
     cycle_start.map_or(cap, |start| start.max(cap))
 }
 
@@ -114,17 +119,16 @@ fn hourly_events<'a>(
     events: &'a [CursorUsageEvent],
     day_start: DateTime<Utc>,
 ) -> impl Iterator<Item = (usize, &'a CursorUsageEvent)> {
-    let date = local_date(clock, day_start);
-    let start = local_midnight(clock, date);
+    let cal = Calendar::local(clock);
+    let date = cal.date_of(day_start);
+    let start = midnight(&cal, date);
     let end = date
         .checked_add_days(Days::new(1))
-        .map_or(start + chrono::Duration::days(1), |d| {
-            local_midnight(clock, d)
-        });
+        .map_or(start + chrono::Duration::days(1), |d| midnight(&cal, d));
     events
         .iter()
         .filter(move |e| e.date >= start && e.date < end)
-        .map(|e| (local_hour(clock, e.date).min(23), e))
+        .map(move |e| (cal.local_naive(e.date).hour() as usize, e))
 }
 
 /// `hourWeights`: [`CursorUsageEvent::weight`] per hour.
@@ -179,17 +183,25 @@ pub fn token_hour_weights(
 pub fn daily_tokens(
     clock: &dyn Clock,
     events: &[CursorUsageEvent],
-) -> BTreeMap<NaiveDate, DayTokenUsage> {
-    let mut days: BTreeMap<NaiveDate, DayTokenUsage> = BTreeMap::new();
+) -> BTreeMap<NaiveDate, DailyTokenUsage> {
+    let cal = Calendar::local(clock);
+    let mut days: BTreeMap<NaiveDate, DailyTokenUsage> = BTreeMap::new();
     for event in events {
-        let day = days.entry(local_date(clock, event.date)).or_default();
-        day.input = day.input.saturating_add(event.input_tokens);
-        day.output = day.output.saturating_add(event.output_tokens);
-        day.cache_read = day.cache_read.saturating_add(event.cache_read_tokens);
-        day.cache_write = day.cache_write.saturating_add(event.cache_write_tokens);
-        day.cost_usd = cap(day.cost_usd + event.charged_cents / 100.0);
-        let model = day.by_model.entry(event.model.clone()).or_insert(0);
-        *model = model.saturating_add(event.total_tokens);
+        let counts = TokenCounts {
+            input: event.input_tokens,
+            output: event.output_tokens,
+            cache_read: event.cache_read_tokens,
+            cache_write: event.cache_write_tokens,
+        };
+        days.entry(cal.date_of(event.date)).or_default().add(
+            &event.model,
+            counts,
+            Some(event.charged_cents / 100.0),
+        );
+    }
+    // Hostile input could overflow a float sum to infinity.
+    for day in days.values_mut() {
+        day.cost_usd = day.cost_usd.map(cap);
     }
     days
 }
@@ -203,15 +215,16 @@ pub fn estimated_weight_by_day(
     cycle_end: Option<DateTime<Utc>>,
     now: DateTime<Utc>,
 ) -> BTreeMap<NaiveDate, f64> {
-    let bounds = subscription_month(clock, Some(cycle_start), cycle_end, Some(now));
-    let lower = bounds.map_or(cycle_start, |b| b.0);
-    let upper = bounds.map(|b| b.1).or(cycle_end);
+    let cal = Calendar::local(clock);
+    let bounds = DailyBudget::subscription_month(Some(cycle_start), cycle_end, Some(now), &cal);
+    let lower = bounds.map_or(cycle_start, |b| b.start);
+    let upper = bounds.map(|b| b.end).or(cycle_end);
     let mut by_day = BTreeMap::new();
     for event in events.iter().filter(|e| e.total_tokens > 0) {
         if event.date < lower || upper.is_some_and(|u| event.date >= u) {
             continue;
         }
-        let slot = by_day.entry(local_date(clock, event.date)).or_insert(0.0);
+        let slot = by_day.entry(cal.date_of(event.date)).or_insert(0.0);
         *slot = cap(*slot + event.total_tokens as f64);
     }
     by_day
@@ -231,7 +244,7 @@ pub struct CursorEventAggregates {
     /// Tokens per day, for budget estimation.
     pub estimated_weight_by_day: BTreeMap<NaiveDate, f64>,
     /// Tokens per day, for the hover label.
-    pub tokens_by_day: BTreeMap<NaiveDate, DayTokenUsage>,
+    pub tokens_by_day: BTreeMap<NaiveDate, DailyTokenUsage>,
 }
 
 impl CursorEventAggregates {
@@ -245,7 +258,8 @@ impl CursorEventAggregates {
     ) -> bool {
         let age = now - self.fetched_at;
         self.window_start == window_start
-            && local_date(clock, self.fetched_at) == local_date(clock, now)
+            && Calendar::local(clock).date_of(self.fetched_at)
+                == Calendar::local(clock).date_of(now)
             && age >= chrono::Duration::zero()
             && age < chrono_secs(EVENTS_REFRESH_INTERVAL)
     }
@@ -260,7 +274,7 @@ pub fn aggregate_events(
     now: DateTime<Utc>,
 ) -> CursorEventAggregates {
     let cycle_start = snapshot.billing_cycle_start.unwrap_or(window_start);
-    let day_start = start_of_day(clock, now);
+    let day_start = Calendar::local(clock).start_of_day(now);
     CursorEventAggregates {
         fetched_at: now,
         window_start,

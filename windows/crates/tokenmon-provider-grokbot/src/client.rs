@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex};
 use chrono::{DateTime, Utc};
 use serde_json::json;
 use tokenmon_core::{AuthSession, Clock, ProviderError, ProviderErrorContext, UsageFetcher};
-use tokenmon_provider_cursor::{CURSOR_BASE_URL, CursorHttp, RequestPolicy};
+use tokenmon_provider_cursor::CursorHttp;
 
 use crate::models::GrokbotSnapshot;
 use crate::parse::parse_usage_status;
@@ -33,10 +33,16 @@ impl GrokbotUsageClient {
         Self { http }
     }
 
-    /// Production client for `https://cursor.com`; `user_agent` is
-    /// `TokenMon/<version>`.
-    pub fn production(user_agent: &str) -> Self {
-        Self::new(CursorHttp::new(CURSOR_BASE_URL, user_agent))
+    /// Production client for `https://cursor.com`; `app_version` feeds the
+    /// `User-Agent`.
+    ///
+    /// # Errors
+    /// `Network` when the TLS backend cannot be initialised.
+    pub fn production(
+        app_version: Option<&str>,
+        clock: Arc<dyn Clock>,
+    ) -> Result<Self, ProviderError> {
+        Ok(Self::new(CursorHttp::production(CTX, app_version, clock)?))
     }
 
     /// `fetchUsageStatus`: POST `{}` and parse the reply.
@@ -53,13 +59,7 @@ impl GrokbotUsageClient {
     ) -> Result<GrokbotSnapshot, ProviderError> {
         let body = self
             .http
-            .post_json(
-                USAGE_PATH,
-                cookie,
-                REFERER,
-                &json!({}),
-                RequestPolicy::GROKBOT,
-            )
+            .post_json(USAGE_PATH, cookie, REFERER, &json!({}))
             .await?;
         parse_usage_status(&body, account_email, now)
     }

@@ -8,7 +8,7 @@ use std::time::Duration;
 use common::{at, harness, is_unauthorized};
 use tokenmon_core::Clock;
 use tokenmon_provider_cursor::{
-    CursorCacheEntry, CursorEventCache, EVENTS_MAX_PAGES, events_window_start, start_of_day,
+    CursorCacheEntry, CursorEventCache, EVENTS_MAX_PAGES, events_window_start,
 };
 
 const COOKIE: &str = "WorkosCursorSessionToken=t";
@@ -38,7 +38,7 @@ fn test_events_window_start_is_cycle_start_within_cap() {
 #[test]
 fn test_events_window_start_caps_at_thirty_one_days() {
     let clock = tokenmon_core::ManualClock::new(now());
-    let cap = start_of_day(&clock, now()) - chrono::Duration::days(31);
+    let cap = at(2026, 7, 10, 0, 0);
     let far = now() - chrono::Duration::days(90);
     assert_eq!(events_window_start(&clock, Some(far), now()), cap);
     assert_eq!(events_window_start(&clock, None, now()), cap);
@@ -200,10 +200,8 @@ async fn test_paging_stops_at_the_page_cap() {
         .mount(&server)
         .await;
     let clock = std::sync::Arc::new(tokenmon_core::ManualClock::new(now()));
-    let client = tokenmon_provider_cursor::CursorUsageClient::new(
-        tokenmon_provider_cursor::CursorHttp::new(&server.uri(), "t"),
-        clock,
-    );
+    let client =
+        tokenmon_provider_cursor::CursorUsageClient::new(common::cursor_http(&server.uri()), clock);
     let r = client.fetch_snapshot(COOKIE, now()).await.unwrap();
     assert!(r.snapshot.account_email.is_none());
     let posts = server
@@ -245,7 +243,7 @@ async fn test_paging_stops_once_the_total_is_read() {
         .mount(&server)
         .await;
     let client = tokenmon_provider_cursor::CursorUsageClient::new(
-        tokenmon_provider_cursor::CursorHttp::new(&server.uri(), "t"),
+        common::cursor_http(&server.uri()),
         std::sync::Arc::new(tokenmon_core::ManualClock::new(now())),
     );
     client.fetch_snapshot(COOKIE, now()).await.unwrap();
@@ -276,7 +274,7 @@ async fn test_summary_unauthorized_fails_the_fetch() {
         .mount(&server)
         .await;
     let client = tokenmon_provider_cursor::CursorUsageClient::new(
-        tokenmon_provider_cursor::CursorHttp::new(&server.uri(), "t"),
+        common::cursor_http(&server.uri()),
         std::sync::Arc::new(tokenmon_core::ManualClock::new(now())),
     );
     let e = client.fetch_snapshot(COOKIE, now()).await.unwrap_err();

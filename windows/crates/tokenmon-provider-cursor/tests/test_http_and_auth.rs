@@ -1,9 +1,11 @@
 //! Body checks, HTTP status mapping and the Cursor auth configuration.
 
-use tokenmon_core::{ProviderError, ProviderErrorContext, UsageError};
+use std::sync::Arc;
+
+use tokenmon_core::net::{json_object, looks_like_login_page};
+use tokenmon_core::{FixedClock, ProviderError, ProviderErrorContext, UsageError};
 use tokenmon_provider_cursor::{
-    CursorHttp, CursorSignIn, ForbiddenPolicy, RequestPolicy, cursor_auth_config, domain_matches,
-    json_object, looks_like_login_page, map_status, parse_retry_after, reject_unauthorized_body,
+    CursorHttp, CursorSignIn, cursor_auth_config, reject_unauthorized_body,
 };
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -62,33 +64,45 @@ fn test_reject_unauthorized_body_passes_normal_summary() {
     assert!(reject_unauthorized_body(br#"{"individualUsage":{"plan":{}}}"#, CTX).is_ok());
 }
 
-/// Non-UTF-8 prefixes are handled (Latin-1 style scan).
-#[test]
-fn test_login_page_scan_tolerates_invalid_utf8() {
-    let mut body = vec![0xff, 0xfe, b'<'];
-    body.extend_from_slice(b"html>SIGN IN</html>");
-    assert!(!looks_like_login_page(&body[1..2])); // no marker
-    assert!(looks_like_login_page(&body[2..]));
+/// A `CursorHttp` for `uri` with the given provider wording.
+fn http_for(ctx: ProviderErrorContext, uri: &str) -> CursorHttp {
+    CursorHttp::with_base_url(ctx, uri, Some("test"), Arc::new(FixedClock::from_unix(0)))
+        .expect("client")
+}
+
+/// Mounts a GET `/x` answering `template` and returns the outcome of fetching it.
+async fn get_x(
+    ctx: ProviderErrorContext,
+    template: ResponseTemplate,
+) -> Result<Vec<u8>, ProviderError> {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/x"))
+        .respond_with(template)
+        .mount(&server)
+        .await;
+    http_for(ctx, &server.uri())
+        .get("/x", "c=1", "https://cursor.com")
+        .await
 }
 
 /// The status table for Cursor: 403 is an expired session.
-#[test]
-fn test_status_mapping_for_cursor() {
-    let p = RequestPolicy::CURSOR;
-    assert!(map_status(200, false, None, b"{}", p).is_ok());
+#[tokio::test]
+async fn test_status_mapping_for_cursor() {
+    let ok = get_x(CTX, ResponseTemplate::new(200).set_body_string("{}")).await;
+    assert_eq!(ok.unwrap(), b"{}");
+    for status in [401, 403] {
+        assert_eq!(
+            get_x(CTX, ResponseTemplate::new(status).set_body_string("{}")).await,
+            Err(ProviderError::Unauthorized(CTX))
+        );
+    }
     assert_eq!(
-        map_status(401, false, None, b"", p),
-        Err(ProviderError::Unauthorized(CTX))
-    );
-    assert_eq!(
-        map_status(403, false, None, b"{}", p),
-        Err(ProviderError::Unauthorized(CTX))
-    );
-    assert_eq!(
-        map_status(500, false, None, b"", p),
+        get_x(CTX, ResponseTemplate::new(500)).await,
         Err(ProviderError::BadResponse(CTX, "HTTP 500".into()))
     );
-    let rate = map_status(429, false, Some(30.0), b"", p).unwrap_err();
+    let limited = ResponseTemplate::new(429).insert_header("retry-after", "30");
+    let rate = get_x(CTX, limited).await.unwrap_err();
     assert_eq!(
         rate.to_string(),
         "Cursor is rate limiting requests. Retrying later."
@@ -97,10 +111,12 @@ fn test_status_mapping_for_cursor() {
 }
 
 /// Grokbot's 403 is a transient custom error; challenges win over status.
-#[test]
-fn test_status_mapping_for_grokbot_and_challenges() {
-    let p = RequestPolicy::GROKBOT;
-    let forbidden = map_status(403, false, None, b"{}", p).unwrap_err();
+#[tokio::test]
+async fn test_status_mapping_for_grokbot_and_challenges() {
+    let g = ProviderErrorContext::Grokbot;
+    let forbidden = get_x(g, ResponseTemplate::new(403).set_body_string("{}"))
+        .await
+        .unwrap_err();
     assert_eq!(
         forbidden.to_string(),
         "Grok Bot is not available on this Cursor account."
@@ -109,22 +125,15 @@ fn test_status_mapping_for_grokbot_and_challenges() {
         forbidden.usage_error(),
         UsageError::BadResponse(_)
     ));
-    assert!(matches!(p.forbidden, ForbiddenPolicy::Custom(_)));
-    let blocked = map_status(403, false, None, b"<html>blocked</html>", p).unwrap_err();
+    let html = ResponseTemplate::new(403).set_body_string("<html>blocked</html>");
+    let blocked = get_x(g, html).await.unwrap_err();
     assert!(
         blocked
             .to_string()
             .contains("bot-protection check (HTTP 403)")
     );
-    assert!(map_status(200, true, None, b"{}", p).is_err());
-}
-
-/// `Retry-After` accepts sane seconds only.
-#[test]
-fn test_parse_retry_after() {
-    assert_eq!(parse_retry_after("12"), Some(12.0));
-    assert_eq!(parse_retry_after("NaN"), None);
-    assert_eq!(parse_retry_after("-4"), None);
+    let mitigated = ResponseTemplate::new(200).insert_header("cf-mitigated", "challenge");
+    assert!(get_x(g, mitigated).await.is_err());
 }
 
 /// The transport sends cookie, accept, user agent and referer, and maps 401.
@@ -145,17 +154,11 @@ async fn test_http_get_sends_shared_headers_and_maps_status() {
         .respond_with(ResponseTemplate::new(401))
         .mount(&server)
         .await;
-    let http = CursorHttp::new(&server.uri(), "TokenMon/test");
+    let http = http_for(ProviderErrorContext::Grokbot, &server.uri());
     let cookie = "WorkosCursorSessionToken=abc";
-    let policy = RequestPolicy::GROKBOT;
-    let body = http
-        .get("/ok", cookie, "https://cursor.com/bot", policy)
-        .await
-        .unwrap();
-    assert_eq!(body, b"{}");
-    let denied = http
-        .get("/denied", cookie, "https://cursor.com/bot", policy)
-        .await;
+    let body = http.get("/ok", cookie, "https://cursor.com/bot").await;
+    assert_eq!(body.unwrap(), b"{}");
+    let denied = http.get("/denied", cookie, "https://cursor.com/bot").await;
     assert_eq!(
         denied,
         Err(ProviderError::Unauthorized(ProviderErrorContext::Grokbot))
@@ -165,9 +168,9 @@ async fn test_http_get_sends_shared_headers_and_maps_status() {
 /// A refused connection maps to a network error without leaking the URL.
 #[tokio::test]
 async fn test_http_transport_failure_is_network_error() {
-    let http = CursorHttp::new("http://127.0.0.1:1", "TokenMon/test");
+    let http = http_for(CTX, "http://127.0.0.1:1");
     let e = http
-        .get("/x", "c=1", "https://cursor.com", RequestPolicy::CURSOR)
+        .get("/x", "c=1", "https://cursor.com")
         .await
         .unwrap_err();
     assert!(matches!(e, ProviderError::Network(CTX, _)));
@@ -222,7 +225,6 @@ fn test_cursor_domain_filter() {
     for d in ["opencode.ai", "grok.com", "evilcursor.com"] {
         assert!(!CursorSignIn::is_cursor_domain(d), "{d}");
     }
-    assert!(!domain_matches("", &["cursor.com"]));
 }
 
 /// The return page is a cursor.com dashboard or settings page.

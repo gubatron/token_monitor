@@ -4,7 +4,9 @@
 #![allow(clippy::unwrap_used, clippy::assert_is_empty)]
 
 use chrono::{DateTime, TimeZone, Utc};
-use tokenmon_core::{ProviderError, ProviderErrorContext};
+use std::sync::Arc;
+
+use tokenmon_core::{FixedClock, ProviderError, ProviderErrorContext};
 use tokenmon_provider_cursor::CursorHttp;
 use tokenmon_provider_grokbot::{
     GrokbotEntitlement, GrokbotSnapshot, GrokbotUsageClient, NO_ALLOWANCE_MESSAGE,
@@ -204,8 +206,19 @@ fn test_extreme_timestamps_are_ignored() {
     assert_eq!(s.period_start, None);
 }
 
+/// A `CursorHttp` for `base_url` with Grokbot wording and a fixed clock.
+fn cursor_http(base_url: &str) -> CursorHttp {
+    CursorHttp::with_base_url(
+        ProviderErrorContext::Grokbot,
+        base_url,
+        Some("test"),
+        Arc::new(FixedClock::from_unix(1_787_000_000)),
+    )
+    .unwrap()
+}
+
 fn client_for(server: &MockServer) -> GrokbotUsageClient {
-    GrokbotUsageClient::new(CursorHttp::new(&server.uri(), "TokenMon/test"))
+    GrokbotUsageClient::new(cursor_http(&server.uri()))
 }
 
 async fn fetch_with(status: u16, body: &str) -> Result<GrokbotSnapshot, ProviderError> {
@@ -293,10 +306,7 @@ async fn test_transport_error_is_network() {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         listener.local_addr().unwrap().port()
     };
-    let client = GrokbotUsageClient::new(CursorHttp::new(
-        &format!("http://127.0.0.1:{port}"),
-        "TokenMon/test",
-    ));
+    let client = GrokbotUsageClient::new(cursor_http(&format!("http://127.0.0.1:{port}")));
     let e = client
         .fetch_usage_status("c=1", None, fetched_at())
         .await

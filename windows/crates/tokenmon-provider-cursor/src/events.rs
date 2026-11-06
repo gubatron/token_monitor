@@ -7,7 +7,7 @@ use chrono::{DateTime, Utc};
 use serde_json::{Map, Value};
 use tokenmon_core::{ProviderError, ProviderErrorContext};
 
-use crate::json::{number, number_of, object_of, safe_int64};
+use tokenmon_core::util::json::number;
 
 const CTX: ProviderErrorContext = ProviderErrorContext::Cursor;
 
@@ -53,14 +53,14 @@ impl CursorUsageEvent {
             return None;
         }
         let date = event_timestamp(json)?;
-        let usage = object_of(json, "tokenUsage");
-        let count = |key: &str| usage.and_then(|u| number_of(u, key)).unwrap_or(0.0);
+        let usage = json.get("tokenUsage").and_then(Value::as_object);
+        let count = |key: &str| usage.and_then(|u| number(u.get(key))).unwrap_or(0.0);
         let (input, output) = (count("inputTokens"), count("outputTokens"));
         let (read, write) = (count("cacheReadTokens"), count("cacheWriteTokens"));
         Some(Self {
             date,
             charged_cents: charged_cents(json, usage),
-            requests_costs: number_of(json, "requestsCosts").unwrap_or(0.0).max(0.0),
+            requests_costs: number(json.get("requestsCosts")).unwrap_or(0.0).max(0.0),
             input_tokens: safe_int64(input),
             output_tokens: safe_int64(output),
             cache_read_tokens: safe_int64(read),
@@ -86,11 +86,11 @@ impl CursorUsageEvent {
 }
 
 fn charged_cents(json: &Map<String, Value>, usage: Option<&Map<String, Value>>) -> f64 {
-    number_of(json, "chargedCents")
+    number(json.get("chargedCents"))
         .filter(|c| *c > 0.0)
         .or_else(|| {
             usage
-                .and_then(|u| number_of(u, "totalCents"))
+                .and_then(|u| number(u.get("totalCents")))
                 .filter(|c| *c > 0.0)
         })
         .unwrap_or(0.0)
@@ -140,7 +140,7 @@ pub fn parse_usage_events_page(data: &[u8]) -> Result<EventsPage, ProviderError>
 pub fn events_page_from_object(root: &Map<String, Value>) -> EventsPage {
     let total = root
         .get("totalUsageEventsCount")
-        .and_then(number)
+        .and_then(|v| number(Some(v)))
         .map_or(0, safe_int64);
     let raw: &[Value] = root
         .get("usageEventsDisplay")
@@ -194,4 +194,28 @@ pub fn date_from_epoch_number(value: f64) -> Option<DateTime<Utc>> {
     let whole = seconds.floor();
     let nanos = (((seconds - whole) * 1.0e9) as u32).min(999_999_999);
     DateTime::from_timestamp(whole as i64, nanos)
+}
+
+/// `safeInt64`: non-finite gives 0, out-of-range saturates, else truncates.
+///
+/// # Examples
+///
+/// ```
+/// use tokenmon_provider_cursor::safe_int64;
+/// assert_eq!(safe_int64(1e30), i64::MAX);
+/// assert_eq!(safe_int64(-1e30), i64::MIN);
+/// assert_eq!(safe_int64(f64::NAN), 0);
+/// assert_eq!(safe_int64(f64::INFINITY), 0);
+/// assert_eq!(safe_int64(12.9), 12);
+/// ```
+pub fn safe_int64(value: f64) -> i64 {
+    if !value.is_finite() {
+        0
+    } else if value >= i64::MAX as f64 {
+        i64::MAX
+    } else if value <= i64::MIN as f64 {
+        i64::MIN
+    } else {
+        value as i64
+    }
 }

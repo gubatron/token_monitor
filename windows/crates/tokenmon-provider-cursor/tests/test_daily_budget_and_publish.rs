@@ -318,7 +318,7 @@ async fn test_fetcher_current_unauthorized_invalidates_session_after_three() {
         .await;
     let clock = Arc::new(ManualClock::new(at(2026, 8, 10, 12, 0)));
     let client = tokenmon_provider_cursor::CursorUsageClient::new(
-        tokenmon_provider_cursor::CursorHttp::new(&server.uri(), "t"),
+        common::cursor_http(&server.uri()),
         clock.clone(),
     );
     let s = session(Some("c=1"));

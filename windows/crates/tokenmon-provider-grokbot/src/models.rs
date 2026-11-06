@@ -1,8 +1,8 @@
 //! Grokbot snapshot types (spec 02 section 2.4).
 
 use chrono::{DateTime, Utc};
+use tokenmon_core::usage::Percent;
 use tokenmon_core::usage::{Calendar, DailyBudget, UsagePool};
-use tokenmon_provider_cursor::json::clamp_percent;
 
 /// Fallback period length, in days, when the provider's span is not weekly.
 pub const DEFAULT_PERIOD_DAYS: i64 = 7;
@@ -58,7 +58,7 @@ pub struct GrokbotSnapshot {
 impl GrokbotSnapshot {
     /// `clamp(100 - used)`.
     pub fn remaining_percent(&self) -> f64 {
-        clamp_percent(100.0 - self.used_percent)
+        Percent::clamp(100.0 - self.used_percent)
     }
 
     /// The raw span between period start and reset in local calendar days;

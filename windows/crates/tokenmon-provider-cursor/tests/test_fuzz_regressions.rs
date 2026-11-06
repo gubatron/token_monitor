@@ -8,11 +8,11 @@ mod common;
 use std::path::PathBuf;
 
 use chrono::DateTime;
+use tokenmon_core::net::{json_object, looks_like_html};
 use tokenmon_core::{ManualClock, ProviderError, ProviderErrorContext};
 use tokenmon_provider_cursor::{
-    aggregate_cost_stats, daily_tokens, estimated_weight_by_day, hour_weights, json_object,
-    looks_like_html, parse_email, parse_summary, parse_usage_events_page, quota_hour_weights,
-    reject_unauthorized_body,
+    aggregate_cost_stats, daily_tokens, estimated_weight_by_day, hour_weights, parse_email,
+    parse_summary, parse_usage_events_page, quota_hour_weights, reject_unauthorized_body,
 };
 
 fn corpus(target: &str) -> Vec<Vec<u8>> {
@@ -71,7 +71,7 @@ fn check_events(data: &[u8]) {
     assert!(
         daily_tokens(&clock, &page.events)
             .values()
-            .all(|d| d.cost_usd.is_finite())
+            .all(|d| d.cost_usd.is_none_or(f64::is_finite))
     );
     assert!(
         estimated_weight_by_day(&clock, &page.events, first.date, None, first.date)

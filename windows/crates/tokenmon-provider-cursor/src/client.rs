@@ -10,6 +10,7 @@ use std::sync::{Arc, Mutex};
 
 use chrono::{DateTime, NaiveDate, Utc};
 use serde_json::json;
+use tokenmon_core::usage::Calendar;
 use tokenmon_core::{AuthSession, Clock, ProviderError, ProviderErrorContext, UsageFetcher};
 
 use crate::aggregate::{
@@ -17,13 +18,11 @@ use crate::aggregate::{
     CursorEventLedger, EVENTS_MAX_PAGES, EVENTS_PAGE_SIZE, aggregate_events, events_window_start,
 };
 use crate::events::{CursorUsageEvent, events_page_from_object};
-use crate::http::{CURSOR_BASE_URL, CursorHttp, RequestPolicy, reject_unauthorized_body};
+use crate::http::{CURSOR_BASE_URL, CursorHttp, reject_unauthorized_body};
 use crate::models::CursorSnapshot;
 use crate::summary::{parse_email, parse_summary_object};
-use crate::time::start_of_day;
 
 const CTX: ProviderErrorContext = ProviderErrorContext::Cursor;
-const POLICY: RequestPolicy = RequestPolicy::CURSOR;
 const EVENTS_PATH: &str = "/api/dashboard/get-filtered-usage-events";
 
 /// Result of one [`CursorUsageClient::fetch_snapshot`].
@@ -60,9 +59,17 @@ impl CursorUsageClient {
         }
     }
 
-    /// Production client for `https://cursor.com`.
-    pub fn production(user_agent: &str, clock: Arc<dyn Clock>) -> Self {
-        Self::new(CursorHttp::new(CURSOR_BASE_URL, user_agent), clock)
+    /// Production client for `https://cursor.com`; `app_version` feeds the
+    /// `User-Agent`.
+    ///
+    /// # Errors
+    /// `Network` when the TLS backend cannot be initialised.
+    pub fn production(
+        app_version: Option<&str>,
+        clock: Arc<dyn Clock>,
+    ) -> Result<Self, ProviderError> {
+        let http = CursorHttp::production(CTX, app_version, Arc::clone(&clock))?;
+        Ok(Self::new(http, clock))
     }
 
     /// The event cache (cleared on sign-out and account reset).
@@ -74,17 +81,15 @@ impl CursorUsageClient {
     ///
     /// # Errors
     /// A failing summary request fails the call (HTTP mapping per
-    /// [`RequestPolicy::CURSOR`]). `auth/me` and events failures never do.
+    /// the [`CursorHttp`] status mapping). `auth/me` and events failures never do.
     pub async fn fetch_snapshot(
         &self,
         cookie: &str,
         now: DateTime<Utc>,
     ) -> Result<CursorFetchResult, ProviderError> {
         let (summary, me) = futures::future::join(
-            self.http
-                .get("/api/usage-summary", cookie, CURSOR_BASE_URL, POLICY),
-            self.http
-                .get("/api/auth/me", cookie, CURSOR_BASE_URL, POLICY),
+            self.http.get("/api/usage-summary", cookie, CURSOR_BASE_URL),
+            self.http.get("/api/auth/me", cookie, CURSOR_BASE_URL),
         )
         .await;
         let root = reject_unauthorized_body(&summary?, CTX)?;
@@ -99,7 +104,7 @@ impl CursorUsageClient {
             .event_aggregates(cookie, &snapshot, window_start, now)
             .await
             .filter(|a| a.window_start == window_start);
-        let today = start_of_day(&*self.clock, now);
+        let today = Calendar::local(&*self.clock).start_of_day(now);
         Ok(match aggregates {
             None => CursorFetchResult {
                 snapshot,
@@ -205,7 +210,7 @@ impl CursorUsageClient {
             });
             let bytes = self
                 .http
-                .post_json(EVENTS_PATH, cookie, CURSOR_BASE_URL, &body, POLICY)
+                .post_json(EVENTS_PATH, cookie, CURSOR_BASE_URL, &body)
                 .await?;
             let parsed = events_page_from_object(&reject_unauthorized_body(&bytes, CTX)?);
             paged += parsed.page_count;

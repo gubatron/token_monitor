@@ -4,7 +4,6 @@
 //!   page classifiers.
 //! * [`http`]: [`CursorHttp`], the HTTP plumbing and status mapping shared with
 //!   Grokbot, plus the login-page / `not_authenticated` body checks.
-//! * [`json`]: lenient JSON readers shared with Grokbot.
 //! * [`summary`]: `/api/usage-summary` and `/api/auth/me` parsers.
 //! * [`events`]: usage-event page parser and event model.
 //! * [`aggregate`]: cost, hourly and per-day aggregation plus the event
@@ -20,11 +19,9 @@ pub mod budget;
 pub mod client;
 pub mod events;
 pub mod http;
-pub mod json;
 pub mod models;
 pub mod publish;
 pub mod summary;
-pub mod time;
 
 pub use aggregate::*;
 pub use auth::*;
@@ -35,4 +32,3 @@ pub use http::*;
 pub use models::*;
 pub use publish::*;
 pub use summary::*;
-pub use time::*;

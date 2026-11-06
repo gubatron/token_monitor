@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 
 use chrono::{DateTime, NaiveDate, Utc};
 
-use crate::json::clamp_percent;
+use tokenmon_core::usage::{DailyTokenUsage, Percent};
 
 /// Which Cursor quota a pool tracks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -51,7 +51,7 @@ pub struct CursorPoolUsage {
 impl CursorPoolUsage {
     /// `clamp(100 - used)`.
     pub fn remaining_percent(&self) -> f64 {
-        clamp_percent(100.0 - self.used_percent)
+        Percent::clamp(100.0 - self.used_percent)
     }
 }
 
@@ -66,33 +66,6 @@ pub struct CursorCostStats {
     pub cycle_input_tokens: i64,
     /// Output tokens in the cycle.
     pub cycle_output_tokens: i64,
-}
-
-/// Tokens and cost of one local day, as shown in the daily-bar hover label.
-#[derive(Debug, Clone, PartialEq, Default)]
-pub struct DayTokenUsage {
-    /// Input tokens.
-    pub input: i64,
-    /// Output tokens.
-    pub output: i64,
-    /// Cache-read tokens.
-    pub cache_read: i64,
-    /// Cache-write tokens.
-    pub cache_write: i64,
-    /// Charged cost in USD.
-    pub cost_usd: f64,
-    /// Total tokens per model name.
-    pub by_model: BTreeMap<String, i64>,
-}
-
-impl DayTokenUsage {
-    /// Sum of the four token kinds (saturating).
-    pub fn total(&self) -> i64 {
-        self.input
-            .saturating_add(self.output)
-            .saturating_add(self.cache_read)
-            .saturating_add(self.cache_write)
-    }
 }
 
 /// What one successful Cursor refresh publishes.
@@ -125,7 +98,7 @@ pub struct CursorSnapshot {
     /// Account email from `/api/auth/me`.
     pub account_email: Option<String>,
     /// Tokens per local day.
-    pub daily_tokens: BTreeMap<NaiveDate, DayTokenUsage>,
+    pub daily_tokens: BTreeMap<NaiveDate, DailyTokenUsage>,
 }
 
 impl CursorSnapshot {

@@ -6,10 +6,21 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use chrono::{DateTime, TimeZone, Utc};
 use serde_json::{Value, json};
-use tokenmon_core::{ManualClock, ProviderError};
+use tokenmon_core::{ManualClock, ProviderError, ProviderErrorContext};
 use tokenmon_provider_cursor::{CursorHttp, CursorUsageClient, CursorUsageEvent};
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, Request, Respond, ResponseTemplate};
+
+/// A Cursor-flavoured `CursorHttp` for a mock server `uri`.
+pub fn cursor_http(uri: &str) -> CursorHttp {
+    CursorHttp::with_base_url(
+        ProviderErrorContext::Cursor,
+        uri,
+        Some("test"),
+        Arc::new(ManualClock::from_unix(0)),
+    )
+    .unwrap()
+}
 
 /// UTC instant helper.
 pub fn at(y: i32, mo: u32, d: u32, h: u32, mi: u32) -> DateTime<Utc> {
@@ -113,7 +124,7 @@ pub async fn harness(now: DateTime<Utc>, events: Vec<(i64, i64)>) -> Harness {
         .mount(&server)
         .await;
     let clock = Arc::new(ManualClock::new(now));
-    let http = CursorHttp::new(&server.uri(), "TokenMon/test");
+    let http = cursor_http(&server.uri());
     let client = CursorUsageClient::new(http, clock.clone());
     Harness {
         server,
