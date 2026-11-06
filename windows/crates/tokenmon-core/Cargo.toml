@@ -25,7 +25,7 @@ sha2 = { workspace = true }
 futures = { workspace = true }
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["rt", "macros", "time", "test-util"] }
+tokio = { workspace = true, features = ["rt", "macros", "time", "test-util", "net", "io-util"] }
 wiremock = { workspace = true }
 futures = { workspace = true, features = ["executor"] }
 proptest = { workspace = true }

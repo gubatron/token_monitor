@@ -48,6 +48,46 @@ pub struct RequestOptions<'a> {
     pub origin: Option<&'a str>,
     /// Extra headers; they override the standard ones.
     pub headers: &'a [(&'a str, &'a str)],
+    /// Overrides the client's response-size cap for this request
+    /// ([`DEFAULT_MAX_RESPONSE_BYTES`] unless changed with
+    /// [`ProviderHttp::with_max_response_bytes`]).
+    pub max_response_bytes: Option<usize>,
+}
+
+/// Default cap on a buffered response body: 16 MiB.
+pub const DEFAULT_MAX_RESPONSE_BYTES: usize = 16 * 1024 * 1024;
+
+/// A response body grew past the allowed size and was abandoned unread.
+///
+/// Surfaces to callers as `BadResponse("Response too large")`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("response body exceeds the {limit} byte limit")]
+pub struct ResponseTooLarge {
+    /// The cap that was exceeded, in bytes.
+    pub limit: usize,
+}
+
+/// Checks that appending `incoming` bytes to a body of `held` bytes stays
+/// within `limit`, so a reader never buffers more than `limit` plus one chunk.
+///
+/// # Errors
+///
+/// [`ResponseTooLarge`] when the total would exceed `limit`.
+///
+/// # Examples
+///
+/// ```
+/// use tokenmon_core::net::http::{ResponseTooLarge, ensure_room};
+///
+/// assert_eq!(ensure_room(2, 1, 3), Ok(()));
+/// assert_eq!(ensure_room(2, 2, 3), Err(ResponseTooLarge { limit: 3 }));
+/// ```
+pub fn ensure_room(held: usize, incoming: usize, limit: usize) -> Result<(), ResponseTooLarge> {
+    if held.saturating_add(incoming) > limit {
+        Err(ResponseTooLarge { limit })
+    } else {
+        Ok(())
+    }
 }
 
 /// A completed HTTP exchange whose status was acceptable to the caller.
@@ -256,6 +296,7 @@ pub struct ProviderHttp {
     context: ProviderErrorContext,
     user_agent: String,
     clock: Arc<dyn Clock>,
+    max_response_bytes: usize,
 }
 
 impl std::fmt::Debug for ProviderHttp {
@@ -312,7 +353,16 @@ impl ProviderHttp {
             context,
             user_agent: user_agent(app_version),
             clock,
+            max_response_bytes: DEFAULT_MAX_RESPONSE_BYTES,
         }
+    }
+
+    /// Changes the default response-size cap (per-request
+    /// [`RequestOptions::max_response_bytes`] still wins).
+    #[must_use]
+    pub fn with_max_response_bytes(mut self, limit: usize) -> Self {
+        self.max_response_bytes = limit;
+        self
     }
 
     /// The provider wording this client reports errors in.
@@ -403,10 +453,24 @@ impl ProviderHttp {
             request = request.body(bytes);
         }
         let network = |e: reqwest::Error| ProviderError::Network(ctx, flatten(&e.without_url()));
-        let response = request.headers(headers).send().await.map_err(network)?;
+        let limit = options
+            .max_response_bytes
+            .unwrap_or(self.max_response_bytes);
+        let mut response = request.headers(headers).send().await.map_err(network)?;
         let status = response.status();
         let response_headers = response.headers().clone();
-        let body = response.bytes().await.map_err(network)?.to_vec();
+        let too_large = || ProviderError::BadResponse(ctx, "Response too large".to_owned());
+        if response
+            .content_length()
+            .is_some_and(|n| usize::try_from(n).map_or(true, |n| n > limit))
+        {
+            return Err(too_large());
+        }
+        let mut body = Vec::new();
+        while let Some(chunk) = response.chunk().await.map_err(network)? {
+            ensure_room(body.len(), chunk.len(), limit).map_err(|_| too_large())?;
+            body.extend_from_slice(&chunk);
+        }
         self.check(status, &response_headers, &body)?;
         Ok(HttpResponse {
             status,
