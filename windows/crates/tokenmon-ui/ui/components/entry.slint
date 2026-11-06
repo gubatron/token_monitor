@@ -1,0 +1,9 @@
+// Compile entry point of the UI kit (build.rs writes it to $OUT_DIR/kit.rs).
+// Only globals, structs and Window components are exported here (Rust code is
+// generated for exactly these); panels and settings import the reusable
+// components from "kit.slint" directly.
+//
+// Each workstream appends its own `export ... from` lines below; keep both
+// sides on merge conflicts.
+export { Theme, Typo, PanelMetrics, LabelValue, BarSegment, CategoryItem, MetricItem, DayBar, Logos, HoverMath } from "kit.slint";
+export { SnapPanelCard, SnapMetricGrid, SnapUsage, SnapCaptions, SnapDailyBudget, SnapDailyUsage, SnapClaudeMock, Gallery } from "snapshots.slint";

@@ -95,7 +95,9 @@ impl Encryptor for DpapiEncryptor {
         if ok == 0 {
             // SAFETY: GetLastError has no preconditions.
             let code = unsafe { GetLastError() };
-            return Err(CryptError(format!("CryptUnprotectData failed: error {code}")));
+            return Err(CryptError(format!(
+                "CryptUnprotectData failed: error {code}"
+            )));
         }
         // SAFETY: the call above succeeded, so `out` is a valid DPAPI blob.
         Ok(unsafe { take(out) })

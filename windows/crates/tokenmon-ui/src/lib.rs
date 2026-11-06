@@ -4,6 +4,7 @@
 //! `.slint` sources live under `ui/`: `ui/components/` (ws-ui-kit),
 //! `ui/panels/` (ws-ui-panels) and `ui/settings/` (ws-ui-settings).
 
+pub mod kit;
 pub mod panels;
 pub mod settings;
 pub mod tray_icon;

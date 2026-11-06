@@ -1,0 +1,61 @@
+// Data structs shared by the kit components. All strings are pre-formatted by
+// the Rust view models in `tokenmon_ui::kit`, so components never format
+// numbers (Slint has no printf).
+
+/// A label/value pair (hover grid rows, token breakdown).
+export struct LabelValue {
+    label: string,
+    value: string,
+}
+
+/// One slot of a `SegmentedUsageBar`. `width` is precomputed for the bar's
+/// track width by `kit::segments::layout_segments`.
+export struct BarSegment {
+    width: length,
+    color: color,
+    /// True for the trailing "remaining" slot (drawn in the empty-track color).
+    remainder: bool,
+}
+
+/// One legend entry of a `CategoryRow`.
+export struct CategoryItem {
+    name: string,
+    /// Already rounded, e.g. "42%".
+    percent-text: string,
+    color: color,
+}
+
+/// One cell of a `MetricStatGrid`.
+export struct MetricItem {
+    title: string,
+    value: string,
+}
+
+/// One day column of the daily bar charts.
+export struct DayBar {
+    /// Fill height as a percentage of the day's allowance (can exceed 100;
+    /// the fill is capped at the stem height). Ignored unless `show-fill`.
+    fill-percent: float,
+    /// Draw a fill at all (value above 0.5% and the day is not in the future).
+    show-fill: bool,
+    /// The day belongs to the pool before an early provider reset (fill at 45% opacity).
+    prior-window: bool,
+    /// Future day: its labels render at 50% opacity and the hover has no usage line.
+    future: bool,
+    /// Top label, e.g. "31%".
+    label-percent: string,
+    /// Bottom label, e.g. "Mo".
+    label-weekday: string,
+    /// Hover title, e.g. "Tuesday, Oct 14".
+    hover-title: string,
+    /// Hover usage line (empty for future days).
+    hover-usage: string,
+    /// Token total, e.g. "1.2M" (empty hides the token section).
+    tokens-total: string,
+    /// Cost, e.g. "≈ $4.20+" (empty hides it).
+    tokens-cost: string,
+    /// Input / Output / Cache read / Cache write rows.
+    token-rows: [LabelValue],
+    /// Up to three model rows.
+    model-rows: [LabelValue],
+}

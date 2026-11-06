@@ -20,3 +20,7 @@ rfd = { workspace = true, features = ["xdg-portal", "pollster", "common-controls
 
 [build-dependencies]
 slint-build = { workspace = true }
+
+[dev-dependencies]
+# Offscreen snapshot tests decode/encode PNGs.
+png = "0.17"

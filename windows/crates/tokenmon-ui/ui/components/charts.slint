@@ -1,0 +1,318 @@
+// Daily bar charts, week paging and the hover label (spec 04 section 3.4).
+import { Theme, Typo, PanelMetrics } from "theme.slint";
+import { DayBar, LabelValue } from "types.slint";
+import { PanelSectionHeader, DigitText } from "basics.slint";
+
+/// Pointer-to-chart geometry, mirrored by `tokenmon_ui::kit::hover`
+/// (unit tests pin both to the same table).
+export global HoverMath {
+    /// Column under `x`, or -1 when none (`x` < 0, bad width, past the last column).
+    pure public function column-index(x: length, column-width: length, columns: int) -> int {
+        if (columns < 1 || column-width <= 0px || x < 0px) {
+            -1
+        } else if (floor(x / column-width) < columns) {
+            floor(x / column-width)
+        } else {
+            -1
+        }
+    }
+
+    /// Left edge of the floating label: beside the pointer (left preferred,
+    /// right when the left side would leave the container).
+    pure public function label-x(pointer-x: length, label-width: length, container-width: length) -> length {
+        if (pointer-x - PanelMetrics.hover-gap - label-width >= 0px) {
+            pointer-x - PanelMetrics.hover-gap - label-width
+        } else if (pointer-x + PanelMetrics.hover-gap + label-width <= container-width) {
+            pointer-x + PanelMetrics.hover-gap
+        } else {
+            max(0px, min(pointer-x - PanelMetrics.hover-gap - label-width, container-width - label-width))
+        }
+    }
+}
+
+/// Left / right chevrons above a daily chart. The left button is enabled by
+/// `can-previous`, the right one by `can-next`.
+export component WeekChartNavigation inherits HorizontalLayout {
+    in property <bool> can-previous: true;
+    in property <bool> can-next: false;
+    callback previous-week();
+    callback next-week();
+    spacing: 8px;
+    alignment: space-between;
+    Rectangle {
+        width: 22px;
+        height: 22px;
+        border-radius: 5px;
+        background: Theme.nav-button-background;
+        accessible-role: button;
+        accessible-label: "Previous week";
+        Image {
+            source: @image-url("../assets/icons/chevron-left.svg");
+            colorize: Theme.secondary;
+            width: 12px;
+            height: 12px;
+            opacity: root.can-previous ? 1 : 0.35;
+        }
+        TouchArea {
+            enabled: root.can-previous;
+            mouse-cursor: root.can-previous ? pointer : default;
+            clicked => { root.previous-week(); }
+        }
+    }
+    Rectangle {
+        width: 22px;
+        height: 22px;
+        border-radius: 5px;
+        background: Theme.nav-button-background;
+        accessible-role: button;
+        accessible-label: "Next week";
+        Image {
+            source: @image-url("../assets/icons/chevron-right.svg");
+            colorize: Theme.secondary;
+            width: 12px;
+            height: 12px;
+            opacity: root.can-next ? 1 : 0.35;
+        }
+        TouchArea {
+            enabled: root.can-next;
+            mouse-cursor: root.can-next ? pointer : default;
+            clicked => { root.next-week(); }
+        }
+    }
+}
+
+component HoverDivider inherits Rectangle {
+    height: 1px;
+    background: Theme.separator;
+    opacity: 0.4;
+}
+
+/// The floating card shown above a hovered day (date, usage line, tokens).
+export component DailyBudgetHoverLabel inherits Rectangle {
+    in property <DayBar> day;
+    width: content.preferred-width;
+    height: content.preferred-height;
+    background: Theme.window-background;
+    border-radius: 8px;
+    border-width: 1px;
+    border-color: Theme.separator;
+    drop-shadow-color: #00000040;
+    drop-shadow-blur: 6px;
+    drop-shadow-offset-y: 2px;
+    content := VerticalLayout {
+        padding-left: 10px;
+        padding-right: 10px;
+        padding-top: 8px;
+        padding-bottom: 8px;
+        spacing: 4px;
+        Text {
+            text: root.day.hover-title;
+            font-family: Typo.family;
+            font-size: Typo.caption-size;
+            font-weight: Typo.semibold;
+            color: Theme.primary;
+        }
+        if root.day.hover-usage != "": Text {
+            text: root.day.hover-usage;
+            font-family: Typo.family;
+            font-size: Typo.caption-size;
+            color: Theme.secondary;
+        }
+        if root.day.tokens-total != "": HoverDivider { }
+        if root.day.tokens-total != "": HorizontalLayout {
+            spacing: 4px;
+            Text {
+                text: root.day.tokens-total;
+                font-family: Typo.family;
+                font-size: Typo.title-size;
+                font-weight: Typo.semibold;
+                color: Theme.primary;
+            }
+            Text {
+                text: "tokens";
+                font-family: Typo.family;
+                font-size: Typo.caption-size;
+                color: Theme.secondary;
+                vertical-alignment: bottom;
+            }
+            Rectangle { min-width: root.day.tokens-cost != "" ? 10px : 0px; horizontal-stretch: 1; }
+            Text {
+                text: root.day.tokens-cost;
+                font-family: Typo.family;
+                font-size: Typo.body-size;
+                font-weight: Typo.semibold;
+                color: Theme.secondary;
+                vertical-alignment: bottom;
+            }
+        }
+        if root.day.tokens-total != "": VerticalLayout {
+            spacing: 1px;
+            for row in root.day.token-rows: HorizontalLayout {
+                spacing: 12px;
+                Text {
+                    text: row.label;
+                    font-family: Typo.family;
+                    font-size: Typo.caption-size;
+                    color: Theme.secondary;
+                    horizontal-stretch: 1;
+                }
+                Text {
+                    text: row.value;
+                    font-family: Typo.family;
+                    font-size: Typo.micro-size;
+                    font-weight: Typo.semibold;
+                    color: Theme.primary;
+                    horizontal-alignment: right;
+                }
+            }
+        }
+        if root.day.tokens-total != "" && root.day.model-rows.length > 0: HoverDivider { }
+        if root.day.tokens-total != "" && root.day.model-rows.length > 0: VerticalLayout {
+            spacing: 1px;
+            for row in root.day.model-rows: HorizontalLayout {
+                spacing: 12px;
+                Text {
+                    text: row.label;
+                    font-family: Typo.family;
+                    font-size: Typo.caption-size;
+                    color: Theme.secondary;
+                    horizontal-stretch: 1;
+                    overflow: elide;
+                }
+                Text {
+                    text: row.value;
+                    font-family: Typo.family;
+                    font-size: Typo.micro-size;
+                    font-weight: Typo.semibold;
+                    color: Theme.primary;
+                    horizontal-alignment: right;
+                }
+            }
+        }
+    }
+}
+
+/// One day column: 12x68 stem (track + bottom-up fill) over two labels.
+component DayColumn inherits VerticalLayout {
+    in property <DayBar> day;
+    in property <color> accent;
+    in property <bool> hovered;
+    spacing: 4px;
+    alignment: start;
+    HorizontalLayout {
+        alignment: center;
+        Rectangle {
+            width: PanelMetrics.stem-width;
+            height: PanelMetrics.stem-height;
+            background: Theme.usage-remaining-track;
+            border-radius: PanelMetrics.stem-radius;
+            if root.day.show-fill: Rectangle {
+                width: parent.width;
+                height: min(PanelMetrics.stem-height, max(6px, PanelMetrics.stem-height * root.day.fill-percent / 100));
+                y: parent.height - self.height;
+                background: root.accent;
+                opacity: root.day.prior-window ? 0.45 : 1;
+                border-radius: PanelMetrics.stem-radius;
+            }
+            Rectangle {
+                border-radius: PanelMetrics.stem-radius;
+                border-width: 1px;
+                border-color: root.hovered ? Theme.stem-hover-outline : transparent;
+            }
+        }
+    }
+    VerticalLayout {
+        height: 32px;
+        spacing: 1px;
+        alignment: start;
+        opacity: root.day.future ? 0.5 : 1;
+        Text {
+            text: root.day.label-percent;
+            font-family: Typo.family;
+            font-size: Typo.micro-size;
+            font-weight: Typo.semibold;
+            color: Theme.primary;
+            horizontal-alignment: center;
+            overflow: elide;
+        }
+        Text {
+            text: root.day.label-weekday;
+            font-family: Typo.family;
+            font-size: Typo.micro-size;
+            font-weight: Typo.semibold;
+            color: Theme.secondary;
+            horizontal-alignment: center;
+        }
+    }
+}
+
+/// The shared chart body: header, optional paging, bars with hover, footer.
+/// `DailyBudgetBars` and `DailyUsageChart` are thin wrappers.
+component DailyChartBody inherits VerticalLayout {
+    in property <string> title;
+    /// "14.3%" next to the title; empty hides it.
+    in property <string> header-percent;
+    in property <string> range-label;
+    in property <[DayBar]> days;
+    in property <color> accent;
+    in property <string> footer;
+    in property <bool> show-navigation;
+    in property <bool> can-previous: true;
+    in property <bool> can-next: false;
+    callback previous-week();
+    callback next-week();
+    spacing: 8px;
+    alignment: start;
+
+    HorizontalLayout {
+        spacing: 8px;
+        PanelSectionHeader { title: root.title; vertical-alignment: center; }
+        if root.header-percent != "": DigitText { text: root.header-percent; vertical-alignment: center; }
+        Rectangle { min-width: 8px; horizontal-stretch: 1; }
+        DigitText { text: root.range-label; vertical-alignment: center; }
+    }
+    if root.show-navigation: WeekChartNavigation {
+        can-previous: root.can-previous;
+        can-next: root.can-next;
+        previous-week => { root.previous-week(); }
+        next-week => { root.next-week(); }
+    }
+    bars := Rectangle {
+        height: PanelMetrics.stem-height + 42px;
+        private property <int> hovered: touch.has-hover ? HoverMath.column-index(touch.mouse-x, self.width / max(1, root.days.length), root.days.length) : -1;
+        HorizontalLayout {
+            for day[i] in root.days: DayColumn {
+                day: day;
+                accent: root.accent;
+                hovered: i == bars.hovered;
+            }
+        }
+        touch := TouchArea { }
+        if bars.hovered >= 0 && bars.hovered < root.days.length: DailyBudgetHoverLabel {
+            z: 100;
+            day: root.days[bars.hovered];
+            x: HoverMath.label-x(touch.mouse-x, self.width, bars.width);
+            y: touch.mouse-y - self.height / 2;
+        }
+    }
+    if root.footer != "": Text {
+        text: root.footer;
+        font-family: Typo.family;
+        font-size: Typo.body-size;
+        color: Theme.secondary;
+        wrap: word-wrap;
+    }
+}
+
+/// Weekly/monthly "Daily Budget" bars with optional week paging. Set
+/// `show-navigation` for the paging chevrons; past weeks pass an empty footer.
+export component DailyBudgetBars inherits DailyChartBody {
+    title: "Daily Budget";
+}
+
+/// Grok billing-period daily chart: same visuals, paging always shown.
+export component DailyUsageChart inherits DailyChartBody {
+    title: "Daily Budget";
+    show-navigation: true;
+    can-previous: true;
+}
