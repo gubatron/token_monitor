@@ -265,3 +265,65 @@ async fn test_api_key_commit_reports_errors_and_success() {
     assert!(state.key_error.is_none() && state.key_draft.is_empty() && !state.replacing_key);
     assert!(app.sessions.signed_in(ProviderId::OpenRouter));
 }
+
+/// A registered source's snapshot reaches the panel: a Grok snapshot becomes a
+/// usage panel with the used-percent text, and the chart query carries the
+/// browsed offset and "View all" flag.
+#[tokio::test]
+async fn test_registered_source_feeds_the_panel_and_receives_the_query() {
+    use std::sync::Mutex;
+    use tokenmon_app::model::AppModel;
+    use tokenmon_app::registry::{ProviderEntry, ProviderRegistry, SessionKey};
+    use tokenmon_app::sources::{SnapshotView, ViewSource};
+    use tokenmon_app::testing::FakePoller;
+    use tokenmon_provider_grok::models::WeeklyUsageSnapshot;
+    use tokenmon_ui::panels::grok::GrokSnapshotInput;
+
+    let (dir, app) = fixture();
+    let seen: Arc<Mutex<Vec<(i32, bool)>>> = Arc::default();
+    let log = Arc::clone(&seen);
+    let at = Utc.with_ymd_and_hms(2026, 7, 10, 12, 0, 0).unwrap();
+    let source: ViewSource = Arc::new(move |q| {
+        log.lock()
+            .expect("lock")
+            .push((q.week_offset, q.show_all_models));
+        SnapshotView::Grok(Some(GrokSnapshotInput::from(&WeeklyUsageSnapshot::new(
+            at, 42.0,
+        ))))
+    });
+    let session = Arc::new(0_u8);
+    let registry = ProviderRegistry::new(vec![ProviderEntry {
+        provider: ProviderId::Grok,
+        poller: FakePoller::new(ProviderId::Grok),
+        session: SessionKey::of(&session),
+    }])
+    .with_view(ProviderId::Grok, source);
+    let model = AppModel::new(
+        registry,
+        Arc::clone(&app.settings),
+        tokio::runtime::Handle::current(),
+    );
+    let store = OverviewStore::open(dir.path());
+    let env = ViewEnv {
+        model: &model,
+        sessions: &app.sessions,
+        overview: &store,
+        version: "1",
+        now: at,
+        tz: tz(),
+    };
+    let mut state = PanelState::new(ProviderId::Grok);
+    let grid = rows(&state, &app);
+    state.handle(&PanelEvent::PreviousPeriod(ProviderId::Grok), &grid, &[]);
+    state.handle(
+        &PanelEvent::ToggleShowAllModels(ProviderId::Grok),
+        &grid,
+        &[],
+    );
+    let PanelView::Grok(vm) = build_view(&env, &state, ProviderId::Grok) else {
+        panic!("grok view");
+    };
+    assert_eq!(vm.kind, PanelKind::Usage);
+    assert_eq!(vm.usage.expect("usage").pool_used_text, "42% Used");
+    assert_eq!(seen.lock().expect("lock").as_slice(), [(-1, true)]);
+}
