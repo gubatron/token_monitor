@@ -8,7 +8,7 @@ Subcommands:
         Parse one target's libFuzzer log (run with -print_final_stats=1) into a
         JSON row: runs, exec/s, corpus size, coverage gained, crash input.
 
-    fuzz_report.py table --title TITLE [--note TEXT] row.json...
+    fuzz_report.py table --title TITLE [--note TEXT] [--build-failed-log F] row.json...
         Print the Markdown summary for all rows: one table
         (target | runs | exec/s | corpus | new coverage | crashes) and, for each
         crash, the input as hex and base64 plus the panic excerpt and the
@@ -191,6 +191,12 @@ def cmd_table(args) -> int:
     out = [f"### {args.title}", ""]
     if args.note:
         out += [args.note, ""]
+    if args.build_failed_log and Path(args.build_failed_log).is_file():
+        log = Path(args.build_failed_log).read_text(encoding="utf-8", errors="replace")
+        out += [":x: **The fuzz crate did not build**, so no target ran. End of the build log:", "",
+                fence("\n".join(log.splitlines()[-40:]))]
+        sys.stdout.write("\n".join(out) + "\n")
+        return 1
     if not rows:
         out.append("No fuzz targets yet: `cargo fuzz list` returned nothing, so there was nothing to run.")
         sys.stdout.write("\n".join(out) + "\n")
@@ -250,6 +256,7 @@ def main(argv: list[str]) -> int:
     table.add_argument("--title", default="Fuzz")
     table.add_argument("--note", default="")
     table.add_argument("--run-url", default="")
+    table.add_argument("--build-failed-log", default="", help="fuzz_run.sh's build-failed.log, if any")
     table.add_argument("rows", nargs="*")
     table.set_defaults(func=cmd_table)
 

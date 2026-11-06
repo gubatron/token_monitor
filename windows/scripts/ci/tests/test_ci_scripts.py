@@ -208,6 +208,16 @@ class FuzzReportTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0)
         self.assertIn("No fuzz targets yet", r.stdout)
 
+    def test_build_failure_is_not_reported_as_no_targets(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "build-failed.log"
+            log.write_text("error: duplicate key\n  --> crates/x/Cargo.toml:25:1\n")
+            r = run("fuzz_report.py", "table", "--build-failed-log", str(log))
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("did not build", r.stdout)
+        self.assertIn("error: duplicate key", r.stdout)
+        self.assertNotIn("No fuzz targets yet", r.stdout)
+
     def test_crash_md_for_issue_body(self):
         row = self.row("fuzz-crash.log", 1, crash=bytes(range(40)))
         with tempfile.TemporaryDirectory() as tmp:

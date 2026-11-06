@@ -401,7 +401,7 @@ jobs:
           set -uo pipefail
           shopt -s nullglob
           rows=("$RUNNER_TEMP"/fuzz/rows/*.json)
-          python3 -I scripts/ci/fuzz_report.py table --title "Fuzz smoke (60 s per target, $RUSTUP_TOOLCHAIN)" \
+          python3 -I scripts/ci/fuzz_report.py table --build-failed-log "$RUNNER_TEMP/fuzz/build-failed.log" --title "Fuzz smoke (60 s per target, $RUSTUP_TOOLCHAIN)" \
             --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
             "${rows[@]}" >> "$GITHUB_STEP_SUMMARY"
 
