@@ -6,7 +6,8 @@
 //! directory, compact JSON with sorted keys:
 //! `{"days":{"2026-10-01":{"claude-opus-5-5":{...}}},"version":2}`.
 
-use std::fs;
+use std::fs::File;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -17,6 +18,10 @@ use crate::tokens::DailyTokens;
 
 /// Ledger file name inside the app data directory.
 pub const LEDGER_FILE_NAME: &str = "claude_code_daily_tokens.dat";
+/// Largest ledger file read. A real ledger (days x models) is a few hundred
+/// KiB; anything bigger is a runaway or planted file and is treated as
+/// unreadable instead of being loaded into memory.
+pub const MAX_LEDGER_BYTES: u64 = 32 << 20;
 /// The only format version this code reads or writes.
 pub const LEDGER_VERSION: u32 = 2;
 
@@ -112,7 +117,7 @@ impl ClaudeCodeUsageLedger {
     }
 
     fn load(&self) -> DailyTokens {
-        fs::read(&self.path)
+        read_bounded(&self.path, MAX_LEDGER_BYTES)
             .map(|b| decode_ledger(&b))
             .unwrap_or_default()
     }
@@ -124,4 +129,22 @@ impl ClaudeCodeUsageLedger {
             tracing::error!("claude ledger write failed: {e}");
         }
     }
+}
+
+/// Reads at most `max` bytes of `path`; a longer file is an error rather than
+/// a truncated (and therefore misleading) read.
+///
+/// # Errors
+///
+/// The open or read error, or `InvalidData` when the file exceeds `max`.
+pub fn read_bounded(path: &Path, max: u64) -> std::io::Result<Vec<u8>> {
+    let mut buf = Vec::new();
+    File::open(path)?.take(max + 1).read_to_end(&mut buf)?;
+    if buf.len() as u64 > max {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "file exceeds the size bound",
+        ));
+    }
+    Ok(buf)
 }

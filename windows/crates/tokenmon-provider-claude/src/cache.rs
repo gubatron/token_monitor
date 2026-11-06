@@ -15,10 +15,35 @@
 //! must end in `\n`) to notice a rewritten file.
 //! A partly written trailing line (with or without a `\r`) is never consumed
 //! until it is valid JSON or its newline arrives.
+//!
+//! # Memory bounds
+//!
+//! Transcripts are user-writable and can reach gigabytes, so nothing here
+//! holds a whole file or every parsed entry:
+//!
+//! * Files are **streamed** in [`BATCH_BYTES`] batches of whole lines; a single
+//!   line over [`MAX_LINE_BYTES`] is skipped, never buffered.
+//! * Per file only metadata and a 64-byte tail are retained; entries are
+//!   folded into the running tallies and dropped. A rebuild (new calendar, a
+//!   removed or replaced file) re-streams the files from disk, up to the bytes
+//!   already parsed.
+//! * The log of entries awaiting the slowest tally holds at most
+//!   [`MAX_ADDED_LOG`] entries; beyond that the tallies are rebuilt from disk.
+//! * Dedupe keys are kept as 64-bit hashes, at most [`MAX_SEEN_KEYS`] per
+//!   tally; past that, further keys are counted without being remembered.
+//! * Files over [`MAX_FILE_BYTES`] are ignored and the walk stops at
+//!   [`MAX_FILES`] files.
+//!
+//! Worst case retained memory is therefore about 100 MiB (the entry log plus
+//! the dedupe hashes of all [`MAX_TALLIES`] tallies); a typical machine uses a
+//! few MiB. Peak working memory while streaming is [`BATCH_BYTES`] plus one
+//! line.
 
+use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs::{self, File};
-use std::io::{Read, Seek, SeekFrom};
+use std::hash::{Hash, Hasher};
+use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::SystemTime;
@@ -36,9 +61,130 @@ const MAX_WALK_DEPTH: usize = 64;
 /// Bytes before the saved offset re-read to confirm the file was only
 /// appended to (a superset of the Swift one-byte newline check).
 const TAIL_CHECK_BYTES: usize = 64;
+/// Whole lines are parsed in batches of about this many bytes.
+pub const BATCH_BYTES: usize = 1 << 20;
+/// A single transcript line over this is skipped instead of buffered.
+pub const MAX_LINE_BYTES: usize = 16 << 20;
+/// Files over this size are ignored (a runaway or planted file).
+pub const MAX_FILE_BYTES: u64 = 2 << 30;
+/// The transcript walk stops collecting after this many files.
+pub const MAX_FILES: usize = 50_000;
+/// Cap on entries waiting for the slowest tally; past it, tallies are rebuilt
+/// from disk instead of fed from the log.
+pub const MAX_ADDED_LOG: usize = 100_000;
+/// Cap on remembered dedupe keys per tally.
+pub const MAX_SEEN_KEYS: usize = 4_000_000;
+/// Chunk size when skipping an oversized line.
+const DISCARD_CHUNK: u64 = 64 * 1024;
 
-fn last_bytes(data: &[u8]) -> Vec<u8> {
-    data[data.len().saturating_sub(TAIL_CHECK_BYTES)..].to_vec()
+/// Appends the last [`TAIL_CHECK_BYTES`] of `chunk` to the rolling `tail`.
+fn push_tail(tail: &mut Vec<u8>, chunk: &[u8]) {
+    tail.extend_from_slice(&chunk[chunk.len().saturating_sub(TAIL_CHECK_BYTES)..]);
+    if tail.len() > TAIL_CHECK_BYTES {
+        tail.drain(..tail.len() - TAIL_CHECK_BYTES);
+    }
+}
+
+/// Parses the whole lines of `batch` into `on_entry` and empties it.
+fn flush(
+    batch: &mut Vec<u8>,
+    consumed: &mut usize,
+    tail: &mut Vec<u8>,
+    on_entry: &mut dyn FnMut(Entry),
+) {
+    let (entries, used) = parse_complete_lines(batch);
+    for e in entries {
+        on_entry(e);
+    }
+    *consumed += used;
+    push_tail(tail, &batch[..used]);
+    batch.clear();
+}
+
+/// Streams `reader` line by line, feeding every usage entry to `on_entry`
+/// without ever holding more than a batch. Returns the bytes consumed and
+/// keeps `tail` as the last 64 consumed bytes (seeded by the caller with the
+/// previous tail on the append path).
+///
+/// Same consumption rule as [`parse_complete_lines`]: every newline-terminated
+/// line counts; an unterminated final line counts only when it is whole JSON.
+/// A line over [`MAX_LINE_BYTES`] is skipped (consumed) once its newline is
+/// seen and left unconsumed while it is still being written.
+fn stream_entries(
+    mut reader: impl BufRead,
+    tail: &mut Vec<u8>,
+    on_entry: &mut dyn FnMut(Entry),
+) -> usize {
+    let mut consumed = 0usize;
+    let mut batch: Vec<u8> = Vec::new();
+    let mut line: Vec<u8> = Vec::new();
+
+    loop {
+        line.clear();
+        let Ok(n) = (&mut reader)
+            .take(MAX_LINE_BYTES as u64 + 1)
+            .read_until(b'\n', &mut line)
+        else {
+            break;
+        };
+        if n == 0 {
+            break;
+        }
+        let terminated = line.last() == Some(&b'\n');
+        if !terminated && line.len() > MAX_LINE_BYTES {
+            // Oversized line: never buffer it; skip to its newline.
+            flush(&mut batch, &mut consumed, tail, on_entry);
+            let saved_tail = tail.clone();
+            let mut skipped = n;
+            push_tail(tail, &line);
+            let mut ended = false;
+            loop {
+                line.clear();
+                let m = (&mut reader)
+                    .take(DISCARD_CHUNK)
+                    .read_until(b'\n', &mut line)
+                    .unwrap_or(0);
+                if m == 0 {
+                    break;
+                }
+                skipped += m;
+                push_tail(tail, &line);
+                if line.last() == Some(&b'\n') {
+                    ended = true;
+                    break;
+                }
+            }
+            if !ended {
+                // Still being written: leave it for a later read.
+                *tail = saved_tail;
+                return consumed;
+            }
+            consumed += skipped;
+            continue;
+        }
+        if !terminated {
+            // The unterminated last line: consumed only when whole JSON.
+            flush(&mut batch, &mut consumed, tail, on_entry);
+            std::mem::swap(&mut batch, &mut line);
+            flush(&mut batch, &mut consumed, tail, on_entry);
+            return consumed;
+        }
+        batch.extend_from_slice(&line);
+        if batch.len() >= BATCH_BYTES {
+            flush(&mut batch, &mut consumed, tail, on_entry);
+        }
+    }
+    flush(&mut batch, &mut consumed, tail, on_entry);
+    consumed
+}
+
+/// Hash of a dedupe key. `DefaultHasher::new()` uses fixed keys, so equal keys
+/// hash equally for the life of the process; a 64-bit collision (about
+/// `n^2 / 2^65` over `n` keys) would drop one response from a total.
+fn key_hash(key: &str) -> u64 {
+    let mut h = DefaultHasher::new();
+    key.hash(&mut h);
+    h.finish()
 }
 
 /// Identity of a calendar for the cache: tallies are kept per distinct
@@ -63,7 +209,7 @@ impl CalendarId {
 #[derive(Debug, Clone)]
 pub struct DailyTokenTally {
     days: DailyTokens,
-    seen: HashSet<String>,
+    seen: HashSet<u64>,
 }
 
 impl Default for DailyTokenTally {
@@ -85,10 +231,15 @@ impl DailyTokenTally {
     /// across files and days within one tally). Entries without a key always
     /// count.
     pub fn add(&mut self, entry: &Entry, calendar: &Calendar<'_>) {
-        if let Some(key) = &entry.dedupe_key
-            && !self.seen.insert(key.clone())
-        {
-            return;
+        if let Some(key) = &entry.dedupe_key {
+            let hash = key_hash(key);
+            if self.seen.contains(&hash) {
+                return;
+            }
+            // Past the cap a key is counted but not remembered (documented bound).
+            if self.seen.len() < MAX_SEEN_KEYS {
+                self.seen.insert(hash);
+            }
         }
         let counts = ModelTokens {
             cache_read_tokens: entry.cache_read_tokens,
@@ -132,7 +283,6 @@ struct Item {
     /// Last [`TAIL_CHECK_BYTES`] bytes of the parsed prefix; the append path
     /// verifies them on disk to notice a rewritten file.
     tail: Vec<u8>,
-    entries: Vec<Entry>,
 }
 
 struct TallyState {
@@ -157,14 +307,18 @@ impl Inner {
         self.added_base + self.added.len()
     }
 
+    /// Re-streams every cached file (up to the bytes already parsed) into a
+    /// fresh tally. File I/O under the lock keeps the result consistent with
+    /// `items` and the entry log.
     fn rebuilt_tally(&self, calendar: &Calendar<'_>) -> DailyTokenTally {
         let mut paths: Vec<&PathBuf> = self.items.keys().collect();
         paths.sort();
         let mut tally = DailyTokenTally::new();
         for path in paths {
-            for e in &self.items[path].entries {
-                tally.add(e, calendar);
-            }
+            let item = &self.items[path];
+            let Ok(file) = File::open(path) else { continue };
+            let reader = BufReader::new(file.take(item.parsed_bytes as u64));
+            stream_entries(reader, &mut Vec::new(), &mut |e| tally.add(&e, calendar));
         }
         tally
     }
@@ -185,7 +339,8 @@ impl Inner {
 
 /// Parsed transcript files keyed by path, plus the running totals over them.
 ///
-/// Thread-safe; the lock is never held across file I/O.
+/// Thread-safe. Memory is bounded (see the module docs); reads of a file
+/// happen outside the lock, only a rebuild of the tallies streams under it.
 #[derive(Default)]
 pub struct ClaudeCodeFileCache {
     inner: Mutex<Inner>,
@@ -263,7 +418,10 @@ impl ClaudeCodeFileCache {
     }
 
     fn refresh(&self, root: &Path, f: FoundFile) {
-        let cached = self.lock().items.get(&f.path).cloned();
+        let (cached, collecting) = {
+            let g = self.lock();
+            (g.items.get(&f.path).cloned(), !g.tallies.is_empty())
+        };
         if let Some(c) = &cached
             && c.modified == f.modified
             && c.size == f.size
@@ -276,12 +434,11 @@ impl ClaudeCodeFileCache {
             && c.parsed_bytes > 0
             && c.tail.last() == Some(&b'\n')
             && f.size >= c.parsed_bytes as u64
-            && let Some(appended) = read_appended(&f.path, c.parsed_bytes, &c.tail)
+            && let Some(reader) = open_appended(&f.path, c.parsed_bytes, &c.tail)
         {
-            let (entries, consumed) = parse_complete_lines(&appended);
-            let tail = last_bytes(&[c.tail.as_slice(), &appended[..consumed]].concat());
-            let mut all = c.entries.clone();
-            all.extend(entries.iter().cloned());
+            let mut tail = c.tail.clone();
+            let mut sink = EntryLog::new(collecting);
+            let consumed = stream_entries(reader, &mut tail, &mut |e| sink.push(e));
             let item = Item {
                 root: root.to_path_buf(),
                 modified: f.modified,
@@ -289,43 +446,91 @@ impl ClaudeCodeFileCache {
                 file_id: f.file_id,
                 parsed_bytes: c.parsed_bytes + consumed,
                 tail,
-                entries: all,
             };
-            let mut g = self.lock();
-            g.items.insert(f.path, item);
-            g.added.extend(entries);
+            self.commit(f.path, item, sink, false);
             return;
         }
-        let data = fs::read(&f.path).unwrap_or_default();
-        let (entries, consumed) = parse_complete_lines(&data);
+        // A first parse feeds the tallies through the log; a re-parse of a
+        // changed file rebuilds them instead (entries may have been dropped).
+        let replaced = cached.is_some();
+        let mut sink = EntryLog::new(collecting && !replaced);
+        let mut tail = Vec::new();
+        let consumed = match File::open(&f.path) {
+            Ok(file) => stream_entries(BufReader::new(file), &mut tail, &mut |e| sink.push(e)),
+            Err(_) => 0,
+        };
         let item = Item {
             root: root.to_path_buf(),
             modified: f.modified,
             size: f.size,
             file_id: f.file_id,
             parsed_bytes: consumed,
-            tail: last_bytes(&data[..consumed]),
-            entries: entries.clone(),
+            tail,
         };
+        self.commit(f.path, item, sink, replaced);
+    }
+
+    /// Stores a refreshed item and routes its entries to the tallies.
+    fn commit(&self, path: PathBuf, item: Item, sink: EntryLog, replaced: bool) {
         let mut g = self.lock();
-        g.items.insert(f.path, item);
-        if cached.is_none() {
-            g.added.extend(entries);
-        } else {
+        g.items.insert(path, item);
+        if replaced || sink.overflow {
             g.needs_rebuild = true;
+        } else if !sink.active {
+            // Tallies appeared while this file streamed: they never saw it.
+            if !g.tallies.is_empty() {
+                g.needs_rebuild = true;
+            }
+        } else if g.added.len() + sink.entries.len() > MAX_ADDED_LOG {
+            g.needs_rebuild = true;
+        } else {
+            g.added.extend(sink.entries);
         }
     }
 }
 
-/// The bytes after `offset`, or `None` when the saved `tail` (the bytes just
-/// before `offset`) no longer matches the file, i.e. it was rewritten.
-fn read_appended(path: &Path, offset: usize, tail: &[u8]) -> Option<Vec<u8>> {
+/// Entries of one refreshed file waiting for the tallies, bounded by
+/// [`MAX_ADDED_LOG`].
+struct EntryLog {
+    /// Collecting at all (some tally exists to feed).
+    active: bool,
+    entries: Vec<Entry>,
+    /// More than the cap arrived: the tallies are rebuilt from disk instead.
+    overflow: bool,
+}
+
+impl EntryLog {
+    fn new(active: bool) -> Self {
+        Self {
+            active,
+            entries: Vec::new(),
+            overflow: false,
+        }
+    }
+
+    fn push(&mut self, entry: Entry) {
+        if !self.active || self.overflow {
+            return;
+        }
+        if self.entries.len() >= MAX_ADDED_LOG {
+            self.overflow = true;
+            self.entries = Vec::new();
+        } else {
+            self.entries.push(entry);
+        }
+    }
+}
+
+/// A reader positioned just after `offset`, or `None` when the saved `tail`
+/// (the bytes just before `offset`) no longer matches the file, i.e. it was
+/// rewritten.
+fn open_appended(path: &Path, offset: usize, tail: &[u8]) -> Option<BufReader<File>> {
     let start = offset.checked_sub(tail.len())?;
     let mut file = File::open(path).ok()?;
     file.seek(SeekFrom::Start(start as u64)).ok()?;
-    let mut buf = Vec::new();
-    file.read_to_end(&mut buf).ok()?;
-    buf.starts_with(tail).then(|| buf.split_off(tail.len()))
+    let mut check = vec![0u8; tail.len()];
+    file.read_exact(&mut check).ok()?;
+    (check == tail).then(|| BufReader::new(file))
 }
 
 struct FoundFile {
@@ -357,6 +562,9 @@ fn walk(dir: &Path, depth: usize, out: &mut Vec<FoundFile>) {
     }
     let Ok(read) = fs::read_dir(dir) else { return };
     for entry in read.flatten() {
+        if out.len() >= MAX_FILES {
+            return;
+        }
         if entry.file_name().to_string_lossy().starts_with('.') {
             continue;
         }
@@ -369,6 +577,7 @@ fn walk(dir: &Path, depth: usize, out: &mut Vec<FoundFile>) {
         } else if kind.is_file()
             && path.extension().is_some_and(|e| e == "jsonl")
             && let Ok(md) = entry.metadata()
+            && md.len() <= MAX_FILE_BYTES
         {
             out.push(FoundFile {
                 path,
