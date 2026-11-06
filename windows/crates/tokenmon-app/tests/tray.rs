@@ -9,12 +9,19 @@ use tokenmon_ui::tray_icon::{MenuAction, MenuEntry, TaskbarTheme, TrayBitmap, Tr
 #[derive(Default)]
 struct Recorder {
     updates: Vec<String>,
+    /// Fail this many upcoming updates.
+    failures: u32,
 }
 
 impl TrayBackend for Recorder {
-    fn update(&mut self, bitmap: &TrayBitmap, tooltip: &str) {
+    fn update(&mut self, bitmap: &TrayBitmap, tooltip: &str) -> bool {
         assert!(bitmap.size > 0);
         self.updates.push(tooltip.to_owned());
+        if self.failures > 0 {
+            self.failures -= 1;
+            return false;
+        }
+        true
     }
 }
 
@@ -208,4 +215,24 @@ fn test_panel_placement_clamps_to_the_work_area() {
     // Taller than the work area: pinned to the top left.
     let (x, y) = place_panel((100, 500), (420, 5000), work);
     assert_eq!((x, y), (0, 0));
+}
+
+/// A failed icon update is not remembered as done: the next refresh retries
+/// even though nothing else changed (#72).
+#[test]
+fn test_failed_icon_update_is_retried() {
+    let s = Settings::default();
+    let mut c = TrayController::new(Recorder {
+        failures: 2,
+        ..Recorder::default()
+    });
+    let used = [(ProviderId::Grok, 40.0)];
+    let go = |c: &mut TrayController<Recorder>| {
+        refresh(c, &s, &used, TrayIconSize::Px16, TaskbarTheme::Dark)
+    };
+    assert!(!go(&mut c));
+    assert!(!go(&mut c));
+    assert!(go(&mut c));
+    assert!(!go(&mut c), "settled once it succeeded");
+    assert_eq!(c.backend().updates.len(), 3);
 }

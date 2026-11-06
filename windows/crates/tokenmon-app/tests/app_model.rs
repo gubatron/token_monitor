@@ -287,3 +287,29 @@ async fn test_smoke_cycle_refreshes_every_provider_and_quits() {
     assert!(f.pollers.iter().all(|p| p.refreshes() == 1));
     assert!(f.model.has_quit());
 }
+
+/// A change made right after `watch_settings()` returns, before its task has
+/// run once, is still handled (the starting value is read before spawning).
+#[tokio::test(start_paused = true)]
+async fn test_change_before_the_watch_task_first_runs_is_not_lost() {
+    let f = fixture();
+    let _watch = f.model.watch_settings();
+    f.settings.set_active_poll_seconds(77);
+    tokio::time::sleep(CHANGE_COALESCING * 3).await;
+    settle().await;
+    assert!(f.pollers.iter().all(|p| p.count(PollerCall::Wake) == 1));
+}
+
+/// A panel that vanished without the shell hiding it must not leave the
+/// pollers on the active cadence.
+#[tokio::test(start_paused = true)]
+async fn test_sync_menu_open_follows_panel_visibility() {
+    let f = fixture();
+    assert!(!f.model.sync_menu_open(false), "already closed");
+    assert!(f.model.sync_menu_open(true));
+    assert!(f.model.is_menu_open());
+    assert!(!f.model.sync_menu_open(true), "unchanged");
+    assert!(f.model.sync_menu_open(false), "window hidden another way");
+    assert!(!f.model.is_menu_open());
+    assert!(f.pollers.iter().all(|p| !p.menu_is_open()));
+}

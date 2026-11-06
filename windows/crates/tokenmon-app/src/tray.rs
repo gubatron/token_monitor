@@ -16,8 +16,10 @@ use tokenmon_ui::tray_icon::{
 
 /// What the controller drives: the OS tray icon.
 pub trait TrayBackend {
-    /// Replaces the icon bitmap and the tooltip together.
-    fn update(&mut self, bitmap: &TrayBitmap, tooltip: &str);
+    /// Replaces the icon bitmap and the tooltip together. Returns whether the
+    /// OS accepted both; on `false` the controller tries again on its next
+    /// refresh instead of believing the icon is current.
+    fn update(&mut self, bitmap: &TrayBitmap, tooltip: &str) -> bool;
 }
 
 /// Live data the tray reflects.
@@ -61,7 +63,8 @@ impl<B: TrayBackend> TrayController<B> {
     }
 
     /// Recomputes the icon and tooltip; updates the backend only when the
-    /// render key or the tooltip changed. Returns whether it did.
+    /// render key or the tooltip changed. Returns whether the backend was
+    /// updated successfully; a failed update is retried on the next call.
     ///
     /// Call it on every poll result, settings change, theme change
     /// (`WM_SETTINGCHANGE`) and DPI change (a new `size`).
@@ -113,7 +116,9 @@ impl<B: TrayBackend> TrayController<B> {
             return false;
         }
         let bitmap: Arc<TrayBitmap> = self.cache.get_or_render(&request);
-        self.backend.update(&bitmap, &tooltip);
+        if !self.backend.update(&bitmap, &tooltip) {
+            return false;
+        }
         self.last_key = Some(key);
         self.last_tooltip = Some(tooltip);
         true
