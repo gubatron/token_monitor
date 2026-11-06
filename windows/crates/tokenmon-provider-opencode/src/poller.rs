@@ -219,6 +219,12 @@ impl OpenCodeUsagePoller {
             .poll_interval(ProviderId::OpenCode, self.menu_open.load(Ordering::SeqCst))
     }
 
+    /// The polling loop, for the app shell (wake, pause and resume on system
+    /// sleep, conditional refresh on menu open).
+    pub fn polling_loop(&self) -> &Arc<PollingLoop> {
+        &self.polling
+    }
+
     /// The displayed snapshot (console or local estimate).
     pub fn snapshot(&self) -> Option<OpenCodeSnapshot> {
         self.state().snapshot.clone()

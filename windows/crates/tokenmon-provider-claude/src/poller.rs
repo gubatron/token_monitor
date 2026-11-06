@@ -252,6 +252,12 @@ impl ClaudeUsagePoller {
             .poll_interval(ProviderId::Claude, self.menu_open.load(Ordering::SeqCst))
     }
 
+    /// The polling loop, for the app shell (wake, pause and resume on system
+    /// sleep, conditional refresh on menu open).
+    pub fn polling_loop(&self) -> &Arc<PollingLoop> {
+        &self.polling
+    }
+
     /// The displayed claude.ai snapshot.
     pub fn snapshot(&self) -> Option<ClaudeSnapshot> {
         self.state().snapshot.clone()
