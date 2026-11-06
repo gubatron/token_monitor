@@ -93,6 +93,9 @@ jobs:
       CORPUS_ARTIFACT: windows-fuzz-corpus-${{ matrix.target }}
     defaults:
       run:
+        # A job-level `defaults.run` replaces the workflow-level one, so the
+        # shell is repeated here (Windows runners default to pwsh).
+        shell: bash
         working-directory: windows
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
