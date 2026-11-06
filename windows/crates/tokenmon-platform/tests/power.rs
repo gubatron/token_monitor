@@ -278,35 +278,34 @@ fn test_modern_standby_resume_without_suspend_wakes_once() {
     assert_eq!(d.accept(0x12), None);
 }
 
-/// Repeated suspend/resume cycles: every cycle delivers exactly one sleep and
-/// one wake, whichever resume message (or both) Windows sends.
+/// Repeated cycles, mixing classic suspend/resume with Modern Standby (no
+/// suspend message), whichever resume message(s) arrive: every cycle delivers
+/// exactly one wake and every suspend one sleep.
 #[test]
 fn test_repeated_suspend_resume_cycles_each_deliver_one_wake() {
+    let t0 = Instant::now();
+    let cycles: [(bool, &[u32]); 6] = [
+        (true, &[0x12, 0x07]),
+        (true, &[0x07, 0x12]),
+        (false, &[0x12, 0x07]),
+        (false, &[0x12]),
+        (true, &[0x07]),
+        (false, &[0x07, 0x12]),
+    ];
     let mut d = ResumeDeduper::default();
-    for resume_messages in [&[0x12, 0x07][..], &[0x07, 0x12], &[0x12], &[0x07]] {
-        assert_eq!(d.accept(0x04), Some(PowerEvent::WillSleep));
-        let wakes = resume_messages
-            .iter()
-            .filter_map(|m| d.accept(*m))
-            .filter(|e| *e == PowerEvent::DidWake)
-            .count();
-        assert_eq!(wakes, 1, "one wake for resume messages {resume_messages:?}");
+    let (mut sleeps, mut wakes) = (0, 0);
+    for (cycle, (suspends, resumes)) in cycles.iter().enumerate() {
+        let start = t0 + Duration::from_secs(900 * cycle as u64);
+        if *suspends && d.accept_at(0x04, start) == Some(PowerEvent::WillSleep) {
+            sleeps += 1;
+        }
+        for (i, message) in resumes.iter().enumerate() {
+            let at = start + Duration::from_secs(60) + Duration::from_millis(15 * i as u64);
+            wakes += usize::from(d.accept_at(*message, at) == Some(PowerEvent::DidWake));
+        }
+        assert_eq!(wakes, cycle + 1, "cycle {cycle} delivered one wake");
     }
-}
-
-/// Modern Standby sends resumes with no suspend message in between: each wake
-/// must still be delivered, not just the first one of the process.
-#[test]
-#[ignore = "blocked on #67: ResumeDeduper drops every wake after the first until PBT_APMSUSPEND"]
-fn test_repeated_modern_standby_wakes_are_each_delivered() {
-    let mut d = ResumeDeduper::default();
-    for cycle in 0..4 {
-        assert_eq!(
-            d.accept(0x12),
-            Some(PowerEvent::DidWake),
-            "modern standby wake {cycle} was dropped"
-        );
-    }
+    assert_eq!(sleeps, 3);
 }
 
 /// FEAT-power-network-satisfied: only IPv4/IPv6 internet counts.
