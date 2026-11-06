@@ -10,27 +10,13 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use chrono::{DateTime, Utc};
 use tokenmon_core::{
-    AuthEvent, AuthEventListener, AuthSession, Clock, ProviderError, ProviderErrorContext,
+    AuthEvent, AuthEventListener, Clock, ProviderAuthSession, ProviderError, ProviderErrorContext,
     SessionGeneration, UsageError,
 };
 
 use crate::client::Fetch;
 use crate::token_cache::AccessTokenCache;
 use crate::usage::ChatGptSnapshot;
-
-/// The two session operations the poller needs beyond [`AuthSession`]
-/// (Swift `auth.applyRefreshedCookies` and `auth.needsSignIn = ...`).
-///
-/// Core's `AuthSession` trait has no setter for these; the real session
-/// (ws-secrets / ws-webauth) implements this trait too.
-pub trait RollingCookieSession: AuthSession {
-    /// Folds renewed `Set-Cookie` values into the stored cookie header
-    /// (essential names only; never bumps the session generation).
-    fn apply_refreshed_cookies(&self, set_cookie_headers: &[String]);
-
-    /// Sets the "show the sign-in prompt" flag.
-    fn set_needs_sign_in(&self, needs: bool);
-}
 
 /// Boxed fetch seam: takes the cookie header and session generation (the token
 /// cache key), returns one [`Fetch`].
@@ -70,7 +56,7 @@ impl Drop for RefreshGuard<'_> {
 
 /// Polls ChatGPT usage for the captured session cookie.
 pub struct ChatGptPoller {
-    auth: Arc<dyn RollingCookieSession>,
+    auth: Arc<dyn ProviderAuthSession>,
     fetch: Arc<FetchFn>,
     token_cache: Arc<AccessTokenCache>,
     clock: Arc<dyn Clock>,
@@ -83,7 +69,7 @@ impl ChatGptPoller {
     /// `fetch` is the injected seam; build the live one with
     /// [`ChatGptPoller::live_fetch`]. The poller starts enabled.
     pub fn new(
-        auth: Arc<dyn RollingCookieSession>,
+        auth: Arc<dyn ProviderAuthSession>,
         clock: Arc<dyn Clock>,
         token_cache: Arc<AccessTokenCache>,
         fetch: Arc<FetchFn>,

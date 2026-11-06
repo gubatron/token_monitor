@@ -30,7 +30,7 @@ use tokenmon_core::settings::AppSettings;
 use tokenmon_core::storage::{DailyQuotaDeltaStore, HourlyDeltaActivityStore, QuotaWindow};
 use tokenmon_core::usage::{Calendar, DailyBudgetDay, WeekOffset};
 use tokenmon_core::{
-    AuthEvent, AuthEventListener, AuthSession, BoxFuture, Clock, ProviderError,
+    AuthEvent, AuthEventListener, BoxFuture, Clock, ProviderAuthSession, ProviderError,
     ProviderErrorContext, ProviderId, ProviderUsagePoller,
 };
 
@@ -44,14 +44,6 @@ use crate::ledger::ClaudeCodeUsageLedger;
 use crate::summary::ClaudeCodeUsageSummary;
 use crate::tokens::DailyTokens;
 use crate::usage::{ClaudeSnapshot, ClaudeUsageResponse};
-
-/// The one session operation the poller needs beyond [`AuthSession`]
-/// (Swift `auth.needsSignIn = ...`). Core's trait has no setter for it; the
-/// real session implements this too.
-pub trait ClaudeSession: AuthSession {
-    /// Sets the "show the sign-in prompt" flag.
-    fn set_needs_sign_in(&self, needs: bool);
-}
 
 /// Fetch seam: takes the stored cookie header, returns the parsed usage and
 /// the instant it was taken. Build the live one with
@@ -121,7 +113,7 @@ pub struct ClaudePollerDeps {
     /// App settings: provider enablement and poll intervals.
     pub settings: Arc<AppSettings>,
     /// The claude.ai cookie session.
-    pub auth: Arc<dyn ClaudeSession>,
+    pub auth: Arc<dyn ProviderAuthSession>,
     /// Hourly activity series (5-hour window).
     pub hourly: HourlyDeltaActivityStore,
     /// Daily weekly-pool deltas.
@@ -180,7 +172,7 @@ impl AuthEventListener for SessionListener {
 /// Claude Code usage.
 pub struct ClaudeUsagePoller {
     settings: Arc<AppSettings>,
-    auth: Arc<dyn ClaudeSession>,
+    auth: Arc<dyn ProviderAuthSession>,
     clock: Arc<dyn Clock>,
     fetch_usage: Arc<FetchUsageFn>,
     load_code_usage: Arc<LoadCodeUsageFn>,

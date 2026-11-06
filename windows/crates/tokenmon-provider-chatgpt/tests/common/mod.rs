@@ -11,11 +11,10 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use tokenmon_core::{
-    AuthEventListener, AuthSession, AuthSessionState, ProviderError, SessionGeneration,
+    AuthEventListener, AuthSession, AuthSessionState, CapturedSession, CredentialStoreError,
+    ProviderAuthSession, ProviderError, SessionGeneration,
 };
-use tokenmon_provider_chatgpt::{
-    ChatGptTransport, RawReply, RollingCookieSession, chatgpt_auth_config,
-};
+use tokenmon_provider_chatgpt::{ChatGptTransport, RawReply, chatgpt_auth_config};
 
 /// Unpadded base64url encoder for building JWT payloads.
 pub fn b64url(bytes: &[u8]) -> String {
@@ -167,7 +166,7 @@ impl AuthSession for FakeSession {
     fn add_listener(&self, _listener: Arc<dyn AuthEventListener>) {}
 }
 
-impl RollingCookieSession for FakeSession {
+impl ProviderAuthSession for FakeSession {
     fn apply_refreshed_cookies(&self, set_cookie_headers: &[String]) {
         let cfg = chatgpt_auth_config();
         let mut g = self.inner.lock().unwrap();
@@ -202,4 +201,22 @@ impl RollingCookieSession for FakeSession {
     fn set_needs_sign_in(&self, needs: bool) {
         self.inner.lock().unwrap().state.needs_sign_in = needs;
     }
+    fn save_account_email(&self, _email: &str) {}
+    fn note_account_identity(&self, _identity: &str) {}
+    fn mark_session_invalid(&self, reason: Option<&str>) {
+        let mut g = self.inner.lock().unwrap();
+        g.cookie = None;
+        g.state.mark_session_invalid(reason);
+    }
+    fn sign_out(&self) {
+        FakeSession::sign_out(self);
+    }
+    fn save(&self, cookie_header: &str) -> Result<(), CredentialStoreError> {
+        FakeSession::save(self, cookie_header);
+        Ok(())
+    }
+    fn adopt(&self, _captured: &CapturedSession) -> Result<(), CredentialStoreError> {
+        Ok(())
+    }
+    fn refresh_from_disk(&self) {}
 }
