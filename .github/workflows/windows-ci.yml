@@ -27,10 +27,14 @@ on:
 permissions:
   contents: read
 
-# Superseded pull-request runs are cancelled; windows-port pushes run to
-# completion so each one leaves a coverage baseline.
+# Many workstreams push to windows-port, so every push gets its own run
+# (grouped by commit, never cancelled): each commit gets a lint and test
+# verdict. Only the expensive jobs (coverage, fuzz smoke, release build) are
+# superseded by a newer push to the same branch, through job-level
+# concurrency below; the Summary job reports those as "superseded", not as
+# failures. Superseded pull-request runs are cancelled outright.
 concurrency:
-  group: windows-ci-${{ github.event_name }}-${{ github.ref }}
+  group: windows-ci-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Every third-party action is pinned to a full commit SHA (version in the
@@ -245,6 +249,9 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
+    concurrency:
+      group: windows-ci-coverage-${{ matrix.os }}-${{ github.ref }}
+      cancel-in-progress: true
     permissions:
       contents: read
       actions: read # find and download the previous run's coverage summary
@@ -289,8 +296,17 @@ jobs:
               --config-file "$cfg" --profile ws-ci; then
             echo "::warning title=coverage::some tests failed; see the Tests job. Coverage is still reported."
           fi
-          cargo llvm-cov report --ignore-filename-regex "$COVERAGE_IGNORE" \
-            --json --summary-only --output-path "$RUNNER_TEMP/cov.json"
+          if ! cargo llvm-cov report --ignore-filename-regex "$COVERAGE_IGNORE" \
+              --json --summary-only --output-path "$RUNNER_TEMP/cov.json"; then
+            # No profile data: the workspace did not compile, so no test ran.
+            {
+              echo "### Coverage (${{ matrix.os }})"
+              echo
+              echo ":x: No coverage data: the tests did not build on this runner, so nothing ran."
+              echo "The compiler errors are in the Tests (${{ matrix.os }}) job and in this job's log."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
           cargo llvm-cov report --ignore-filename-regex "$COVERAGE_IGNORE" \
             --lcov --output-path "$RUNNER_TEMP/lcov.info"
 
@@ -338,6 +354,9 @@ jobs:
     if: needs.detect.outputs.workspace == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    concurrency:
+      group: windows-ci-fuzz-smoke-${{ github.ref }}
+      cancel-in-progress: true
     env:
       # Fuzzing needs nightly (sanitizers); pin a dated one and bump it on
       # purpose (same pin as windows-fuzz-nightly.yml). Setting it here
@@ -422,6 +441,9 @@ jobs:
     if: needs.detect.outputs.workspace == 'true'
     runs-on: windows-latest
     timeout-minutes: 40
+    concurrency:
+      group: windows-ci-windows-build-${{ github.ref }}
+      cancel-in-progress: true
     defaults:
       run:
         # A job-level `defaults.run` replaces the workflow-level one, so the
@@ -567,6 +589,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           NEEDS_JSON: ${{ toJSON(needs) }}
           WORKSPACE: ${{ needs.detect.outputs.workspace }}
+          COMMIT_SUBJECT: ${{ github.event.head_commit.message || github.event.pull_request.title || '' }}
         run: |
           set -uo pipefail
           run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
@@ -577,7 +600,9 @@ jobs:
             note="Skipped jobs: \`windows/Cargo.toml\` does not exist on this commit yet, so there is nothing to build, test, measure or fuzz."
           fi
           python3 -I windows/scripts/ci/render_ci_summary.py --jobs /tmp/jobs.json --run-url "$run_url" \
-            --self Summary --skip-note "$note" > /tmp/summary.md
+            --self Summary --skip-note "$note" --supersedable coverage,fuzz-smoke,windows-build \
+            --sha "$GITHUB_SHA" --ref "$GITHUB_REF_NAME" --event "$GITHUB_EVENT_NAME" \
+            --server-url "$GITHUB_SERVER_URL" --repo "$GITHUB_REPOSITORY" > /tmp/summary.md
           status=$?
           cat /tmp/summary.md >> "$GITHUB_STEP_SUMMARY"
           exit $status
