@@ -1,4 +1,5 @@
 //! Port of OpenRouterUsageClientTests.swift plus transport status mapping.
+#![allow(clippy::unwrap_used, clippy::assert_is_empty)]
 
 use std::sync::{Arc, Mutex};
 
@@ -8,7 +9,6 @@ use tokenmon_provider_openrouter::{
     ApiKey, BudgetSource, Endpoint, EndpointFetcher, NoCostEstimator, OpenRouterUsageClient,
     ReqwestFetcher,
 };
-use url::Url;
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -51,10 +51,10 @@ fn now() -> chrono::DateTime<Utc> {
 /// trailing slash on the base.
 #[test]
 fn test_endpoint_urls_resolve_under_api_version_path() {
-    let base = Url::parse("https://openrouter.ai/api/v1").unwrap();
+    let base = "https://openrouter.ai/api/v1";
     let urls: Vec<_> = Endpoint::ALL
         .iter()
-        .map(|e| e.url(&base).unwrap().to_string())
+        .map(|e| e.url(base).unwrap().to_string())
         .collect();
     assert_eq!(
         urls,
@@ -64,9 +64,9 @@ fn test_endpoint_urls_resolve_under_api_version_path() {
             "https://openrouter.ai/api/v1/activity"
         ]
     );
-    let slashed = Url::parse("https://example.com/api/v1/").unwrap();
+    let slashed = "https://example.com/api/v1/";
     assert_eq!(
-        Endpoint::Key.url(&slashed).unwrap().as_str(),
+        Endpoint::Key.url(slashed).unwrap().as_str(),
         "https://example.com/api/v1/key"
     );
 }
@@ -146,8 +146,14 @@ async fn test_key_failures_propagate() {
     ));
 }
 
-async fn fetcher(server: &MockServer) -> ReqwestFetcher {
-    ReqwestFetcher::new(&server.uri(), ApiKey::new("sk-or-v1-wire")).unwrap()
+fn fetcher(server: &MockServer) -> ReqwestFetcher {
+    ReqwestFetcher::new(
+        &server.uri(),
+        ApiKey::new("sk-or-v1-wire"),
+        None,
+        Arc::new(tokenmon_core::SystemClock),
+    )
+    .unwrap()
 }
 
 /// The live transport sends bearer auth and JSON accept to `/key`.
@@ -162,7 +168,7 @@ async fn test_transport_sends_bearer_and_returns_body() {
         .expect(1)
         .mount(&server)
         .await;
-    let body = fetcher(&server).await.fetch(Endpoint::Key).await.unwrap();
+    let body = fetcher(&server).fetch(Endpoint::Key).await.unwrap();
     assert_eq!(body, b"{\"data\":{\"usage\":1}}");
 }
 
@@ -173,11 +179,7 @@ async fn status_of(template: ResponseTemplate) -> ProviderError {
         .respond_with(template)
         .mount(&server)
         .await;
-    fetcher(&server)
-        .await
-        .fetch(Endpoint::Key)
-        .await
-        .unwrap_err()
+    fetcher(&server).fetch(Endpoint::Key).await.unwrap_err()
 }
 
 /// Status mapping: 401/403 unauthorized, 429 rate limited with Retry-After,

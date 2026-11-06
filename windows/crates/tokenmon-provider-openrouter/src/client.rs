@@ -1,24 +1,21 @@
 //! HTTP access and the `/key` then `/credits` + `/activity` orchestration
 //! (`OpenRouterUsageClient`, spec 03 section 4.2).
 //!
-//! [`ReqwestFetcher`] is a deliberately small private transport (status
-//! mapping per the spec's shared rules). It is replaced by the `tokenmon-core`
-//! net wrapper once that lands; the [`EndpointFetcher`] seam stays.
+//! Transport, status mapping, bot-challenge detection and `Retry-After` come
+//! from `tokenmon_core::net::ProviderHttp`; [`EndpointFetcher`] is the seam
+//! tests fake.
 
 use std::fmt;
 use std::sync::Arc;
-use std::time::Duration;
 
 use chrono::{DateTime, Utc};
-use tokenmon_core::{BoxFuture, ProviderError, ProviderErrorContext, UsageError};
-use url::Url;
+use tokenmon_core::net::{ProviderHttp, RequestOptions};
+use tokenmon_core::{BoxFuture, Clock, ProviderError, ProviderErrorContext};
 
 use crate::activity::CostEstimator;
 use crate::auth::ApiKey;
 use crate::models::{parse_activity, parse_credits, parse_key};
 use crate::snapshot::OpenRouterSnapshot;
-
-const CTX: ProviderErrorContext = ProviderErrorContext::OpenRouter;
 
 /// Production API base.
 pub const DEFAULT_BASE_URL: &str = "https://openrouter.ai/api/v1";
@@ -49,12 +46,8 @@ impl Endpoint {
 
     /// Absolute URL under `base`, treating a base without a trailing slash as
     /// a directory (`.../api/v1` + `key` is `.../api/v1/key`).
-    pub fn url(self, base: &Url) -> Option<Url> {
-        let mut dir = base.clone();
-        if !dir.path().ends_with('/') {
-            dir.set_path(&format!("{}/", dir.path()));
-        }
-        dir.join(self.path()).ok()
+    pub fn url(self, base: &str) -> Option<url::Url> {
+        ProviderHttp::resolve(self.path(), base)
     }
 }
 
@@ -64,17 +57,17 @@ pub trait EndpointFetcher: Send + Sync {
     fn fetch(&self, endpoint: Endpoint) -> BoxFuture<'_, Result<Vec<u8>, ProviderError>>;
 }
 
-/// Live reqwest transport.
+/// Live transport over the core [`ProviderHttp`].
 pub struct ReqwestFetcher {
-    client: reqwest::Client,
-    base: Url,
+    http: ProviderHttp,
+    base: String,
     key: ApiKey,
 }
 
 impl fmt::Debug for ReqwestFetcher {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ReqwestFetcher")
-            .field("base", &self.base.as_str())
+            .field("base", &self.base)
             .field("key", &self.key)
             .finish_non_exhaustive()
     }
@@ -85,80 +78,46 @@ impl ReqwestFetcher {
     ///
     /// # Errors
     /// [`ProviderError::Network`] if the HTTP client cannot be built.
-    pub fn new(base: &str, key: ApiKey) -> Result<Self, ProviderError> {
-        let base = Url::parse(base)
-            .map_err(|_| ProviderError::BadResponse(CTX, "Invalid base URL".into()))?;
-        let client = reqwest::Client::builder()
-            .user_agent(concat!("TokenMon/", env!("CARGO_PKG_VERSION")))
-            .timeout(Duration::from_secs(30))
-            .build()
-            .map_err(|e| ProviderError::Network(CTX, key.redact(&e.without_url().to_string())))?;
-        Ok(Self { client, base, key })
-    }
-
-    async fn get(&self, endpoint: Endpoint) -> Result<Vec<u8>, ProviderError> {
-        let url = endpoint
-            .url(&self.base)
-            .ok_or_else(|| ProviderError::BadResponse(CTX, "Invalid endpoint URL".into()))?;
-        let response = self
-            .client
-            .get(url)
-            .header(reqwest::header::ACCEPT, "application/json")
-            .bearer_auth(self.key.expose())
-            .send()
-            .await
-            .map_err(|e| self.network_error(&e))?;
-        let status = response.status();
-        let retry_after = response
-            .headers()
-            .get(reqwest::header::RETRY_AFTER)
-            .and_then(|v| v.to_str().ok())
-            .and_then(|v| v.trim().parse::<f64>().ok());
-        let bot_challenge = response.headers().contains_key("cf-mitigated");
-        let body = response.bytes().await.map_err(|e| self.network_error(&e))?;
-        map_status(status.as_u16(), retry_after, bot_challenge, &body).map(|()| body.to_vec())
-    }
-
-    fn network_error(&self, e: &reqwest::Error) -> ProviderError {
-        ProviderError::Network(CTX, self.key.redact(&e.to_string()))
-    }
-}
-
-/// Shared status mapping (spec 03 conventions).
-fn map_status(
-    status: u16,
-    retry_after: Option<f64>,
-    bot_challenge: bool,
-    body: &[u8],
-) -> Result<(), ProviderError> {
-    let html = body
-        .iter()
-        .take(512)
-        .copied()
-        .collect::<Vec<_>>()
-        .to_ascii_lowercase()
-        .windows(5)
-        .any(|w| w == b"<html" || w == b"<!doc");
-    if bot_challenge || (status == 403 && html) {
-        return Err(ProviderError::BadResponse(
-            CTX,
-            format!("Request blocked by a bot-protection check (HTTP {status}). Retrying."),
-        ));
-    }
-    match status {
-        200..=299 => Ok(()),
-        401 | 403 => Err(ProviderError::Unauthorized(CTX)),
-        429 => Err(ProviderError::Custom {
-            message: "OpenRouter is rate limiting requests. Retrying later.".into(),
-            usage: UsageError::RateLimited { retry_after },
-        }),
-        s => Err(ProviderError::BadResponse(CTX, format!("HTTP {s}"))),
+    pub fn new(
+        base: &str,
+        key: ApiKey,
+        app_version: Option<&str>,
+        clock: Arc<dyn Clock>,
+    ) -> Result<Self, ProviderError> {
+        let http = ProviderHttp::new(ProviderErrorContext::OpenRouter, app_version, clock)?;
+        Ok(Self {
+            http,
+            base: base.to_owned(),
+            key,
+        })
     }
 }
 
 impl EndpointFetcher for ReqwestFetcher {
     fn fetch(&self, endpoint: Endpoint) -> BoxFuture<'_, Result<Vec<u8>, ProviderError>> {
-        Box::pin(self.get(endpoint))
+        Box::pin(async move {
+            let options = RequestOptions {
+                bearer_token: Some(self.key.expose()),
+                ..RequestOptions::default()
+            };
+            self.http
+                .get(&self.base, endpoint.path(), options)
+                .await
+                .map_err(|e| redact_error(&self.key, e))
+        })
+    }
+}
+
+/// Defense in depth: scrubs the key from every string an error carries.
+fn redact_error(key: &ApiKey, e: ProviderError) -> ProviderError {
+    match e {
+        ProviderError::Network(c, m) => ProviderError::Network(c, key.redact(&m)),
+        ProviderError::BadResponse(c, m) => ProviderError::BadResponse(c, key.redact(&m)),
+        ProviderError::Custom { message, usage } => ProviderError::Custom {
+            message: key.redact(&message),
+            usage,
+        },
+        other => other,
     }
 }
 

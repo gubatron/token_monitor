@@ -1,4 +1,5 @@
 //! Port of OpenRouterModelsTests.swift (spec 03 section 7.8).
+#![allow(clippy::unwrap_used)]
 
 use chrono::{TimeZone, Utc};
 use tokenmon_provider_openrouter::{

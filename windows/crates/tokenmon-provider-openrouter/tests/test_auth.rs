@@ -1,4 +1,5 @@
 //! Port of OpenRouterAuthSessionTests.swift plus the three-strike rule.
+#![allow(clippy::unwrap_used)]
 
 use std::sync::Arc;
 

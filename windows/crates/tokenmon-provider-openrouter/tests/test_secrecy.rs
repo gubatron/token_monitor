@@ -1,4 +1,5 @@
 //! The API key must never appear in Debug output or error strings.
+#![allow(clippy::unwrap_used)]
 
 use std::sync::Arc;
 
@@ -30,7 +31,13 @@ fn test_debug_output_is_redacted() {
     let session = OpenRouterAuthSession::new(store);
     session.save_api_key(SECRET).unwrap();
     assert_clean(&format!("{session:?}"));
-    let fetcher = ReqwestFetcher::new("https://openrouter.ai/api/v1", key.clone()).unwrap();
+    let fetcher = ReqwestFetcher::new(
+        "https://openrouter.ai/api/v1",
+        key.clone(),
+        None,
+        Arc::new(tokenmon_core::SystemClock),
+    )
+    .unwrap();
     assert_clean(&format!("{fetcher:?}"));
     assert_clean(&format!("{:?}", session.state()));
 }
@@ -65,7 +72,13 @@ async fn test_reflected_key_never_reaches_error_strings() {
             .mount(&server)
             .await;
     }
-    let f = ReqwestFetcher::new(&server.uri(), ApiKey::new(SECRET)).unwrap();
+    let f = ReqwestFetcher::new(
+        &server.uri(),
+        ApiKey::new(SECRET),
+        None,
+        Arc::new(tokenmon_core::SystemClock),
+    )
+    .unwrap();
     for e in [Endpoint::Key, Endpoint::Credits] {
         let err = f.fetch(e).await.unwrap_err();
         assert_clean(&err.to_string());
@@ -85,7 +98,13 @@ async fn test_reflected_key_never_reaches_error_strings() {
 /// A transport failure (nothing listening) does not leak the key.
 #[tokio::test]
 async fn test_network_error_does_not_leak_key() {
-    let f = ReqwestFetcher::new("http://127.0.0.1:1/", ApiKey::new(SECRET)).unwrap();
+    let f = ReqwestFetcher::new(
+        "http://127.0.0.1:1/",
+        ApiKey::new(SECRET),
+        None,
+        Arc::new(tokenmon_core::SystemClock),
+    )
+    .unwrap();
     let err = f.fetch(Endpoint::Key).await.unwrap_err();
     assert!(matches!(err, tokenmon_core::ProviderError::Network(..)));
     assert_clean(&err.to_string());
@@ -100,7 +119,15 @@ async fn test_snapshot_error_through_client_is_clean() {
         .respond_with(ResponseTemplate::new(200).set_body_string(format!("[\"{SECRET}\"]")))
         .mount(&server)
         .await;
-    let f = Arc::new(ReqwestFetcher::new(&server.uri(), ApiKey::new(SECRET)).unwrap());
+    let f = Arc::new(
+        ReqwestFetcher::new(
+            &server.uri(),
+            ApiKey::new(SECRET),
+            None,
+            Arc::new(tokenmon_core::SystemClock),
+        )
+        .unwrap(),
+    );
     let client = OpenRouterUsageClient::new(f, Arc::new(NoCostEstimator));
     let err = client.fetch_snapshot(Utc::now()).await.unwrap_err();
     assert_clean(&err.to_string());

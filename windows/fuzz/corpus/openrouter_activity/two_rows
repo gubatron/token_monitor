@@ -1,0 +1,1 @@
+{"data":[{"date":"2026-09-20","model":"z-ai/glm-5.3-flash","provider_name":"Z.ai","usage":2.5,"requests":10,"prompt_tokens":1000,"completion_tokens":200,"reasoning_tokens":0},{"date":"2026-09-20","model":"stealth/ox-alpha","provider_name":"Stealth","usage":0,"requests":284,"prompt_tokens":3489882,"completion_tokens":110726,"reasoning_tokens":0}]}
