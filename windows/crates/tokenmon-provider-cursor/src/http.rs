@@ -17,6 +17,8 @@ use serde_json::{Map, Value};
 use tokenmon_core::net::{ProviderHttp, RequestOptions, json_object};
 use tokenmon_core::{Clock, ProviderError, ProviderErrorContext};
 
+use crate::auth::CURSOR_COOKIE_HOSTS;
+
 /// Production base URL.
 pub const CURSOR_BASE_URL: &str = "https://cursor.com";
 
@@ -52,7 +54,12 @@ impl CursorHttp {
         clock: Arc<dyn Clock>,
     ) -> Result<Self, ProviderError> {
         Ok(Self::new(
-            ProviderHttp::new(context, app_version, clock)?,
+            ProviderHttp::for_hosts(
+                context,
+                app_version,
+                clock,
+                &CURSOR_COOKIE_HOSTS.map(str::to_owned),
+            )?,
             base_url,
         ))
     }

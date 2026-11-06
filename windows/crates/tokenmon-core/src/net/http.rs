@@ -10,6 +10,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderName, HeaderValue, SET_COOKIE};
+use reqwest::redirect::{Attempt, Policy};
 use reqwest::{Client, Method, StatusCode};
 use serde_json::{Map, Value};
 use url::Url;
@@ -17,6 +18,7 @@ use url::Url;
 use crate::clock::Clock;
 
 use super::detect::{is_bot_challenge, looks_like_html, looks_like_login_page};
+use super::domain::Domain;
 use super::error::{ProviderError, ProviderErrorContext, UsageError};
 use super::request::{
     HeaderBuildError, apply_extra_headers, build_headers, response_error, user_agent,
@@ -310,6 +312,64 @@ pub struct ProviderHttp {
     user_agent: String,
     clock: Arc<dyn Clock>,
     max_response_bytes: usize,
+    /// Hosts whose `Set-Cookie` headers are kept (empty: any host the
+    /// redirect policy let through, which is the request's own host).
+    cookie_hosts: Arc<[String]>,
+}
+
+/// Most redirects one request follows.
+const MAX_REDIRECTS: usize = 10;
+
+/// True for `127.0.0.0/8`, `::1` and `localhost`: the only plain-http targets
+/// accepted (local mock servers in tests; no provider lives there).
+fn is_loopback_host(host: &str) -> bool {
+    let host = host.trim_start_matches('[').trim_end_matches(']');
+    host.eq_ignore_ascii_case("localhost")
+        || host
+            .parse::<std::net::IpAddr>()
+            .is_ok_and(|ip| ip.is_loopback())
+}
+
+/// `https`, or `http` to a loopback host.
+fn scheme_allowed(scheme: &str, host: &str) -> bool {
+    scheme == "https" || (scheme == "http" && is_loopback_host(host))
+}
+
+/// Whether `host` is one of `allowed` or a subdomain of one
+/// ([`Domain::matches`]).
+fn host_allowed(host: &str, allowed: &[String]) -> bool {
+    let allowed: Vec<&str> = allowed.iter().map(String::as_str).collect();
+    Domain::matches(host, &allowed)
+}
+
+/// The redirect decision (#44). A hop is followed only when it is `https` and
+/// stays on the provider's hosts: `allowed`, or, when that list is empty, the
+/// host of the original request. Anything else fails the request, so a
+/// redirect can neither downgrade to `http` nor carry caller-supplied headers
+/// (`Referer`, `Origin`, extras that reqwest does not strip) to another site.
+fn follow_redirect(attempt: Attempt<'_>, allowed: &[String]) -> reqwest::redirect::Action {
+    if attempt.previous().len() >= MAX_REDIRECTS {
+        return attempt.error("too many redirects");
+    }
+    let url = attempt.url();
+    let host = url.host_str().unwrap_or_default().to_owned();
+    if !scheme_allowed(url.scheme(), &host) {
+        return attempt.error("redirect to a non-https URL refused");
+    }
+    let permitted = if allowed.is_empty() {
+        attempt
+            .previous()
+            .first()
+            .and_then(|first| first.host_str())
+            .is_some_and(|first| first.eq_ignore_ascii_case(&host))
+    } else {
+        host_allowed(&host, allowed)
+    };
+    if permitted {
+        attempt.follow()
+    } else {
+        attempt.error("redirect to another host refused")
+    }
 }
 
 impl std::fmt::Debug for ProviderHttp {
@@ -333,8 +393,13 @@ fn flatten(e: &reqwest::Error) -> String {
 }
 
 impl ProviderHttp {
-    /// Builds the shared ephemeral client: no cookie jar, no cache, default
-    /// redirects, 15 s connect and 60 s request timeouts.
+    /// Builds the shared ephemeral client: no cookie jar, no cache, 15 s
+    /// connect and 60 s request timeouts, and a redirect policy that follows
+    /// only `https` hops to the request's own host (see
+    /// [`ProviderHttp::for_hosts`] to allow a provider's other hosts).
+    ///
+    /// Requests must be `https`; plain `http` is accepted for loopback hosts
+    /// only (local test servers).
     ///
     /// `app_version` feeds `User-Agent: TokenMon/<version>` (`unknown` if `None`).
     ///
@@ -346,12 +411,34 @@ impl ProviderHttp {
         app_version: Option<&str>,
         clock: Arc<dyn Clock>,
     ) -> Result<Self, ProviderError> {
+        Self::for_hosts(context, app_version, clock, &[])
+    }
+
+    /// Like [`ProviderHttp::new`], but redirects may also go to `hosts` (and
+    /// their subdomains), and `Set-Cookie` headers are kept only when the
+    /// final response came from one of them. Pass the provider's
+    /// `AuthConfig::hosts`.
+    ///
+    /// # Errors
+    ///
+    /// `Network` when the TLS backend cannot be initialised.
+    pub fn for_hosts(
+        context: ProviderErrorContext,
+        app_version: Option<&str>,
+        clock: Arc<dyn Clock>,
+        hosts: &[String],
+    ) -> Result<Self, ProviderError> {
+        let allowed: Arc<[String]> = hosts.iter().map(|h| h.to_lowercase()).collect();
+        let for_policy = allowed.clone();
         let client = Client::builder()
             .connect_timeout(Duration::from_secs(15))
             .timeout(Duration::from_secs(60))
+            .redirect(Policy::custom(move |a| follow_redirect(a, &for_policy)))
             .build()
             .map_err(|e| ProviderError::Network(context, flatten(&e)))?;
-        Ok(Self::with_client(client, context, app_version, clock))
+        let mut http = Self::with_client(client, context, app_version, clock);
+        http.cookie_hosts = allowed;
+        Ok(http)
     }
 
     /// Wraps an existing client (tests, or sharing a connection pool).
@@ -367,6 +454,7 @@ impl ProviderHttp {
             user_agent: user_agent(app_version),
             clock,
             max_response_bytes: DEFAULT_MAX_RESPONSE_BYTES,
+            cookie_hosts: Arc::from([]),
         }
     }
 
@@ -458,6 +546,18 @@ impl ProviderHttp {
         let ctx = self.context;
         let bad = |m: String| ProviderError::BadResponse(ctx, m);
         let url = Self::resolve(path, base).ok_or_else(|| bad(format!("Invalid path {path}")))?;
+        // `path` may not move the request to another origin than `base`, and
+        // the target must be https (loopback http only for local servers).
+        let base_url = Url::parse(base).ok();
+        if base_url
+            .as_ref()
+            .is_some_and(|b| b.origin() != url.origin())
+        {
+            return Err(bad(format!("Invalid path {path}")));
+        }
+        if !scheme_allowed(url.scheme(), url.host_str().unwrap_or_default()) {
+            return Err(bad("Refusing a non-https URL".to_owned()));
+        }
         let mut headers = self.headers(&options).map_err(|e| bad(e.to_string()))?;
         let mut request = self.client.request(method, url);
         if let Some(body) = json {
@@ -471,7 +571,17 @@ impl ProviderHttp {
             .unwrap_or(self.max_response_bytes);
         let mut response = request.headers(headers).send().await.map_err(network)?;
         let status = response.status();
-        let response_headers = response.headers().clone();
+        let mut response_headers = response.headers().clone();
+        // Cookies from a host outside the provider's list must never reach
+        // the stored session.
+        if !self.cookie_hosts.is_empty()
+            && !response
+                .url()
+                .host_str()
+                .is_some_and(|h| host_allowed(h, &self.cookie_hosts))
+        {
+            response_headers.remove(SET_COOKIE);
+        }
         let too_large = || ProviderError::BadResponse(ctx, "Response too large".to_owned());
         if response
             .content_length()
