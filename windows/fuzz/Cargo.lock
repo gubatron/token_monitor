@@ -1528,6 +1528,7 @@ dependencies = [
  "serde_json",
  "tokenmon-core",
  "tokenmon-platform",
+ "tokenmon-provider-cursor",
  "tokenmon-provider-openrouter",
 ]
 
@@ -1542,6 +1543,18 @@ dependencies = [
  "tracing",
  "windows-sys 0.61.2",
  "zeroize",
+]
+
+[[package]]
+name = "tokenmon-provider-cursor"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "futures",
+ "reqwest",
+ "serde_json",
+ "tokenmon-core",
+ "tracing",
 ]
 
 [[package]]

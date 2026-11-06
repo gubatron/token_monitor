@@ -14,6 +14,7 @@ chrono = { version = "0.4", default-features = false, features = ["std", "clock"
 reqwest = { version = "0.13", default-features = false }
 tokenmon-platform = { path = "../crates/tokenmon-platform" }
 tokenmon-core = { path = "../crates/tokenmon-core" }
+tokenmon-provider-cursor = { path = "../crates/tokenmon-provider-cursor" }
 arbitrary = { version = "1", features = ["derive"] }
 serde_json = "1.0"
 
@@ -140,6 +141,27 @@ bench = false
 [[bin]]
 name = "platform_vault_decode"
 path = "fuzz_targets/platform_vault_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "cursor_summary"
+path = "fuzz_targets/cursor_summary.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "cursor_events_page"
+path = "fuzz_targets/cursor_events_page.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "cursor_http_body"
+path = "fuzz_targets/cursor_http_body.rs"
 test = false
 doc = false
 bench = false

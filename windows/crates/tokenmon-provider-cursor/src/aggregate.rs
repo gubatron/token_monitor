@@ -34,6 +34,11 @@ pub const EVENTS_WINDOW_CAP_DAYS: u64 = 31;
 /// `QuotaNormalization.averageWeeksPerMonth`.
 pub const AVERAGE_WEEKS_PER_MONTH: f64 = 365.2425 / 12.0 / 7.0;
 
+/// Keeps a float sum finite: hostile input could otherwise overflow to infinity.
+fn cap(value: f64) -> f64 {
+    value.min(f64::MAX)
+}
+
 /// `eventsWindowStart`: the cycle start, but never before local midnight 31
 /// days ago.
 pub fn events_window_start(
@@ -58,7 +63,7 @@ pub fn aggregate_cost_stats(
             .filter(|e| e.date >= cycle_start)
             .fold(init, |(c, t, i, o), e| {
                 (
-                    c + e.charged_cents,
+                    cap(c + e.charged_cents),
                     t.saturating_add(e.total_tokens),
                     i.saturating_add(e.input_tokens),
                     o.saturating_add(e.output_tokens),
@@ -130,7 +135,7 @@ pub fn hour_weights(
 ) -> [f64; 24] {
     let mut out = [0.0; 24];
     for (hour, event) in hourly_events(clock, events, day_start) {
-        out[hour] += event.weight();
+        out[hour] = cap(out[hour] + event.weight());
     }
     out
 }
@@ -151,7 +156,7 @@ pub fn quota_hour_weights(
     let limit_cents = limit * 100.0 / AVERAGE_WEEKS_PER_MONTH;
     for (hour, event) in hourly_events(clock, events, day_start) {
         if event.charged_cents > 0.0 {
-            out[hour] += event.charged_cents / limit_cents * 100.0;
+            out[hour] = cap(out[hour] + event.charged_cents / limit_cents * 100.0);
         }
     }
     out
@@ -182,7 +187,7 @@ pub fn daily_tokens(
         day.output = day.output.saturating_add(event.output_tokens);
         day.cache_read = day.cache_read.saturating_add(event.cache_read_tokens);
         day.cache_write = day.cache_write.saturating_add(event.cache_write_tokens);
-        day.cost_usd += event.charged_cents / 100.0;
+        day.cost_usd = cap(day.cost_usd + event.charged_cents / 100.0);
         let model = day.by_model.entry(event.model.clone()).or_insert(0);
         *model = model.saturating_add(event.total_tokens);
     }
@@ -206,7 +211,8 @@ pub fn estimated_weight_by_day(
         if event.date < lower || upper.is_some_and(|u| event.date >= u) {
             continue;
         }
-        *by_day.entry(local_date(clock, event.date)).or_insert(0.0) += event.total_tokens as f64;
+        let slot = by_day.entry(local_date(clock, event.date)).or_insert(0.0);
+        *slot = cap(*slot + event.total_tokens as f64);
     }
     by_day
 }
