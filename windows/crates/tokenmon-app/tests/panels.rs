@@ -125,10 +125,9 @@ async fn test_select_tab_resolves_through_the_switcher_grid() {
         state.handle(&PanelEvent::SelectTab { row: 1, col: 0 }, &grid, &[]),
         vec![Action::Show(visible[3])]
     );
-    assert!(
-        state
-            .handle(&PanelEvent::SelectTab { row: 9, col: 9 }, &grid, &[])
-            .is_empty()
+    assert_eq!(
+        state.handle(&PanelEvent::SelectTab { row: 9, col: 9 }, &grid, &[]),
+        Vec::<Action>::new()
     );
 }
 
@@ -178,10 +177,9 @@ async fn test_events_reduce_to_actions() {
         ),
         vec![Action::ToggleSection(PanelSection::ClaudeModels)]
     );
-    assert!(
-        state
-            .handle(&PanelEvent::ToggleModelsSection(ProviderId::Grok), &g, &[])
-            .is_empty()
+    assert_eq!(
+        state.handle(&PanelEvent::ToggleModelsSection(ProviderId::Grok), &g, &[]),
+        Vec::<Action>::new()
     );
     state.handle(
         &PanelEvent::ToggleShowAllModels(ProviderId::OpenRouter),
@@ -196,10 +194,9 @@ async fn test_events_reduce_to_actions() {
     );
     assert!(!state.shows_all(ProviderId::OpenRouter));
     // Typing stores the draft without a redraw (the field keeps its cursor).
-    assert!(
-        state
-            .handle(&PanelEvent::ApiKeyEdited("sk-or-x".into()), &g, &[])
-            .is_empty()
+    assert_eq!(
+        state.handle(&PanelEvent::ApiKeyEdited("sk-or-x".into()), &g, &[]),
+        Vec::<Action>::new()
     );
     assert_eq!(state.key_draft, "sk-or-x");
     assert_eq!(
@@ -240,10 +237,9 @@ async fn test_overview_card_actions_resolve_against_applied_cards() {
         state.handle(&PanelEvent::OverviewSignIn(or), &g, &vm.cards),
         vec![Action::Show(ProviderId::OpenRouter)]
     );
-    assert!(
-        state
-            .handle(&PanelEvent::OverviewSignIn(99), &g, &vm.cards)
-            .is_empty()
+    assert_eq!(
+        state.handle(&PanelEvent::OverviewSignIn(99), &g, &vm.cards),
+        Vec::<Action>::new()
     );
     assert_eq!(
         card_inputs(&app.model, &app.sessions, None).len(),

@@ -1,18 +1,21 @@
-//! Windows glue: single-instance startup, the tray icon, the panel window and
+//! Windows glue: single-instance startup, the tray icon, the panel windows and
 //! the platform collaborators. Everything decidable lives in the portable
-//! modules; this one only connects them to the OS.
+//! modules ([`crate::panel`], [`crate::tray`], [`crate::overview`],
+//! [`crate::settings_host`]); this one only connects them to the OS.
 //!
 //! Threads: a tokio runtime runs polling and IO; the Slint event loop runs on
-//! the main thread and owns the tray and the panel. Background callbacks
-//! (pipe server, toast click) reach the UI through
-//! `slint::invoke_from_event_loop`.
+//! the main thread and owns the tray, the panel windows and Settings.
+//! Background callbacks (pipe server, toast click, Settings quit) reach the UI
+//! through `slint::invoke_from_event_loop`.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
+use std::collections::BTreeMap;
 use std::process::ExitCode;
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
+use chrono::{DateTime, FixedOffset, Utc};
 use slint::ComponentHandle;
 use tokenmon_core::alerts::{Notifier, ThresholdAlert};
 use tokenmon_core::polling::TokioSleeper;
@@ -28,30 +31,68 @@ use tokenmon_platform::secrets::{APP_FALLBACK_POLICY, DpapiEncryptor};
 use tokenmon_platform::shell::windows::{
     MutexInstanceLock, PipeClient, PipeServer, WinRegistry, current_user_pipe_name,
 };
-use tokenmon_platform::shell::{IpcMessage, LaunchArgs, StartupDecision, decide_startup};
+use tokenmon_platform::shell::{
+    DesktopVerb, IpcMessage, LaunchArgs, LoginItemService, RunKeyLoginItem, StartupDecision,
+    decide_startup,
+};
 use tokenmon_platform::webauth::WindowsWebAuthHost;
 use tokenmon_provider_opencode::db::DataDirEnv;
-use tokenmon_ui::panels::{bridge, events, ui};
-use tokenmon_ui::tray_icon::{MenuAction, MenuEntry, TrayBitmap, TrayIconSize};
+use tokenmon_ui::panels::events::{PanelEvent, PanelHandler};
+use tokenmon_ui::panels::overview::OverviewCardVm;
+use tokenmon_ui::panels::switcher::{RowVm, build_switcher};
+use tokenmon_ui::settings::bind::{SettingsWindow, create_settings_window, refresh};
+use tokenmon_ui::settings::{NativeSaveDialog, SettingsViewModel};
+use tokenmon_ui::tray_icon::{MenuAction, MenuEntry, TrayBitmap};
 use tray_icon::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem};
 use tray_icon::{Icon, MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 
 use crate::app::{App, AppInputs};
-use crate::panel;
-use crate::tray::{TrayBackend, TrayController, TrayData, context_menu, panel_target};
+use crate::overview::{OverviewStore, next_midnight, record_live};
+use crate::panel::{Action, PanelState, PanelView, ViewEnv, build_view, commit_api_key};
+use crate::settings_host::{AppHost, AppSettingsBackend, HostParts};
+use crate::tray::{
+    MenuCommand, PANEL_GAP, TrayBackend, TrayController, TrayData, context_menu, icon_size,
+    menu_command, place_panel,
+};
 use crate::updates::UpdateService;
 
+mod display;
+mod panels;
 mod theme;
+
+use panels::PanelWindow;
+
+/// A click on the tray icon this soon after the panel dismissed itself on
+/// focus loss is the same click: it must not reopen the panel.
+const REOPEN_GUARD: Duration = Duration::from_millis(300);
+
+/// How often the UI tick runs (tray state, live panel, rollover).
+const TICK: Duration = Duration::from_secs(2);
+
+/// The Overview history is saved every this many ticks while the panel is
+/// closed.
+const RECORD_EVERY_TICKS: u32 = 30;
 
 /// What the UI thread owns. `Rc` state is not `Send`, so background callbacks
 /// (tray, menu, pipe, toast) never capture it: they post a closure that
 /// reaches it through [`with_ui`] on the UI thread.
 struct Ui {
-    panel: Rc<Panel>,
+    windows: RefCell<BTreeMap<ProviderId, Rc<PanelWindow>>>,
+    state: RefCell<PanelState>,
+    rows: RefCell<Vec<RowVm>>,
+    cards: RefCell<Vec<OverviewCardVm>>,
+    last_view: RefCell<Option<PanelView>>,
+    anchor: Cell<Option<(i32, i32)>>,
+    dismissed_at: Cell<Option<Instant>>,
+    store: Arc<OverviewStore>,
     app: Rc<App>,
     version: String,
     updates: Arc<UpdateService>,
     handle: tokio::runtime::Handle,
+    settings_vm: Arc<SettingsViewModel>,
+    settings_window: RefCell<Option<Rc<SettingsWindow>>>,
+    tick: slint::Timer,
+    me: RefCell<Weak<Ui>>,
 }
 
 thread_local! {
@@ -59,7 +100,7 @@ thread_local! {
 }
 
 /// Runs `f` on the UI thread with the UI state, if it is set up.
-fn with_ui(f: impl FnOnce(&Ui) + Send + 'static) {
+fn with_ui(f: impl FnOnce(&Rc<Ui>) + Send + 'static) {
     let _ = slint::invoke_from_event_loop(move || {
         if let Some(ui) = UI.with(|u| u.borrow().clone()) {
             f(&ui);
@@ -67,11 +108,8 @@ fn with_ui(f: impl FnOnce(&Ui) + Send + 'static) {
     });
 }
 
-impl Ui {
-    /// Shows the panel (anchored to the last tray position).
-    fn show(&self) {
-        self.panel.show(&self.app, &self.version);
-    }
+fn now_and_offset() -> (DateTime<Utc>, FixedOffset) {
+    (Utc::now(), *chrono::Local::now().offset())
 }
 
 /// Opens release pages in the default browser through Explorer.
@@ -115,9 +153,9 @@ impl TrayBackend for TrayIconBackend {
     }
 }
 
-fn tray_menu(settings: &tokenmon_core::settings::Settings) -> Menu {
+fn tray_menu(entries: &[MenuEntry]) -> Menu {
     let menu = Menu::new();
-    for entry in context_menu(settings) {
+    for entry in entries {
         match entry {
             MenuEntry::Item { label, action } => {
                 let _ = menu.append(&MenuItem::with_id(
@@ -135,49 +173,259 @@ fn tray_menu(settings: &tokenmon_core::settings::Settings) -> Menu {
     menu
 }
 
-/// Panel window and where it was last anchored.
-struct Panel {
-    window: ui::OverviewPanel,
-    anchor: RefCell<Option<(i32, i32)>>,
+impl Ui {
+    /// The handler every panel window routes its actions to.
+    fn handler(&self) -> PanelHandler {
+        let weak = self.me.borrow().clone();
+        Rc::new(move |event| {
+            if let Some(ui) = weak.upgrade() {
+                ui.on_event(&event);
+            }
+        })
+    }
+
+    /// The window for `provider`, created and wired on first use.
+    fn window_for(&self, provider: ProviderId) -> Option<Rc<PanelWindow>> {
+        if let Some(w) = self.windows.borrow().get(&provider) {
+            return Some(Rc::clone(w));
+        }
+        let window = match PanelWindow::create(provider, &self.handler()) {
+            Ok(w) => Rc::new(w),
+            Err(e) => {
+                tracing::error!(error = %e, %provider, "panel window failed");
+                return None;
+            }
+        };
+        self.wire_dismiss(provider, &window);
+        self.windows
+            .borrow_mut()
+            .insert(provider, Rc::clone(&window));
+        Some(window)
+    }
+
+    /// Dismiss on Escape or when the selected panel loses focus.
+    fn wire_dismiss(&self, provider: ProviderId, window: &Rc<PanelWindow>) {
+        use slint::winit_030::{EventResult, WinitWindowAccessor, winit};
+        let weak = self.me.borrow().clone();
+        window.window().on_winit_window_event(move |_, event| {
+            use winit::event::WindowEvent;
+            use winit::keyboard::{Key, NamedKey};
+            let dismiss = match event {
+                WindowEvent::Focused(false) => true,
+                WindowEvent::KeyboardInput { event, .. } => {
+                    event.state.is_pressed() && event.logical_key == Key::Named(NamedKey::Escape)
+                }
+                _ => false,
+            };
+            if dismiss
+                    && let Some(ui) = weak.upgrade()
+                    // A tab switch hides the old window after selecting the
+                    // new one; only the selected panel dismisses.
+                    && ui.state.borrow().selected == provider
+            {
+                ui.hide_all();
+            }
+            EventResult::Propagate
+        });
+    }
+
+    /// Switches to `provider`'s tab and shows the panel.
+    fn show_tab(&self, provider: ProviderId) {
+        self.state.borrow_mut().selected = provider;
+        self.app.settings.set_selected_provider(provider);
+        self.render(true);
+    }
+
+    /// Shows the panel on the selected tab.
+    fn show_selected(&self) {
+        let provider = self.state.borrow().selected;
+        self.show_tab(provider);
+    }
+
+    /// Builds the selected provider's view and applies it; with `reveal` the
+    /// window is placed near the tray and shown. Without it, nothing happens
+    /// unless the view changed.
+    fn render(&self, reveal: bool) {
+        let provider = self.state.borrow().selected;
+        let (now, tz) = now_and_offset();
+        let view = {
+            let state = self.state.borrow();
+            build_view(
+                &ViewEnv {
+                    model: &self.app.model,
+                    sessions: &self.app.sessions,
+                    overview: &self.store,
+                    version: &self.version,
+                    now,
+                    tz,
+                },
+                &state,
+                provider,
+            )
+        };
+        let rows = build_switcher(
+            &self.app.settings.snapshot().visible_usage_providers(),
+            provider,
+        );
+        if !reveal && self.last_view.borrow().as_ref() == Some(&view) && *self.rows.borrow() == rows
+        {
+            return;
+        }
+        let Some(window) = self.window_for(provider) else {
+            return;
+        };
+        if let PanelView::Overview(vm) = &view {
+            self.cards.borrow_mut().clone_from(&vm.cards);
+        }
+        window.apply(&view, &rows);
+        *self.rows.borrow_mut() = rows;
+        *self.last_view.borrow_mut() = Some(view);
+        if reveal {
+            for (p, other) in self.windows.borrow().iter() {
+                if *p != provider && other.is_visible() {
+                    other.hide();
+                }
+            }
+            self.place(&window);
+            window.show();
+            self.app.model.set_menu_open(true);
+        }
+    }
+
+    /// Anchors the window above (or below) the tray icon, inside the work area.
+    fn place(&self, window: &PanelWindow) {
+        let size = window.window().size();
+        let anchor = self.anchor.get().unwrap_or_else(default_anchor);
+        let (work, _) = display::monitor_at(anchor.0, anchor.1);
+        let (x, y) = place_panel(
+            anchor,
+            (
+                i32::try_from(size.width).unwrap_or(0),
+                i32::try_from(size.height).unwrap_or(0),
+            ),
+            work,
+        );
+        window
+            .window()
+            .set_position(slint::PhysicalPosition::new(x, y));
+    }
+
+    fn is_panel_visible(&self) -> bool {
+        self.windows.borrow().values().any(|w| w.is_visible())
+    }
+
+    fn hide_all(&self) {
+        if !self.is_panel_visible() {
+            return;
+        }
+        for w in self.windows.borrow().values() {
+            w.hide();
+        }
+        self.dismissed_at.set(Some(Instant::now()));
+        self.app.model.set_menu_open(false);
+    }
+
+    fn recently_dismissed(&self) -> bool {
+        self.dismissed_at
+            .get()
+            .is_some_and(|t| t.elapsed() < REOPEN_GUARD)
+    }
+
+    fn on_event(&self, event: &PanelEvent) {
+        let actions = {
+            let (rows, cards) = (self.rows.borrow(), self.cards.borrow());
+            self.state.borrow_mut().handle(event, &rows, &cards)
+        };
+        for action in actions {
+            self.perform(action);
+        }
+    }
+
+    fn perform(&self, action: Action) {
+        match action {
+            Action::Redraw => self.render(false),
+            Action::Show(p) => self.show_tab(p),
+            Action::OpenSettings => {
+                self.hide_all();
+                self.open_settings();
+            }
+            Action::SignIn(p) => {
+                if let Err(e) = self.app.signin.start(p) {
+                    tracing::warn!(error = %e, provider = %p, "sign-in could not open");
+                }
+            }
+            Action::SignOut(p) => {
+                self.app.signin.sign_out(p);
+                self.render(false);
+            }
+            Action::ToggleSection(section) => {
+                let expanded = self.app.settings.snapshot().is_expanded(section);
+                self.app.settings.set_expanded(!expanded, section);
+                self.render(false);
+            }
+            Action::SubmitApiKey(key) => {
+                let accepted =
+                    commit_api_key(&mut self.state.borrow_mut(), &self.app.sessions, &key);
+                if accepted {
+                    self.app.model.sign_in_completed(ProviderId::OpenRouter);
+                }
+                self.render(false);
+            }
+        }
+    }
+
+    fn open_settings(&self) {
+        let existing = self.settings_window.borrow().clone();
+        let window = match existing {
+            Some(w) => w,
+            None => match create_settings_window(Arc::clone(&self.settings_vm)) {
+                Ok(w) => {
+                    *self.settings_window.borrow_mut() = Some(Rc::clone(&w));
+                    w
+                }
+                Err(e) => {
+                    tracing::error!(error = %e, "settings window failed");
+                    return;
+                }
+            },
+        };
+        refresh(&window, &self.settings_vm);
+        let _ = window.show();
+    }
+
+    fn run_command(&self, command: MenuCommand) {
+        match command {
+            MenuCommand::Show(p) => self.show_tab(p),
+            MenuCommand::OpenSettings => self.open_settings(),
+            MenuCommand::CheckForUpdates => {
+                let checker = Arc::clone(&self.updates.checker);
+                self.handle
+                    .spawn(async move { checker.check_manually().await });
+            }
+            MenuCommand::Quit => self.quit(),
+        }
+    }
+
+    fn quit(&self) {
+        let (now, tz) = now_and_offset();
+        record_live(
+            &self.store,
+            self.app.model.registry(),
+            &self.app.settings.snapshot(),
+            &self.app.sessions,
+            now,
+            tz,
+        );
+        self.app.model.quit();
+        let _ = slint::quit_event_loop();
+    }
 }
 
-impl Panel {
-    /// Fills the panel from the live model and shows it near the tray.
-    fn show(&self, app: &App, version: &str) {
-        let now = chrono::Utc::now();
-        let tz = *chrono::Local::now().offset();
-        bridge::apply_overview(
-            &self.window,
-            &panel::overview(&app.model, &app.sessions, version, now, tz),
-        );
-        self.place();
-        let _ = self.window.show();
-        app.model.set_menu_open(true);
-    }
-
-    fn hide(&self, app: &App) {
-        let _ = self.window.hide();
-        app.model.set_menu_open(false);
-    }
-
-    fn is_visible(&self) -> bool {
-        self.window.window().is_visible()
-    }
-
-    /// Anchors the window above (or below) the tray icon, 420 wide.
-    fn place(&self) {
-        let size = self.window.window().size();
-        let (ax, ay) = self.anchor.borrow().unwrap_or((0, 0));
-        let x = (ax - i32::try_from(size.width / 2).unwrap_or(0)).max(0);
-        let y = if ay > i32::try_from(size.height).unwrap_or(0) {
-            ay - i32::try_from(size.height).unwrap_or(0) - 8
-        } else {
-            ay + 40
-        };
-        self.window
-            .window()
-            .set_position(slint::PhysicalPosition::new(x, y.max(0)));
-    }
+/// Where the panel opens when no tray position is known yet (a toast click or
+/// `--show` before any tray event): the primary work area's bottom right.
+fn default_anchor() -> (i32, i32) {
+    let (work, _) = display::monitor_at(0, 0);
+    (work.x + work.width - 220, work.y + work.height + PANEL_GAP)
 }
 
 /// Entry point of the Windows build. Returns the process exit code.
@@ -235,10 +483,11 @@ fn run_primary(pipe: &str, show_panel: bool, version: &str) -> ExitCode {
         tracing::warn!(error = %e, "AUMID registration failed; toasts may not show");
     }
 
-    // Toast clicks arrive on a WinRT thread: marshal to the UI thread.
+    // Toast clicks arrive on a WinRT thread: marshal to the UI thread and open
+    // that provider's panel.
     let toast_clicks = Arc::new(move |provider: ProviderId| {
         tracing::info!(%provider, "toast clicked");
-        with_ui(Ui::show);
+        with_ui(move |ui| ui.show_tab(provider));
     });
     let notifier: Arc<dyn Notifier> = match WinRtToastBackend::new() {
         Ok(backend) => Arc::new(ToastNotifier::new(backend, toast_clicks)),
@@ -283,6 +532,19 @@ fn run_primary(pipe: &str, show_panel: bool, version: &str) -> ExitCode {
     };
     tasks.push(updates.spawn_loop(runtime.handle()));
 
+    // Turning "Check automatically" on or off applies at once.
+    let checker = Arc::clone(&updates.checker);
+    let _updates_observer = crate::observe::ObservationLoop::start(
+        runtime.handle(),
+        app.settings.subscribe(),
+        Duration::from_millis(100),
+        false,
+        |s| s.checks_for_updates,
+        move |_| {
+            checker.settings_changed();
+        },
+    );
+
     // Sleep pauses every loop; wake resumes them once the network is back.
     let events = WindowsEventSource::new();
     events.start(Arc::new(SystemWakeGate::new(
@@ -291,37 +553,41 @@ fn run_primary(pipe: &str, show_panel: bool, version: &str) -> ExitCode {
         app.wake_callbacks(),
     )));
 
-    let window = match ui::OverviewPanel::new() {
-        Ok(w) => w,
-        Err(e) => {
-            tracing::error!(error = %e, "panel window failed");
-            return ExitCode::FAILURE;
-        }
-    };
-    let panel = Rc::new(Panel {
-        window,
-        anchor: RefCell::new(None),
-    });
+    let settings_vm = settings_view_model(&app, &updates, version, runtime.handle());
+    let store = Arc::new(OverviewStore::open(&dir));
+    let selected = app.settings.snapshot().selected_provider;
     let ui = Rc::new(Ui {
-        panel,
+        windows: RefCell::new(BTreeMap::new()),
+        state: RefCell::new(PanelState::new(selected)),
+        rows: RefCell::new(Vec::new()),
+        cards: RefCell::new(Vec::new()),
+        last_view: RefCell::new(None),
+        anchor: Cell::new(None),
+        dismissed_at: Cell::new(None),
+        store,
         app: Rc::clone(&app),
         version: version.to_owned(),
         updates,
         handle: runtime.handle().clone(),
+        settings_vm,
+        settings_window: RefCell::new(None),
+        tick: slint::Timer::default(),
+        me: RefCell::new(Weak::new()),
     });
+    *ui.me.borrow_mut() = Rc::downgrade(&ui);
     UI.with(|u| *u.borrow_mut() = Some(Rc::clone(&ui)));
-    wire_panel(&ui);
     wire_tray(&ui, show_panel);
 
     // A second launch with --show asks the running instance to open the panel.
     let _server = PipeServer::start(pipe, move |message| {
         if message == IpcMessage::Show {
-            with_ui(Ui::show);
+            with_ui(|ui| ui.show_selected());
         }
     });
 
     let result = slint::run_event_loop_until_quit();
-    app.model.quit();
+    ui.quit();
+    drop(tasks);
     if result.is_ok() {
         ExitCode::SUCCESS
     } else {
@@ -329,80 +595,59 @@ fn run_primary(pipe: &str, show_panel: bool, version: &str) -> ExitCode {
     }
 }
 
-/// Dismiss on Escape or focus loss, and route the panel's actions.
-fn wire_panel(ui: &Rc<Ui>) {
-    use slint::winit_030::{EventResult, WinitWindowAccessor, winit};
-    let weak = Rc::downgrade(ui);
-    ui.panel
-        .window
-        .window()
-        .on_winit_window_event(move |_, event| {
-            use winit::event::WindowEvent;
-            use winit::keyboard::{Key, NamedKey};
-            let dismiss = match event {
-                WindowEvent::Focused(false) => true,
-                WindowEvent::KeyboardInput { event, .. } => {
-                    event.state.is_pressed() && event.logical_key == Key::Named(NamedKey::Escape)
-                }
-                _ => false,
-            };
-            if dismiss && let Some(ui) = weak.upgrade() {
-                ui.panel.hide(&ui.app);
-            }
-            EventResult::Propagate
-        });
-    let weak = Rc::downgrade(ui);
-    events::connect_overview(
-        &ui.panel.window,
-        &(Rc::new(move |event| {
-            if let Some(ui) = weak.upgrade() {
-                handle_panel_event(&ui, &event);
-            }
-        }) as events::PanelHandler),
-    );
-}
-
-fn handle_panel_event(ui: &Ui, event: &events::PanelEvent) {
-    use events::PanelEvent;
-    let provider = match event {
-        PanelEvent::SignIn(p) | PanelEvent::SignInAgain(p) => Some(*p),
-        PanelEvent::OverviewSignIn(i) => card_provider(ui, *i),
-        PanelEvent::SignOut(p) => {
-            ui.app.signin.sign_out(*p);
-            return;
-        }
-        PanelEvent::OverviewSignOut(i) => {
-            if let Some(p) = card_provider(ui, *i) {
-                ui.app.signin.sign_out(p);
-            }
-            return;
-        }
-        _ => None,
-    };
-    if let Some(p) = provider
-        && let Err(e) = ui.app.signin.start(p)
-    {
-        tracing::warn!(error = %e, provider = %p, "sign-in could not open");
+/// The Settings window's view model over the real services.
+fn settings_view_model(
+    app: &Rc<App>,
+    updates: &Arc<UpdateService>,
+    version: &str,
+    handle: &tokio::runtime::Handle,
+) -> Arc<SettingsViewModel> {
+    let exe = exe_path().to_string_lossy().into_owned();
+    let login = Arc::new(RunKeyLoginItem::new(Arc::new(WinRegistry), exe.clone()));
+    // A moved or updated install leaves a stale Run entry; point it here.
+    if login.is_stale().unwrap_or(false) {
+        let _ = login.register();
     }
+    let host = AppHost::new(HostParts {
+        settings: Arc::clone(&app.settings),
+        model: Arc::clone(&app.model),
+        sessions: Arc::clone(&app.sessions),
+        signin: Arc::clone(&app.signin),
+        updates: Arc::clone(updates),
+        login_item: login as Arc<dyn LoginItemService>,
+        desktop_verb: Arc::new(DesktopVerb::new(Arc::new(WinRegistry), exe)),
+        history: app.model.registry().history(),
+        version: version.to_owned(),
+        tz: Arc::new(|| *chrono::Local::now().offset()),
+        handle: handle.clone(),
+        quit: Arc::new(|| with_ui(|ui| ui.quit())),
+    });
+    Arc::new(SettingsViewModel::new(
+        Arc::new(AppSettingsBackend::new(Arc::clone(&app.settings))),
+        Arc::new(host),
+        Arc::new(NativeSaveDialog),
+    ))
 }
 
-/// The provider behind Overview card `index`.
-fn card_provider(ui: &Ui, index: usize) -> Option<ProviderId> {
-    panel::card_inputs(&ui.app.model, &ui.app.sessions)
-        .get(index)
-        .map(|c| c.provider)
+/// What the periodic UI tick remembers between runs.
+struct TickState {
+    controller: TrayController<TrayIconBackend>,
+    menu: Vec<MenuEntry>,
+    next_midnight: DateTime<Utc>,
+    ticks: u32,
 }
 
 /// Creates the tray icon and routes its clicks and menu.
 fn wire_tray(ui: &Rc<Ui>, show_panel: bool) {
     let settings = ui.app.settings.snapshot();
+    let entries = context_menu(&settings);
     let Ok(icon) = Icon::from_rgba(vec![0; 16 * 16 * 4], 16, 16) else {
         return;
     };
     let tray = match TrayIconBuilder::new()
         .with_icon(icon)
         .with_tooltip("TokenMon")
-        .with_menu(Box::new(tray_menu(&settings)))
+        .with_menu(Box::new(tray_menu(&entries)))
         .with_menu_on_left_click(false)
         .build()
     {
@@ -412,30 +657,37 @@ fn wire_tray(ui: &Rc<Ui>, show_panel: bool) {
             return;
         }
     };
-    let controller = Rc::new(RefCell::new(TrayController::new(TrayIconBackend(tray))));
 
-    // Clicking the icon toggles the panel, anchored to it.
+    // Any tray event tells where the icon is; a left click toggles the panel.
     TrayIconEvent::set_event_handler(Some(|event: TrayIconEvent| {
-        if let TrayIconEvent::Click {
-            button: MouseButton::Left,
-            button_state: MouseButtonState::Up,
-            rect,
-            ..
-        } = event
-        {
-            let anchor = (
-                (rect.position.x + f64::from(rect.size.width) / 2.0) as i32,
-                rect.position.y as i32,
-            );
-            with_ui(move |ui| {
-                *ui.panel.anchor.borrow_mut() = Some(anchor);
-                if ui.panel.is_visible() {
-                    ui.panel.hide(&ui.app);
-                } else {
-                    ui.show();
-                }
-            });
-        }
+        let (rect, click) = match &event {
+            TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                rect,
+                ..
+            } => (*rect, true),
+            TrayIconEvent::Click { rect, .. }
+            | TrayIconEvent::Enter { rect, .. }
+            | TrayIconEvent::Move { rect, .. }
+            | TrayIconEvent::Leave { rect, .. } => (*rect, false),
+            _ => return,
+        };
+        let anchor = (
+            (rect.position.x + f64::from(rect.size.width) / 2.0) as i32,
+            rect.position.y as i32,
+        );
+        with_ui(move |ui| {
+            ui.anchor.set(Some(anchor));
+            if !click {
+                return;
+            }
+            if ui.is_panel_visible() {
+                ui.hide_all();
+            } else if !ui.recently_dismissed() {
+                ui.show_selected();
+            }
+        });
     }));
 
     // Right-click menu actions.
@@ -443,58 +695,87 @@ fn wire_tray(ui: &Rc<Ui>, show_panel: bool) {
         let Some(action) = event.id.0.parse().ok().and_then(MenuAction::from_id) else {
             return;
         };
-        with_ui(move |ui| match action {
-            MenuAction::Quit => {
-                ui.app.model.quit();
-                let _ = slint::quit_event_loop();
-            }
-            MenuAction::CheckForUpdates => {
-                let checker = Arc::clone(&ui.updates.checker);
-                ui.handle
-                    .spawn(async move { checker.check_manually().await });
-            }
-            other if panel_target(other).is_some() => ui.show(),
-            _ => {}
-        });
+        with_ui(move |ui| ui.run_command(menu_command(action)));
     }));
 
-    // Re-render when usage, settings or the taskbar theme change; one short
-    // timer covers all three (the theme is read from the registry).
-    let timer = slint::Timer::default();
+    let mut tick = TickState {
+        controller: TrayController::new(TrayIconBackend(tray)),
+        menu: entries,
+        next_midnight: next_midnight(Utc::now(), *chrono::Local::now().offset()),
+        ticks: 0,
+    };
     let weak = Rc::downgrade(ui);
-    timer.start(
-        slint::TimerMode::Repeated,
-        Duration::from_secs(2),
-        move || {
-            let Some(ui) = weak.upgrade() else {
-                return;
-            };
-            let settings = ui.app.settings.snapshot();
-            let used: Vec<_> = ui
-                .app
-                .model
-                .registry()
-                .entries()
-                .iter()
-                .filter_map(|e| e.poller.headline_used_percent().map(|v| (e.provider, v)))
-                .collect();
-            let sessions = Arc::clone(&ui.app.sessions);
-            let signed_in = move |p: ProviderId| sessions.signed_in(p);
-            controller.borrow_mut().refresh(
-                &TrayData {
-                    settings: &settings,
-                    used_percent: &used,
-                    signed_in: &signed_in,
-                },
-                TrayIconSize::Px16,
-                theme::taskbar_theme(),
-            );
-        },
-    );
-    // The timer must outlive this function.
-    std::mem::forget(timer);
+    ui.tick.start(slint::TimerMode::Repeated, TICK, move || {
+        if let Some(ui) = weak.upgrade() {
+            on_tick(&ui, &mut tick);
+        }
+    });
 
     if show_panel {
-        ui.show();
+        ui.show_selected();
+    }
+}
+
+/// The 2 s tick: re-renders the tray (usage, settings, taskbar theme, DPI and
+/// icon-size changes all show up as a different render key; the controller
+/// touches the OS only when it changed), swaps the context menu when the
+/// provider set changed, keeps an open panel live, rolls the Overview over at
+/// local midnight and saves the Overview history.
+fn on_tick(ui: &Rc<Ui>, tick: &mut TickState) {
+    let (now, tz) = now_and_offset();
+    let settings = ui.app.settings.snapshot();
+    let used: Vec<_> = ui
+        .app
+        .model
+        .registry()
+        .entries()
+        .iter()
+        .filter_map(|e| e.poller.headline_used_percent().map(|v| (e.provider, v)))
+        .collect();
+    let sessions = Arc::clone(&ui.app.sessions);
+    let signed_in = move |p: ProviderId| sessions.signed_in(p);
+    let anchor = ui.anchor.get().unwrap_or((0, 0));
+    let (_, dpi) = display::monitor_at(anchor.0, anchor.1);
+    tick.controller.refresh(
+        &TrayData {
+            settings: &settings,
+            used_percent: &used,
+            signed_in: &signed_in,
+        },
+        icon_size(display::small_icon_metric(dpi), dpi),
+        theme::taskbar_theme(),
+    );
+
+    let entries = context_menu(&settings);
+    if entries != tick.menu {
+        tick.controller
+            .backend_mut()
+            .0
+            .set_menu(Some(Box::new(tray_menu(&entries))));
+        tick.menu = entries;
+    }
+
+    if now >= tick.next_midnight {
+        tick.next_midnight = next_midnight(now, tz);
+        ui.state.borrow_mut().reset_offsets();
+    }
+    tick.ticks = tick.ticks.wrapping_add(1);
+    if tick.ticks.is_multiple_of(RECORD_EVERY_TICKS) {
+        record_live(
+            &ui.store,
+            ui.app.model.registry(),
+            &settings,
+            &ui.app.sessions,
+            now,
+            tz,
+        );
+    }
+    if ui.is_panel_visible() {
+        ui.render(false);
+    }
+    if let Some(window) = ui.settings_window.borrow().as_ref()
+        && window.window().is_visible()
+    {
+        refresh(window, &ui.settings_vm);
     }
 }

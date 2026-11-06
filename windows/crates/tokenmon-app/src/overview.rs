@@ -112,6 +112,22 @@ pub fn today_series(
     build_today_series(&inputs, today)
 }
 
+/// Records today's live series into `store` so history accumulates while the
+/// panel is closed. Returns whether anything changed.
+pub fn record_live(
+    store: &OverviewStore,
+    registry: &ProviderRegistry,
+    settings: &Settings,
+    sessions: &Sessions,
+    now: DateTime<Utc>,
+    tz: FixedOffset,
+) -> bool {
+    let calendar = Calendar::fixed(tz);
+    let today = calendar.date_of(now);
+    let live = today_series(registry, settings, sessions, &calendar, today);
+    store.record(&live, today)
+}
+
 /// The first local midnight after `now`: when the Overview must roll to a new
 /// day.
 pub fn next_midnight(now: DateTime<Utc>, tz: FixedOffset) -> DateTime<Utc> {
@@ -207,7 +223,7 @@ mod tests {
             .with_tokens(OverviewSeries::Cursor, tokens);
         let columns = hour_columns(&series);
         assert_eq!(columns.len(), 24);
-        assert!(columns[8].is_empty());
+        assert_eq!(columns[8].len(), 0);
         let nine = &columns[9];
         assert_eq!(nine.len(), 2);
         assert_eq!(nine[0].series, HourSeries::Grok);

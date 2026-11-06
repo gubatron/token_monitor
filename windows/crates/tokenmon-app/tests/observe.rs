@@ -82,5 +82,5 @@ async fn test_cancel_stops_handling() {
     l.cancel();
     tx.send_modify(|c| c.value = 1);
     settle().await;
-    assert!(seen(&s).is_empty());
+    assert_eq!(seen(&s).len(), 0);
 }

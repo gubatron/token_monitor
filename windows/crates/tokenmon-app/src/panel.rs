@@ -121,6 +121,12 @@ impl PanelState {
         }
     }
 
+    /// Returns every chart to its current period (the day rolled over, so
+    /// "today" is a different date).
+    pub fn reset_offsets(&mut self) {
+        self.offsets.clear();
+    }
+
     /// The browsed period of `provider` (`0` current, negative earlier).
     pub fn offset(&self, provider: ProviderId) -> i32 {
         self.offsets.get(&provider).copied().unwrap_or(0)
