@@ -22,6 +22,7 @@ tokenmon-provider-cursor = { path = "../crates/tokenmon-provider-cursor" }
 arbitrary = { version = "1", features = ["derive"] }
 serde_json = "1.0"
 tokenmon-provider-grokbot = { path = "../crates/tokenmon-provider-grokbot" }
+tokenmon-provider-opencode = { path = "../crates/tokenmon-provider-opencode" }
 url = "2.5"
 
 # Own workspace: nightly-only, never built by the stable workspace gate.
