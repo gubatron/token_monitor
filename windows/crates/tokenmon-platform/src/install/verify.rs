@@ -46,12 +46,48 @@ fn is_pe(path: &Path) -> std::io::Result<bool> {
     Ok(f.read_exact(&mut sig).is_ok() && &sig == b"PE\0\0")
 }
 
+/// Whether a `Zone.Identifier` stream's text marks the file as downloaded from
+/// the Internet or a restricted zone (`ZoneId` 3 or 4).
+///
+/// # Examples
+///
+/// ```
+/// use tokenmon_platform::install::verify::zone_id_marks_internet;
+///
+/// assert!(zone_id_marks_internet("[ZoneTransfer]\r\nZoneId=3\r\n"));
+/// assert!(!zone_id_marks_internet("[ZoneTransfer]\r\nZoneId=2\r\n"));
+/// assert!(!zone_id_marks_internet(""));
+/// ```
+pub fn zone_id_marks_internet(contents: &str) -> bool {
+    contents
+        .lines()
+        .filter_map(|l| l.trim().strip_prefix("ZoneId="))
+        .any(|v| v.trim().parse::<u32>().is_ok_and(|z| z >= 3))
+}
+
+/// The text of the file's `Zone.Identifier` alternate data stream, if any.
+/// Only Windows has such streams.
+fn read_zone_identifier(path: &Path) -> Option<String> {
+    if cfg!(windows) {
+        let mut stream = path.as_os_str().to_owned();
+        stream.push(":Zone.Identifier");
+        std::fs::read_to_string(stream).ok()
+    } else {
+        None
+    }
+}
+
 impl SignatureVerifier for PeHeaderVerifier {
     fn verify_exe(&self, path: &Path) -> Result<(), InstallError> {
-        match is_pe(path) {
-            Ok(true) => Ok(()),
-            _ => Err(bad("The download is not a Windows program.")),
+        if !matches!(is_pe(path), Ok(true)) {
+            return Err(bad("The download is not a Windows program."));
         }
+        if read_zone_identifier(path).is_some_and(|t| zone_id_marks_internet(&t)) {
+            return Err(bad(
+                "Windows would block this unsigned download from opening.",
+            ));
+        }
+        Ok(())
     }
 
     fn verify_msi(&self, path: &Path) -> Result<(), InstallError> {

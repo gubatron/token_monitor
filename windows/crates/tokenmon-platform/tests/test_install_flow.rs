@@ -153,11 +153,14 @@ async fn test_installs_verified_update_in_place() {
     let out = r.installer.install(zip_req(&body)).await.unwrap();
     assert_eq!(out, InstallOutcome::Relaunching);
     assert_eq!(fs::read(&r.exe).unwrap(), fake_pe("new"));
-    assert_eq!(siblings(&r), ["TokenMon.exe", "TokenMon.exe.old"]);
+    let names = siblings(&r);
+    assert_eq!(names.len(), 2, "{names:?}");
+    assert_eq!(names[0], "TokenMon.exe");
+    assert!(names[1].starts_with("TokenMon.old-") && names[1].ends_with(".exe"));
     assert_eq!(fs::read_dir(&r.work).unwrap().count(), 0);
     let spawned = r.launcher.spawned.lock().unwrap();
     assert_eq!(spawned[0].program, r.exe.as_os_str());
-    assert_eq!(spawned[0].args, ["--relaunch-after-pid", "4242"]);
+    assert_eq!(spawned[0].args, ["--wait-for-pid", "4242"]);
 }
 
 /// A failed relaunch still installs and asks for a manual restart.

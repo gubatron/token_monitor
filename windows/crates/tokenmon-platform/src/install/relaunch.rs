@@ -22,7 +22,7 @@ pub trait ProcessLauncher: Send + Sync {
 
 /// Argument the relaunched build receives so it waits for the old process to
 /// exit (single-instance guard) before it takes over.
-pub const RELAUNCH_WAIT_ARG: &str = "--relaunch-after-pid";
+pub const RELAUNCH_WAIT_ARG: &str = "--wait-for-pid";
 
 /// Command that starts the freshly installed `exe` once process `pid` is gone.
 ///
@@ -36,7 +36,7 @@ pub const RELAUNCH_WAIT_ARG: &str = "--relaunch-after-pid";
 /// use tokenmon_platform::install::relaunch::relaunch_spec;
 ///
 /// let spec = relaunch_spec(Path::new(r"C:\Apps\TokenMon.exe"), 42);
-/// assert_eq!(spec.args, ["--relaunch-after-pid", "42"]);
+/// assert_eq!(spec.args, ["--wait-for-pid", "42"]);
 /// ```
 pub fn relaunch_spec(exe: &Path, pid: u32) -> CommandSpec {
     CommandSpec {
