@@ -197,7 +197,15 @@ fn render_ldml(dt: DateTime<FixedOffset>, pattern: &str) -> String {
                 continue;
             }
             i += 1;
-            while i < chars.len() && chars[i] != '\'' {
+            while i < chars.len() {
+                if chars[i] == '\'' {
+                    if chars.get(i + 1) == Some(&'\'') {
+                        out.push('\'');
+                        i += 2;
+                        continue;
+                    }
+                    break;
+                }
                 out.push(chars[i]);
                 i += 1;
             }
