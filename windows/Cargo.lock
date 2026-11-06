@@ -5567,8 +5567,13 @@ dependencies = [
 name = "tokenmon-provider-grokbot"
 version = "0.1.0"
 dependencies = [
+ "chrono",
+ "serde_json",
  "tokenmon-core",
  "tokenmon-provider-cursor",
+ "tokio",
+ "tracing",
+ "wiremock",
 ]
 
 [[package]]
