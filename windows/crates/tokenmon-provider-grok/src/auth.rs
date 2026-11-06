@@ -65,10 +65,10 @@ pub fn is_return_page(url: &str) -> bool {
 /// Whether a cookie name is one of the preferred session cookies
 /// (`sso`, `sso-rw`), case-insensitively.
 ///
-/// [`AuthConfig`] holds a single `preferred_session_cookie` (`sso`); the sign-in
-/// window must use this function so a session with only `sso-rw` is accepted.
+/// Delegates to [`AuthConfig::is_preferred_session_cookie`] so a session with
+/// only `sso-rw` is accepted everywhere.
 pub fn is_preferred_session_cookie(name: &str) -> bool {
-    ESSENTIAL_COOKIES.contains(&name.to_lowercase().as_str())
+    auth_config().is_preferred_session_cookie(name)
 }
 
 /// The `AuthConfig` of the Grok session.
@@ -88,7 +88,7 @@ pub fn auth_config() -> AuthConfig {
         hosts: owned(&GROK_HOSTS),
         sign_out_hosts: owned(&GROK_HOSTS),
         extra_store_keys: Vec::new(),
-        preferred_session_cookie: "sso".to_owned(),
+        preferred_session_cookies: owned(&["sso", "sso-rw"]),
         essential_cookie_names: owned(&ESSENTIAL_COOKIES),
         essential_cookie_prefixes: Vec::new(),
         account_identity_cookie: None,

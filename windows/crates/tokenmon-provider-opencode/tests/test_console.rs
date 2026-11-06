@@ -527,3 +527,14 @@ fn test_locate_db() {
     );
     assert_eq!(locate_db(&DataDirEnv::default(), |_| true), None);
 }
+
+/// Regression (#53): both session cookie names are preferred via core config.
+#[test]
+fn test_auth_config_prefers_both_session_cookies() {
+    let cfg = auth_config();
+    assert_eq!(
+        cfg.preferred_session_cookies,
+        ["auth", "__host-console_session"]
+    );
+    assert!(cfg.is_preferred_session_cookie("__Host-console_session"));
+}

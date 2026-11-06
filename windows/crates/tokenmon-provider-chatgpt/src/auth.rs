@@ -35,7 +35,7 @@ pub fn chatgpt_auth_config() -> AuthConfig {
         hosts: CHATGPT_HOSTS.map(str::to_owned).to_vec(),
         sign_out_hosts: CHATGPT_HOSTS.map(str::to_owned).to_vec(),
         extra_store_keys: Vec::new(),
-        preferred_session_cookie: SESSION_TOKEN_PREFIX.to_owned(),
+        preferred_session_cookies: vec![SESSION_TOKEN_PREFIX.to_owned()],
         essential_cookie_names: Vec::new(),
         essential_cookie_prefixes: vec![SESSION_TOKEN_PREFIX.to_owned()],
         account_identity_cookie: None,

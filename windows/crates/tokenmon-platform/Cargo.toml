@@ -91,6 +91,9 @@ windows = { version = "0.62", features = [
 ] }
 
 [dev-dependencies]
+# Real provider configs keep the capture tests honest about their cookie lists.
+tokenmon-provider-grok = { workspace = true }
+tokenmon-provider-opencode = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["rt", "macros", "time", "test-util"] }
 wiremock = { workspace = true }

@@ -6006,6 +6006,8 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "tokenmon-core",
+ "tokenmon-provider-grok",
+ "tokenmon-provider-opencode",
  "tokio",
  "tracing",
  "url",

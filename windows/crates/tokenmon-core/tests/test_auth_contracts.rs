@@ -14,7 +14,7 @@ fn chatgpt_like() -> AuthConfig {
         hosts: vec!["chatgpt.com".into()],
         sign_out_hosts: vec!["chatgpt.com".into()],
         extra_store_keys: vec![],
-        preferred_session_cookie: "__secure-next-auth.session-token".into(),
+        preferred_session_cookies: vec!["__secure-next-auth.session-token".into()],
         essential_cookie_names: vec![],
         essential_cookie_prefixes: vec!["__secure-next-auth.session-token".into()],
         account_identity_cookie: None,
@@ -123,4 +123,14 @@ fn test_generation_monotonic_and_is_current() {
         SessionGeneration(u64::MAX).next(),
         SessionGeneration(u64::MAX)
     );
+}
+
+/// Several preferred session cookie names are each accepted, case-insensitively.
+#[test]
+fn test_is_preferred_session_cookie_accepts_any_listed_name() {
+    let mut cfg = chatgpt_like();
+    cfg.preferred_session_cookies = vec!["sso".into(), "sso-rw".into()];
+    assert!(cfg.is_preferred_session_cookie("SSO-RW"));
+    assert!(cfg.is_preferred_session_cookie("sso"));
+    assert!(!cfg.is_preferred_session_cookie("other"));
 }

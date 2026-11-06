@@ -160,15 +160,18 @@ impl fmt::Debug for CapturedCookies {
     }
 }
 
-/// The preferred session cookie, or one of its `<name>.N` chunks: NextAuth
+/// A preferred session cookie, or one of its `<name>.N` chunks: NextAuth
 /// splits big tokens into `<name>.0`, `<name>.1`, ... and a chunked-only
 /// login is a valid session.
 fn is_session_cookie(policy: &CapturePolicy, name: &str) -> bool {
+    let lower = name.to_lowercase();
     policy.auth.is_preferred_session_cookie(name)
-        || name
-            .to_lowercase()
-            .strip_prefix(policy.auth.preferred_session_cookie.as_str())
-            .is_some_and(|rest| {
+        || policy
+            .auth
+            .preferred_session_cookies
+            .iter()
+            .filter_map(|p| lower.strip_prefix(p.as_str()))
+            .any(|rest| {
                 rest.strip_prefix('.')
                     .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
             })

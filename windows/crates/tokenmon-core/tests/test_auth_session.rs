@@ -18,7 +18,7 @@ fn config(essential: &[&str], prefixes: &[&str], identity: Option<&str>) -> Auth
         hosts: vec![],
         sign_out_hosts: vec!["example.com".into()],
         extra_store_keys: vec![CredentialKey::Workspace],
-        preferred_session_cookie: "session".into(),
+        preferred_session_cookies: vec!["session".into()],
         essential_cookie_names: essential.iter().map(|s| (*s).into()).collect(),
         essential_cookie_prefixes: prefixes.iter().map(|s| (*s).into()).collect(),
         account_identity_cookie: identity.map(Into::into),
