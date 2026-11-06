@@ -159,9 +159,10 @@ pub struct AuthConfig {
     pub sign_out_hosts: Vec<String>,
     /// Extra keys cleared with the session (for example `Workspace`).
     pub extra_store_keys: Vec<CredentialKey>,
-    /// Lowercase name of the cookie that proves a session (for example
-    /// `sessionkey`).
-    pub preferred_session_cookie: String,
+    /// Lowercase names of the cookies that prove a session (for example
+    /// `["sessionkey"]`, or `["sso", "sso-rw"]` for Grok). Any one suffices;
+    /// the first entry is the primary where order matters.
+    pub preferred_session_cookies: Vec<String>,
     /// Lowercase essential cookie names; empty with no prefixes means "no
     /// allowlist".
     pub essential_cookie_names: Vec<String>,
@@ -208,9 +209,11 @@ impl AuthConfig {
             || self.essential_family(name).is_some()
     }
 
-    /// Whether `name` is the preferred session cookie (case-insensitive).
+    /// Whether `name` is one of the preferred session cookies
+    /// (case-insensitive).
     pub fn is_preferred_session_cookie(&self, name: &str) -> bool {
-        name.to_lowercase() == self.preferred_session_cookie
+        let lower = name.to_lowercase();
+        self.preferred_session_cookies.contains(&lower)
     }
 }
 

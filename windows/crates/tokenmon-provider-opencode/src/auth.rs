@@ -16,8 +16,7 @@ pub const CONSOLE_SESSION_COOKIE: &str = "__host-console_session";
 
 /// The OpenCode [`AuthConfig`].
 ///
-/// `AuthConfig::preferred_session_cookie` holds one name, but OpenCode
-/// accepts two; use [`is_preferred_session_cookie`] for the full rule.
+/// Both `auth` and the console session cookie prove a session.
 pub fn auth_config() -> AuthConfig {
     AuthConfig {
         store_filename_prefix: "opencode_auth_".into(),
@@ -25,7 +24,7 @@ pub fn auth_config() -> AuthConfig {
         hosts: vec!["opencode.ai".into(), "auth.opencode.ai".into()],
         sign_out_hosts: vec!["opencode.ai".into(), "auth.opencode.ai".into()],
         extra_store_keys: vec![CredentialKey::Workspace],
-        preferred_session_cookie: "auth".into(),
+        preferred_session_cookies: vec!["auth".into(), CONSOLE_SESSION_COOKIE.into()],
         essential_cookie_names: vec!["auth".into(), "provider".into(), CONSOLE_SESSION_COOKIE.into()],
         essential_cookie_prefixes: Vec::new(),
         account_identity_cookie: None,
@@ -37,8 +36,7 @@ pub fn auth_config() -> AuthConfig {
 
 /// `auth` or the console session cookie, case-insensitive.
 pub fn is_preferred_session_cookie(name: &str) -> bool {
-    let n = name.to_lowercase();
-    n == "auth" || n == CONSOLE_SESSION_COOKIE
+    auth_config().is_preferred_session_cookie(name)
 }
 
 /// Whether a cookie name plausibly carries authentication.

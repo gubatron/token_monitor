@@ -21,7 +21,7 @@ pub fn auth(names: &[&str], prefixes: &[&str], preferred: &str, attempts: u32) -
         hosts: vec![],
         sign_out_hosts: vec!["example.com".into()],
         extra_store_keys: vec![],
-        preferred_session_cookie: preferred.into(),
+        preferred_session_cookies: vec![preferred.into()],
         essential_cookie_names: names.iter().map(|s| (*s).to_owned()).collect(),
         essential_cookie_prefixes: prefixes.iter().map(|s| (*s).to_owned()).collect(),
         account_identity_cookie: None,
@@ -52,19 +52,14 @@ pub fn chatgpt_policy() -> CapturePolicy {
 
 pub fn grok_policy() -> CapturePolicy {
     CapturePolicy::new(
-        auth(&["sso", "sso-rw"], &[], "sso", 4),
+        tokenmon_provider_grok::auth::auth_config(),
         Arc::new(|d| host_matches(d, "grok.com") || host_matches(d, "x.ai")),
     )
 }
 
 pub fn opencode_policy() -> CapturePolicy {
     CapturePolicy::new(
-        auth(
-            &["auth", "provider", "__host-console_session"],
-            &[],
-            "auth",
-            4,
-        ),
+        tokenmon_provider_opencode::auth::auth_config(),
         Arc::new(|d| host_matches(d, "opencode.ai")),
     )
 }

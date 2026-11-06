@@ -124,7 +124,7 @@ impl AuthConfig {
     /// use tokenmon_core::AuthConfig;
     /// # fn cfg() -> AuthConfig { AuthConfig {
     /// #   store_filename_prefix: "t_".into(), log_category: "T".into(), hosts: vec![],
-    /// #   sign_out_hosts: vec![], extra_store_keys: vec![], preferred_session_cookie: "sso".into(),
+    /// #   sign_out_hosts: vec![], extra_store_keys: vec![], preferred_session_cookies: vec!["sso".into()],
     /// #   essential_cookie_names: vec!["sso".into()], essential_cookie_prefixes: vec![],
     /// #   account_identity_cookie: None, max_attempts: 4,
     /// #   retry_delay: AuthConfig::DEFAULT_RETRY_DELAY, failure_message: String::new() } }
@@ -296,7 +296,7 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
 /// # fn cfg() -> AuthConfig { AuthConfig {
 /// #   store_filename_prefix: "t_".into(), log_category: "T".into(), hosts: vec![],
 /// #   sign_out_hosts: vec!["example.com".into()], extra_store_keys: vec![],
-/// #   preferred_session_cookie: "sid".into(), essential_cookie_names: vec![],
+/// #   preferred_session_cookies: vec!["sid".into()], essential_cookie_names: vec![],
 /// #   essential_cookie_prefixes: vec![], account_identity_cookie: None, max_attempts: 4,
 /// #   retry_delay: AuthConfig::DEFAULT_RETRY_DELAY, failure_message: String::new() } }
 /// let s = CookieAuthSession::new(cfg(), Arc::new(InMemoryCredentialStore::default()), Arc::new(SystemClock));

@@ -355,3 +355,15 @@ fn test_auth_config_constants() {
     assert!(cfg.is_essential("sso") && cfg.is_essential("sso-rw") && !cfg.is_essential("_ga"));
     assert!(is_preferred_session_cookie("SSO") && is_preferred_session_cookie("sso-rw"));
 }
+
+/// Regression (#53): a jar with only `sso-rw` yields a stored cookie header.
+#[test]
+fn test_select_session_cookies_accepts_sso_rw_only() {
+    let jar = [CookieRecord {
+        name: "sso-rw".into(),
+        value: "rw".into(),
+        domain: ".grok.com".into(),
+    }];
+    assert_eq!(select_session_cookies(&jar).as_deref(), Some("sso-rw=rw"));
+    assert!(auth_config().is_preferred_session_cookie("SSO-RW"));
+}

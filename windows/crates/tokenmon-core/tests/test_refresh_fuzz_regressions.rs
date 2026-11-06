@@ -42,7 +42,7 @@ fn config(with_allowlist: bool) -> AuthConfig {
         hosts: vec![],
         sign_out_hosts: vec!["example.com".into()],
         extra_store_keys: vec![],
-        preferred_session_cookie: "sso".into(),
+        preferred_session_cookies: vec!["sso".into()],
         essential_cookie_names: if with_allowlist {
             vec!["sso".into()]
         } else {

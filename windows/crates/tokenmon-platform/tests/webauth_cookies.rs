@@ -163,7 +163,7 @@ fn no_allowlist_uses_preferred_then_auth_looking_cookies() {
 
     let mut q = claude_policy();
     q.auth.essential_cookie_names.clear();
-    q.auth.preferred_session_cookie = "nope".into();
+    q.auth.preferred_session_cookies = vec!["nope".into()];
     let only_misc = vec![
         cookie("misc", "m", ".claude.ai"),
         cookie("tok_auth", "t", ".claude.ai"),
@@ -418,4 +418,21 @@ fn non_secure_cookies_are_never_captured_by_default() {
     let mut lax = claude_policy();
     lax.require_secure = false;
     assert!(capture(&[insecure], &lax).is_some());
+}
+
+/// Regression (#53): a Grok jar holding only `sso-rw` is a captured session.
+#[test]
+fn grok_sso_rw_only_jar_is_captured() {
+    let jar = vec![cookie("sso-rw", "rw", ".grok.com")];
+    let got = select(&jar, &grok_policy()).expect("sso-rw alone is a session");
+    assert_eq!(cookie_header(&got), "sso-rw=rw");
+}
+
+/// Regression (#53): an OpenCode jar holding only `__host-console_session`
+/// is a captured session.
+#[test]
+fn opencode_console_session_only_jar_is_captured() {
+    let jar = vec![cookie("__Host-console_session", "c", "opencode.ai")];
+    let got = select(&jar, &opencode_policy()).expect("console session alone is a session");
+    assert_eq!(got.len(), 1);
 }

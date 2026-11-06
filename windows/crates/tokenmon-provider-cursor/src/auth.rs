@@ -50,7 +50,7 @@ pub fn cursor_auth_config() -> AuthConfig {
         hosts: CURSOR_COOKIE_HOSTS.map(str::to_owned).to_vec(),
         sign_out_hosts: CURSOR_COOKIE_HOSTS.map(str::to_owned).to_vec(),
         extra_store_keys: Vec::new(),
-        preferred_session_cookie: SESSION_COOKIE_NAME_LOWER.to_owned(),
+        preferred_session_cookies: vec![SESSION_COOKIE_NAME_LOWER.to_owned()],
         essential_cookie_names: vec![SESSION_COOKIE_NAME_LOWER.to_owned()],
         essential_cookie_prefixes: Vec::new(),
         account_identity_cookie: None,
@@ -77,7 +77,9 @@ impl CursorSignIn {
     pub const RETURN_DELAY: Duration = Duration::from_millis(800);
 
     /// Whether `host`/`path` is an identity-provider page (the user is still
-    /// signing in): an auth host, or any path containing `/login` or `/signin`.
+    /// signing in): an auth host, or a Cursor-owned host (matched with
+    /// `Domain::matches`) whose path contains `/login` or `/signin`. A
+    /// look-alike host with a `/login` path is not an auth page.
     ///
     /// # Examples
     ///
@@ -86,12 +88,13 @@ impl CursorSignIn {
     /// assert!(CursorSignIn::is_auth_page("github.com", "/session"));
     /// assert!(CursorSignIn::is_auth_page("cursor.com", "/login"));
     /// assert!(!CursorSignIn::is_auth_page("github.com.evil.example", "/"));
+    /// assert!(!CursorSignIn::is_auth_page("cursor.com.evil.example", "/login"));
     /// assert!(!CursorSignIn::is_auth_page("cursor.com", "/dashboard"));
     /// ```
     pub fn is_auth_page(host: &str, path: &str) -> bool {
         Domain::matches(host, &CURSOR_AUTH_HOSTS)
-            || path.contains("/login")
-            || path.contains("/signin")
+            || (Domain::matches(host, &CURSOR_COOKIE_HOSTS)
+                && (path.contains("/login") || path.contains("/signin")))
     }
 
     /// Whether the page is the post-sign-in return page: a cursor.com host and

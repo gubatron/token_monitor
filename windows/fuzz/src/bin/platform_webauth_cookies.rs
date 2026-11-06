@@ -17,7 +17,7 @@ fn policy() -> CapturePolicy {
         hosts: vec![],
         sign_out_hosts: vec!["claude.ai".into()],
         extra_store_keys: vec![],
-        preferred_session_cookie: "__secure-next-auth.session-token".into(),
+        preferred_session_cookies: vec!["__secure-next-auth.session-token".into()],
         essential_cookie_names: vec!["sessionkey".into()],
         essential_cookie_prefixes: vec!["__secure-next-auth.session-token".into()],
         account_identity_cookie: None,

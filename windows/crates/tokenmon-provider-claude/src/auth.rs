@@ -24,7 +24,7 @@ pub fn claude_auth_config() -> AuthConfig {
         hosts: hosts.clone(),
         sign_out_hosts: hosts,
         extra_store_keys: Vec::new(),
-        preferred_session_cookie: "sessionkey".to_owned(),
+        preferred_session_cookies: vec!["sessionkey".to_owned()],
         essential_cookie_names: vec!["sessionkey".to_owned(), "lastactiveorg".to_owned()],
         essential_cookie_prefixes: Vec::new(),
         account_identity_cookie: Some("lastactiveorg".to_owned()),

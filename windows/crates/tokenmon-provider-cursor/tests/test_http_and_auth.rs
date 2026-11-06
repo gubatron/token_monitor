@@ -208,6 +208,12 @@ fn test_auth_page_matches_identity_hosts_exactly_or_by_suffix() {
     assert!(CursorSignIn::is_auth_page("cursor.com", "/login"));
     assert!(!CursorSignIn::is_auth_page("github.com.evil.example", "/"));
     assert!(!CursorSignIn::is_auth_page("notgithub.com", "/"));
+    // #52: a /login path only counts on a Cursor host.
+    assert!(!CursorSignIn::is_auth_page(
+        "cursor.com.evil.example",
+        "/login"
+    ));
+    assert!(!CursorSignIn::is_auth_page("evil.example", "/signin"));
     assert!(!CursorSignIn::is_auth_page("cursor.com", "/dashboard"));
 }
 
