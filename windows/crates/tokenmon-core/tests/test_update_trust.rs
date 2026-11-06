@@ -85,3 +85,42 @@ fn test_trusted_download_allows_cdn_hosts_only() {
         assert!(!trusted(bad, O, R), "{bad:?} must be refused");
     }
 }
+
+/// #40: release pages of the configured repository only.
+#[test]
+fn test_release_page_allowlist() {
+    use tokenmon_core::update::is_repository_release_page as ok;
+    let (o, r) = ("gubatron", "token_monitor");
+    assert!(ok(
+        "https://github.com/gubatron/token_monitor/releases",
+        o,
+        r
+    ));
+    assert!(ok(
+        "https://github.com/Gubatron/Token_Monitor/releases/latest",
+        o,
+        r
+    ));
+    assert!(ok(
+        "https://github.com/gubatron/token_monitor/releases/tag/windows-v1.0.0",
+        o,
+        r
+    ));
+    for bad in [
+        "",
+        "file:///C:/x",
+        "ms-msdt:/x",
+        "http://github.com/gubatron/token_monitor/releases",
+        "https://github.com/gubatron/token_monitor",
+        "https://github.com/gubatron/token_monitor/Releases",
+        "https://github.com/gubatron/token_monitor/releases//x",
+        "https://github.com/gubatron/token_monitor/releases/%2e%2e/x",
+        "https://github.com/gubatron/token_monitor/releases#x",
+        "https://user@github.com/gubatron/token_monitor/releases",
+        "https://github.com:8443/gubatron/token_monitor/releases",
+        "https://github.com/gubatron/token_monitor_evil/releases",
+        "https://evil.com/gubatron/token_monitor/releases",
+    ] {
+        assert!(!ok(bad, o, r), "{bad}");
+    }
+}

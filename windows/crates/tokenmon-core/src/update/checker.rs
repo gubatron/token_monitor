@@ -10,6 +10,7 @@ use super::error::{InstallError, UpdateError};
 use super::feed::{
     AssetKind, AvailableRelease, ReleaseAsset, ReleaseFeedFetcher, ReleaseSource, newer_release,
 };
+use super::trust::is_repository_release_page;
 use super::version::AppVersion;
 use crate::provider::BoxFuture;
 
@@ -258,7 +259,17 @@ impl UpdateChecker {
 
     fn fall_back_to_page(&self, release: &AvailableRelease, message: &str) {
         self.update(|s| s.status_message = Some(message.to_owned()));
-        self.opener.open(&release.page_url);
+        // Re-checked here because `AvailableRelease` fields are public.
+        let url = if is_repository_release_page(
+            &release.page_url,
+            &self.source.owner,
+            &self.source.repository,
+        ) {
+            release.page_url.clone()
+        } else {
+            self.source.releases_page_url()
+        };
+        self.opener.open(&url);
     }
 
     async fn run_install(
