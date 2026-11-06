@@ -482,3 +482,33 @@ fn test_random_jitter_is_bounded() {
     let j = RandomJitter::with_seed(1);
     assert!((0..10_000).all(|_| j.next_fraction().abs() <= 0.1));
 }
+
+/// Regression (#73): a panicking refresh is treated as a failure: the loop
+/// backs off (30 s) and refreshes again instead of staying dead.
+#[tokio::test(flavor = "current_thread")]
+async fn test_panicking_refresh_backs_off_and_reschedules() {
+    let time = ManualScheduler::new();
+    let calls = Arc::new(AtomicUsize::new(0));
+    let counter = Arc::clone(&calls);
+    let l = PollingLoop::builder(
+        || Some(secs(10)),
+        move || {
+            let n = counter.fetch_add(1, Ordering::SeqCst);
+            async move {
+                assert!(n != 0, "first refresh blows up");
+                PollOutcome::Success
+            }
+        },
+    )
+    .clock(time.clock())
+    .sleeper(Arc::new(time.clone()))
+    .jitter(Arc::new(|| 0.0) as Arc<dyn JitterSource>)
+    .build();
+    l.start();
+    assert_eq!(time.next_sleep().await, secs(30));
+    assert!(!l.is_refreshing());
+    time.fire();
+    assert_eq!(time.next_sleep().await, secs(10));
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+    l.stop();
+}

@@ -498,3 +498,33 @@ async fn test_network_failure_falls_back_and_reports_failure() {
     );
     assert!(!rig.auth.state().needs_sign_in);
 }
+
+/// Regression (#73): a scan that fails for a reason other than "no database"
+/// shows that reason in the error caption instead of hiding it.
+#[tokio::test]
+async fn test_scan_error_detail_reaches_the_caption() {
+    let seam: Arc<ScanFn> = Arc::new(|_| Err(DbError::QueryFailed("database is locked".into())));
+    let rig = rig_with(FakeSession::signed_out(), unauthorized(), seam);
+    rig.poller.refresh_now().await;
+    let text = rig.poller.last_error_text().unwrap();
+    assert!(text.starts_with(captions::LOCAL_UNREADABLE), "{text}");
+    assert!(text.contains("database is locked"), "{text}");
+}
+
+/// Regression (#73): a panicking scan (a `JoinError`) must not replace a good
+/// console snapshot with nothing.
+#[tokio::test]
+async fn test_panicking_scan_keeps_the_console_snapshot() {
+    let auth = FakeSession::signed_in("auth=1");
+    auth.inner.lock().unwrap().state.needs_sign_in = false;
+    let seam: Arc<ScanFn> = Arc::new(|_| panic!("scan blew up"));
+    let rig = rig_with(
+        auth,
+        console(Ok((console_snapshot(30.0), "wrk_1".into()))),
+        seam,
+    );
+    rig.poller.refresh_now().await;
+    let snapshot = rig.poller.snapshot().expect("console snapshot kept");
+    assert!(!snapshot.is_estimated);
+    assert!((snapshot.monthly_used_percent() - 50.0).abs() < 1e-9);
+}

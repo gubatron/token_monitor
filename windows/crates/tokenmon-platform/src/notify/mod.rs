@@ -72,9 +72,17 @@ impl<B: ToastBackend> ToastNotifier<B> {
 
 impl<B: ToastBackend> Notifier for ToastNotifier<B> {
     fn deliver(&self, alert: &ThresholdAlert) {
+        self.try_deliver(alert);
+    }
+
+    fn try_deliver(&self, alert: &ThresholdAlert) -> bool {
         let content = ToastContent::from_alert(alert);
-        if let Err(e) = self.backend.show(&content, self.on_activated.clone()) {
-            tracing::warn!(error = %e, tag = %content.tag, "threshold toast failed");
+        match self.backend.show(&content, self.on_activated.clone()) {
+            Ok(()) => true,
+            Err(e) => {
+                tracing::warn!(error = %e, tag = %content.tag, "threshold toast failed; will retry");
+                false
+            }
         }
     }
 }

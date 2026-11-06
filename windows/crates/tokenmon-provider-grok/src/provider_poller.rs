@@ -49,6 +49,7 @@ impl GrokProviderPoller {
         configure: impl FnOnce(PollingLoopBuilder) -> PollingLoopBuilder,
     ) -> Self {
         let menu_open = Arc::new(AtomicBool::new(false));
+        let enabled_source = Arc::clone(&settings);
         let interval = {
             let menu_open = Arc::clone(&menu_open);
             move || settings().poll_interval(ProviderId::Grok, menu_open.load(Ordering::SeqCst))
@@ -56,8 +57,15 @@ impl GrokProviderPoller {
         let weak: Weak<GrokUsagePoller> = Arc::downgrade(&inner);
         let refresh = move || {
             let weak = weak.clone();
+            let enabled_source = Arc::clone(&enabled_source);
             async move {
                 match weak.upgrade() {
+                    // Gate every refresh (timer, refresh_now, sign-in
+                    // completion) on the setting, like Swift's
+                    // `isProviderEnabled(.grok)` check.
+                    Some(_) if !enabled_source().is_provider_enabled(ProviderId::Grok) => {
+                        PollOutcome::Skipped
+                    }
                     Some(poller) => {
                         let result = poller.perform_refresh().await;
                         outcome_for(&poller, result)

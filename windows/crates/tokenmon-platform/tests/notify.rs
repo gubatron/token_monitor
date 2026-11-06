@@ -117,6 +117,18 @@ fn test_backend_failure_is_not_fatal() {
     assert_eq!(backend.shown().len(), 0);
 }
 
+/// Regression (#73): `try_deliver` reports a failed toast (so the threshold
+/// notifier retries it) and a shown one.
+#[test]
+fn test_try_deliver_reports_toast_failure() {
+    let (backend, _, n) = notifier();
+    backend.set_fail(true);
+    assert!(!n.try_deliver(&alert(ProviderId::Grok, 85.0, 80.0)));
+    backend.set_fail(false);
+    assert!(n.try_deliver(&alert(ProviderId::Grok, 85.0, 80.0)));
+    assert_eq!(backend.shown().len(), 1);
+}
+
 /// First run registers the AUMID; the second run writes nothing.
 #[test]
 fn test_aumid_registration_is_idempotent() {
