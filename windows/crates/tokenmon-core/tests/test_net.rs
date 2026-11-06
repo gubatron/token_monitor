@@ -418,6 +418,7 @@ async fn test_get_sends_standard_headers_and_user_agent() {
         referer: Some("https://r.test"),
         origin: Some("https://o.test"),
         headers: &[("x-extra", "1")],
+        ..RequestOptions::default()
     };
     let body = http(Ctx::Claude)
         .get(&server.uri(), "api/usage", opts)

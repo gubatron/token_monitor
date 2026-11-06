@@ -28,8 +28,8 @@ pub use detect::{
 pub use domain::Domain;
 pub use error::{ProviderError, ProviderErrorContext, UsageError};
 pub use http::{
-    HttpResponse, ProviderHttp, RequestOptions, json_object, set_cookie_headers,
-    split_folded_set_cookie, with_cancellation,
+    DEFAULT_MAX_RESPONSE_BYTES, HttpResponse, ProviderHttp, RequestOptions, ResponseTooLarge,
+    ensure_room, json_object, set_cookie_headers, split_folded_set_cookie, with_cancellation,
 };
 pub use request::{
     HeaderBuildError, apply_extra_headers, bot_challenge_message, build_headers, map_error,
