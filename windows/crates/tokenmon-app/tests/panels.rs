@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use chrono::{FixedOffset, TimeZone, Utc};
+use chrono::{TimeZone, Utc};
 use tokenmon_app::app::{App, AppInputs};
 use tokenmon_app::overview::OverviewStore;
 use tokenmon_app::panel::{
@@ -39,8 +39,8 @@ fn build(dir: &std::path::Path) -> App {
     .expect("builds")
 }
 
-fn tz() -> FixedOffset {
-    FixedOffset::east_opt(0).expect("utc")
+fn clock() -> tokenmon_core::ManualClock {
+    tokenmon_core::ManualClock::new(Utc.with_ymd_and_hms(2026, 7, 10, 12, 0, 0).unwrap())
 }
 
 /// Every provider's panel builds from the live model. Signed out, each shows
@@ -56,7 +56,7 @@ async fn test_every_provider_panel_builds_signed_out() {
         overview: &store,
         version: "1.2.3",
         now: Utc.with_ymd_and_hms(2026, 7, 10, 12, 0, 0).unwrap(),
-        tz: tz(),
+        clock: &clock(),
     };
     let state = PanelState::new(ProviderId::Overview);
     for provider in [ProviderId::Overview]
@@ -218,7 +218,7 @@ async fn test_overview_card_actions_resolve_against_applied_cards() {
         overview: &store,
         version: "1",
         now: Utc::now(),
-        tz: tz(),
+        clock: &clock(),
     };
     let mut state = PanelState::new(ProviderId::Overview);
     let vm = overview(&env, &state);
@@ -310,7 +310,7 @@ async fn test_registered_source_feeds_the_panel_and_receives_the_query() {
         overview: &store,
         version: "1",
         now: at,
-        tz: tz(),
+        clock: &clock(),
     };
     let mut state = PanelState::new(ProviderId::Grok);
     let grid = rows(&state, &app);

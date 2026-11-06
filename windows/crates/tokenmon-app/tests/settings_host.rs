@@ -102,7 +102,7 @@ fn fixture_with(updates: Option<Arc<UpdateService>>) -> Fixture {
         desktop_verb: Arc::new(DesktopVerb::new(registry.clone(), EXE)),
         history: history.clone(),
         version: "1.2.3".to_owned(),
-        tz: Arc::new(|| FixedOffset::east_opt(0).expect("utc")),
+        tz: Arc::new(|_| FixedOffset::east_opt(0).expect("utc")),
         handle: tokio::runtime::Handle::current(),
         quit: Arc::new(move || q.store(true, Ordering::SeqCst)),
     });

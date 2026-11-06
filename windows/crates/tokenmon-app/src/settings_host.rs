@@ -135,8 +135,9 @@ pub fn refresh_time(at: DateTime<Utc>, tz: FixedOffset) -> String {
         .to_string()
 }
 
-/// How the host reads the local offset (injected so tests are hermetic).
-pub type TzSource = Arc<dyn Fn() -> FixedOffset + Send + Sync>;
+/// How the host reads the local offset in effect at an instant (injected so
+/// tests are hermetic; DST aware in production).
+pub type TzSource = Arc<dyn Fn(DateTime<Utc>) -> FixedOffset + Send + Sync>;
 
 /// Everything [`AppHost`] is built from.
 pub struct HostParts {
@@ -203,14 +204,14 @@ impl AppHost {
     }
 
     fn refresh(&self, settings: &Settings) -> RefreshStatus {
-        let tz = (self.parts.tz)();
+        let tz = &self.parts.tz;
         let registry = self.parts.model.registry();
         let at = |p: ProviderId| registry.entry(p).and_then(|e| e.poller.last_refreshed_at());
         if settings.selected_provider == ProviderId::Overview {
             let lines: Vec<_> = settings
                 .visible_usage_providers()
                 .into_iter()
-                .filter_map(|p| at(p).map(|t| (p, refresh_time(t, tz))))
+                .filter_map(|p| at(p).map(|t| (p, refresh_time(t, tz(t)))))
                 .collect();
             return if lines.is_empty() {
                 RefreshStatus::None
@@ -221,7 +222,7 @@ impl AppHost {
         let provider = settings.selected_provider;
         match at(provider) {
             Some(t) => RefreshStatus::Single {
-                last_refresh: refresh_time(t, tz),
+                last_refresh: refresh_time(t, tz(t)),
                 last_error: registry
                     .entry(provider)
                     .and_then(|e| e.poller.last_error())

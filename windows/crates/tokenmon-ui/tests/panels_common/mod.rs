@@ -1,17 +1,18 @@
 //! Shared fixtures for the panel view-model tests.
 #![allow(dead_code, missing_docs, clippy::unwrap_used)]
 
-use chrono::{DateTime, FixedOffset, NaiveDate, TimeZone, Utc};
+use chrono::{DateTime, NaiveDate, TimeZone, Utc};
 use tokenmon_core::Srgb;
+use tokenmon_core::usage::Calendar;
 use tokenmon_ui::panels::common::{
     AllowanceNoun, DailyBudgetInput, DayInput, FooterKind, PanelContext, ProviderStatus,
 };
 
 /// 2026-07-15 12:00 UTC, zone UTC.
-pub fn ctx() -> PanelContext {
+pub fn ctx() -> PanelContext<'static> {
     PanelContext {
         now: Utc.with_ymd_and_hms(2026, 7, 15, 12, 0, 0).unwrap(),
-        tz: FixedOffset::east_opt(0).unwrap(),
+        calendar: Calendar::utc(),
     }
 }
 

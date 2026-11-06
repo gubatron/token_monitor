@@ -4,8 +4,8 @@
 //! Inputs are small structs owned by this crate; `From` impls from the
 //! provider crates' snapshot types are added once those land.
 
-use chrono::{DateTime, FixedOffset, NaiveDate, Utc};
-use tokenmon_core::usage::{DailyBudget, PaceHeadroom};
+use chrono::{DateTime, NaiveDate, Utc};
+use tokenmon_core::usage::{Calendar, DailyBudget, PaceHeadroom};
 use tokenmon_core::{ProviderId, Srgb};
 
 use crate::kit::week::WeekOffset;
@@ -25,24 +25,28 @@ pub mod geometry {
     pub const CARD_INNER_WIDTH: f64 = 372.0;
 }
 
-/// Wall-clock inputs for display: "now" and the local zone.
+/// Wall-clock inputs for display: "now" and the local calendar.
+///
+/// The calendar resolves the UTC offset per instant, so a reset caption on
+/// the far side of a DST change uses the offset in effect at the reset, as
+/// Swift's `TimeZone.current` does.
 #[derive(Debug, Clone, Copy)]
-pub struct PanelContext {
+pub struct PanelContext<'a> {
     /// Current instant (from the injected clock).
     pub now: DateTime<Utc>,
-    /// Local UTC offset used for all calendar formatting.
-    pub tz: FixedOffset,
+    /// Local calendar used for all calendar formatting.
+    pub calendar: Calendar<'a>,
 }
 
-impl PanelContext {
+impl PanelContext<'_> {
     /// Local calendar day containing `now`.
     pub fn today(&self) -> NaiveDate {
-        self.now.with_timezone(&self.tz).date_naive()
+        self.calendar.date_of(self.now)
     }
 
     /// `Resets EEE dd MMMM h:mma` caption.
     pub fn reset_caption(&self, at: DateTime<Utc>) -> String {
-        format::reset_caption(at, self.tz)
+        format::reset_caption(at, self.calendar.offset_at(at))
     }
 }
 

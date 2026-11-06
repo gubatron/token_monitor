@@ -145,7 +145,9 @@ fn window_track(w: &OpenCodeWindowInput, ctx: &PanelContext) -> TrackVm {
         (OpenCodeWindowKind::FiveHour, None) if w.used_percent <= 0.0 => {
             Some("No usage in last 5h".to_owned())
         }
-        (OpenCodeWindowKind::Weekly, Some(t)) => Some(format::reset_caption_short(t, ctx.tz)),
+        (OpenCodeWindowKind::Weekly, Some(t)) => {
+            Some(format::reset_caption_short(t, ctx.calendar.offset_at(t)))
+        }
         (OpenCodeWindowKind::Monthly, Some(t)) => Some(ctx.reset_caption(t)),
         (_, None) => None,
     };

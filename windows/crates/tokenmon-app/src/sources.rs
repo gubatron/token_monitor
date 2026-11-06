@@ -8,7 +8,9 @@
 
 use std::sync::Arc;
 
-use chrono::{DateTime, FixedOffset, Utc};
+use std::fmt;
+
+use chrono::{DateTime, Utc};
 use tokenmon_core::ProviderId;
 use tokenmon_core::overview::{CursorDay, DayHourly, OpenCodeDay};
 use tokenmon_core::settings::Settings;
@@ -40,12 +42,12 @@ use crate::daily::{ChartContext, daily_input, grok_week_input, noun_for};
 const DEFAULT_MONTHLY_LIMIT_USD: f64 = 60.0;
 
 /// What a panel build asks of a source.
-#[derive(Debug, Clone)]
-pub struct ViewQuery {
+#[derive(Clone)]
+pub struct ViewQuery<'a> {
     /// Current instant.
     pub now: DateTime<Utc>,
-    /// Local offset for calendar maths.
-    pub tz: FixedOffset,
+    /// Source of the local UTC offset at any instant (DST aware).
+    pub clock: &'a dyn Clock,
     /// Browsed period, `0` current and negative earlier.
     pub week_offset: i32,
     /// "View all" is on for the models list.
@@ -73,8 +75,17 @@ pub enum SnapshotView {
     OpenRouter(Option<OpenRouterSnapshotInput>),
 }
 
+impl fmt::Debug for ViewQuery<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ViewQuery")
+            .field("now", &self.now)
+            .field("week_offset", &self.week_offset)
+            .finish_non_exhaustive()
+    }
+}
+
 /// Builds a provider's [`SnapshotView`].
-pub type ViewSource = Arc<dyn Fn(&ViewQuery) -> SnapshotView + Send + Sync>;
+pub type ViewSource = Arc<dyn Fn(&ViewQuery<'_>) -> SnapshotView + Send + Sync>;
 
 /// One provider's contribution to today's Overview series.
 #[derive(Debug, Clone, PartialEq)]
@@ -96,7 +107,7 @@ pub type HourlySource = Arc<dyn Fn(&Calendar<'_>) -> Option<TodayPart> + Send + 
 
 fn chart<'a>(
     provider: ProviderId,
-    q: &ViewQuery,
+    q: &ViewQuery<'_>,
     used: Option<f64>,
     period_start: Option<DateTime<Utc>>,
     resets_at: Option<DateTime<Utc>>,
@@ -122,7 +133,7 @@ pub fn grok_source(poller: &Arc<GrokProviderPoller>) -> ViewSource {
         let Some(snapshot) = usage.snapshot() else {
             return SnapshotView::Grok(None);
         };
-        let calendar = Calendar::fixed(q.tz);
+        let calendar = Calendar::local(q.clock);
         let ctx = chart(
             ProviderId::Grok,
             q,
@@ -154,7 +165,7 @@ pub fn grokbot_source(poller: &Arc<GrokbotUsagePoller>) -> ViewSource {
         let Some(snapshot) = poller.snapshot() else {
             return SnapshotView::Grokbot(None);
         };
-        let calendar = Calendar::fixed(q.tz);
+        let calendar = Calendar::local(q.clock);
         let ctx = chart(
             ProviderId::Grokbot,
             q,
@@ -178,7 +189,7 @@ pub fn cursor_source(poller: &Arc<CursorUsagePoller>) -> ViewSource {
         let Some(snapshot) = poller.snapshot() else {
             return SnapshotView::Cursor(None);
         };
-        let calendar = Calendar::fixed(q.tz);
+        let calendar = Calendar::local(q.clock);
         let ctx = chart(
             ProviderId::Cursor,
             q,
@@ -210,7 +221,7 @@ pub fn claude_source(poller: &Arc<ClaudeUsagePoller>) -> ViewSource {
         let Some(snapshot) = poller.snapshot() else {
             return SnapshotView::Claude(None, code);
         };
-        let calendar = Calendar::fixed(q.tz);
+        let calendar = Calendar::local(q.clock);
         let resets_at = poller.weekly_resets_at(q.now);
         let used = snapshot.seven_day.as_ref().map(|w| w.used_percent);
         let ctx = chart(ProviderId::Claude, q, used, None, resets_at, &calendar);
@@ -238,7 +249,7 @@ pub fn opencode_source(poller: &Arc<OpenCodeUsagePoller>) -> ViewSource {
         let Some(snapshot) = poller.snapshot() else {
             return SnapshotView::OpenCode(None);
         };
-        let calendar = Calendar::fixed(q.tz);
+        let calendar = Calendar::local(q.clock);
         let monthly = snapshot
             .windows
             .iter()
