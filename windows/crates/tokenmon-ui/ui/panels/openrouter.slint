@@ -1,6 +1,7 @@
 import { PanelShell } from "shell.slint";
-import { PanelHeader, PoolCard, DailyCard, MetricGrid, ModelsCard, FooterBlock, MessageBlock, Card, SectionHeader, Caption, UsageTrack, Palette } from "parts.slint";
-import { TrackData, MetricData, ModelsData, DailyData, FooterData, HeaderData, SegmentData, ChipData, TabRowData } from "types.slint";
+import { PanelHeader, PoolCard, DailyCard, ModelsCard, FooterBlock, MessageBlock, Caption, ActionButton } from "parts.slint";
+import { Theme, Typo, PanelCard, PanelSectionHeader, DigitText, MetricStatGrid } from "../components/kit.slint";
+import { TrackData, ModelsData, FooterData, HeaderData, TabRowData, MetricItem } from "types.slint";
 
 // OpenRouter panel (spec 03 section 4.6): API key entry instead of a sign-in window.
 export component OpenRouterPanel inherits PanelShell {
@@ -8,6 +9,15 @@ export component OpenRouterPanel inherits PanelShell {
     out property <length> content-height: root.shell-content-height;
     callback select-tab(int, int);
     shell-select-tab(r, c) => { root.select-tab(r, c); }
+    callback open-settings();
+    callback sign-out();
+    /// The user typed in the key field (argument: the new draft).
+    callback key-edited(string);
+    /// The Connect button was pressed (argument: the draft key).
+    callback submit-key(string);
+    /// The "Replace API Key…" link was pressed.
+    callback replace-key();
+    callback toggle-show-all-models();
     in property <HeaderData> header;
     in property <bool> has-usage;
     in property <string> message;
@@ -15,7 +25,7 @@ export component OpenRouterPanel inherits PanelShell {
     in property <string> used-text;
     in property <[TrackData]> tracks;
     in property <string> no-limit;
-    in property <[MetricData]> stats;
+    in property <[MetricItem]> stats;
     in property <ModelsData> models;
     in property <bool> has-key-entry;
     in property <string> key-placeholder;
@@ -24,45 +34,91 @@ export component OpenRouterPanel inherits PanelShell {
     in property <string> key-error;
     in property <string> replace-link;
     in property <FooterData> footer;
-    PanelHeader { data: root.header; }
-    if !has-usage: Caption { text: root.message; }
-    if has-usage: PoolCard {
+    in-out property <string> key-draft;
+    PanelHeader { data: root.header; open-settings => { root.open-settings(); } }
+    if !root.has-usage: Caption { text: root.message; }
+    if root.has-usage: PoolCard {
         title: root.budget-title;
         trailing: root.used-text;
         tracks: root.tracks;
     }
-    if has-usage && no-limit != "": Caption { text: root.no-limit; }
-    if has-usage: VerticalLayout {
+    if root.has-usage && root.no-limit != "": Caption { text: root.no-limit; }
+    if root.has-usage: VerticalLayout {
         spacing: 8px;
-        SectionHeader { text: "STATS"; }
-        MetricGrid { cells: root.stats; }
+        PanelSectionHeader { title: "Stats"; }
+        MetricStatGrid { items: root.stats; }
     }
-    if has-usage && models.present: ModelsCard { data: root.models; }
-    if has-key-entry: VerticalLayout {
+    if root.has-usage && root.models.present: ModelsCard {
+        data: root.models;
+        toggle-show-all => { root.toggle-show-all-models(); }
+    }
+    if root.has-key-entry: VerticalLayout {
         spacing: 6px;
         HorizontalLayout {
             spacing: 8px;
             Rectangle {
                 height: 24px;
+                horizontal-stretch: 1;
                 border-radius: 5px;
-                background: Palette.control-bg;
+                background: Theme.control-background;
                 border-width: 1px;
-                border-color: Palette.separator;
-                Text { x: 8px; text: root.key-placeholder; font-size: 12px; color: Palette.tertiary; }
+                border-color: Theme.separator;
+                if root.key-draft == "": Text {
+                    x: 8px;
+                    text: root.key-placeholder;
+                    font-family: Typo.family;
+                    font-size: Typo.body-size;
+                    color: Theme.tertiary;
+                    vertical-alignment: center;
+                }
+                input := TextInput {
+                    x: 8px;
+                    width: parent.width - 16px;
+                    text <=> root.key-draft;
+                    font-family: Typo.family;
+                    font-size: Typo.body-size;
+                    color: Theme.primary;
+                    input-type: password;
+                    single-line: true;
+                    vertical-alignment: center;
+                    accessible-label: root.key-placeholder;
+                    edited => { root.key-edited(self.text); }
+                    accepted => { if root.key-button-enabled { root.submit-key(self.text); } }
+                }
             }
-            Rectangle {
+            ActionButton {
                 width: 72px;
-                height: 24px;
-                border-radius: 5px;
-                background: Palette.control-bg;
-                border-width: 1px;
-                border-color: Palette.separator;
-                opacity: root.key-button-enabled ? 1.0 : 0.4;
-                Text { text: root.key-button; font-size: 11px; color: Palette.primary; }
+                text: root.key-button;
+                enabled: root.key-button-enabled;
+                clicked => { root.submit-key(root.key-draft); }
             }
         }
-        if key-error != "": Text { text: root.key-error; font-size: 11px; color: Palette.danger; }
+        if root.key-error != "": Text {
+            text: root.key-error;
+            font-family: Typo.family;
+            font-size: Typo.caption-size;
+            color: Theme.destructive;
+            wrap: word-wrap;
+        }
     }
-    if replace-link != "": Text { text: root.replace-link; font-size: 11px; color: Palette.secondary; }
-    if has-usage: FooterBlock { data: root.footer; }
+    if root.replace-link != "": Rectangle {
+        height: 16px;
+        accessible-role: button;
+        accessible-label: root.replace-link;
+        Text {
+            text: root.replace-link;
+            font-family: Typo.family;
+            font-size: Typo.caption-size;
+            color: Theme.secondary;
+            horizontal-alignment: left;
+        }
+        TouchArea {
+            mouse-cursor: pointer;
+            clicked => { root.replace-key(); }
+        }
+    }
+    if root.has-usage: FooterBlock {
+        data: root.footer;
+        sign-out => { root.sign-out(); }
+    }
 }

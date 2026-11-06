@@ -4,8 +4,12 @@
 //! Inputs are small structs owned by this crate; `From` impls from the
 //! provider crates' snapshot types are added once those land.
 
-use chrono::{DateTime, Datelike, FixedOffset, NaiveDate, Utc};
+use chrono::{DateTime, FixedOffset, NaiveDate, Utc};
+use tokenmon_core::usage::{DailyBudget, PaceHeadroom};
 use tokenmon_core::{ProviderId, Srgb};
+
+use crate::kit::week::WeekOffset;
+use crate::kit::{daily as kit_daily, hover as kit_hover};
 
 use super::format;
 
@@ -493,8 +497,9 @@ pub struct DailyBudgetInput {
     pub accent: Srgb,
     /// Weekly or monthly.
     pub noun: AllowanceNoun,
-    /// `DailyBudget.paceCaption(pace)` computed by core, if any.
-    pub pace_caption: Option<String>,
+    /// Pace headroom from `DailyBudget::pace_headroom`; its caption comes from
+    /// core's `DailyBudget::pace_caption`.
+    pub pace: Option<PaceHeadroom>,
     /// Footer rules.
     pub footer_kind: FooterKind,
     /// Live footer shown (false for past weeks).
@@ -571,36 +576,21 @@ pub struct DailyBudgetVm {
     pub footer: Option<String>,
 }
 
-/// Week range label: `October 13 – 19` or `September 29 – Oct 5`.
+/// Week range label: `October 13 – 19` or `September 29 – Oct 5` (delegates to the kit).
 pub fn range_label(first: NaiveDate, last: NaiveDate) -> String {
-    let head = first.format("%B %-d");
-    if first.year() == last.year() && first.month() == last.month() {
-        format!("{head} – {}", last.day())
-    } else {
-        format!("{head} – {}", last.format("%b %-d"))
-    }
+    kit_daily::range_label(first, last)
 }
 
-/// Hover usage line for a non-future day.
+/// Hover usage line for a non-future day (delegates to the kit).
 pub fn usage_line(day: &DayInput, noun: AllowanceNoun) -> String {
-    if day.is_prior_window {
-        format!(
-            "{:.1}% of the {} pool before the provider reset it early",
-            day.spent,
-            noun.as_str()
-        )
-    } else if day.budget <= 0.0 {
-        "No budget".to_owned()
-    } else if day.spent <= 0.001 {
-        format!("0% of the {:.1}% daily allowance", day.budget)
-    } else {
-        format!(
-            "{:.1}% of {} · {}% of daily allowance",
-            day.spent,
-            noun.as_str(),
-            (day.spent / day.budget * 100.0).round() as i64
-        )
-    }
+    kit_hover::usage_line(
+        kit_hover::DayUsage {
+            spent: day.spent,
+            budget: day.budget,
+            is_prior_window: day.is_prior_window,
+        },
+        noun.as_str(),
+    )
 }
 
 fn hover_tokens(t: &TokensInput) -> Option<HoverTokensVm> {
@@ -660,7 +650,7 @@ fn footer(input: &DailyBudgetInput, today: NaiveDate) -> Option<String> {
     if !input.show_live_footer {
         return None;
     }
-    if let Some(p) = input.pace_caption.clone() {
+    if let Some(p) = input.pace.as_ref().and_then(DailyBudget::pace_caption) {
         return Some(p);
     }
     match input.footer_kind {
@@ -705,17 +695,17 @@ pub fn build_daily_budget(input: &DailyBudgetInput, ctx: &PanelContext) -> Optio
     })
 }
 
-/// `WeekOffset.previous`: unbounded.
+/// `WeekOffset.previous`: unbounded (delegates to the kit).
 pub fn week_previous(offset: i32) -> i32 {
-    offset - 1
+    WeekOffset(offset).previous().0
 }
 
-/// `WeekOffset.next`: never past the current week.
+/// `WeekOffset.next`: never past the current week (delegates to the kit).
 pub fn week_next(offset: i32) -> i32 {
-    (offset + 1).min(0)
+    WeekOffset(offset).next().0
 }
 
-/// `WeekOffset.canGoNext`.
+/// `WeekOffset.canGoNext` (delegates to the kit).
 pub fn week_can_go_next(offset: i32) -> bool {
-    offset < 0
+    WeekOffset(offset).can_go_next()
 }

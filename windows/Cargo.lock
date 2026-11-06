@@ -5663,6 +5663,13 @@ dependencies = [
  "slint-build",
  "tiny-skia 0.12.0",
  "tokenmon-core",
+ "tokenmon-provider-chatgpt",
+ "tokenmon-provider-claude",
+ "tokenmon-provider-cursor",
+ "tokenmon-provider-grok",
+ "tokenmon-provider-grokbot",
+ "tokenmon-provider-opencode",
+ "tokenmon-provider-openrouter",
 ]
 
 [[package]]

@@ -39,7 +39,7 @@ pub fn daily(days: Vec<DayInput>) -> DailyBudgetInput {
         days,
         accent: Srgb::rgb(0.1, 0.2, 0.3),
         noun: AllowanceNoun::Weekly,
-        pace_caption: None,
+        pace: None,
         footer_kind: FooterKind::Generic,
         show_live_footer: true,
         has_navigation: true,

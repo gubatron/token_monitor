@@ -59,6 +59,26 @@ pub fn rows<T: Clone>(items: &[T]) -> Vec<Vec<Option<T>>> {
         .collect()
 }
 
+/// Provider behind the cell at `(row, col)`, or `None` for padding cells and
+/// out-of-range coordinates. Resolves the `select-tab(row, col)` callback.
+///
+/// ```
+/// use tokenmon_core::ProviderId;
+/// use tokenmon_ui::panels::switcher::{build_switcher, tab_provider};
+/// let rows = build_switcher(&[ProviderId::Grok], ProviderId::Overview);
+/// assert_eq!(tab_provider(&rows, 0, 1), Some(ProviderId::Grok));
+/// assert_eq!(tab_provider(&rows, 0, 3), None);
+/// assert_eq!(tab_provider(&rows, 4, 0), None);
+/// ```
+pub fn tab_provider(rows: &[RowVm], row: usize, col: usize) -> Option<ProviderId> {
+    rows.get(row)?
+        .cells
+        .get(col)?
+        .tab
+        .as_ref()
+        .map(|t| t.provider)
+}
+
 /// Builds the grid for `[overview] + visible` with `selected` highlighted.
 pub fn build_switcher(visible: &[ProviderId], selected: ProviderId) -> Vec<RowVm> {
     let tabs: Vec<TabVm> = std::iter::once(ProviderId::Overview)

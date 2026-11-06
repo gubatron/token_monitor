@@ -1,6 +1,7 @@
 import { PanelShell } from "shell.slint";
-import { PanelHeader, PoolCard, DailyCard, MetricGrid, ModelsCard, FooterBlock, MessageBlock, Card, SectionHeader, Caption, UsageTrack, Palette } from "parts.slint";
-import { TrackData, MetricData, ModelsData, DailyData, FooterData, HeaderData, SegmentData, ChipData, TabRowData } from "types.slint";
+import { PanelHeader, PoolCard, DailyCard, ModelsCard, FooterBlock, MessageBlock, Caption, ActionButton } from "parts.slint";
+import { Theme, Typo, PanelCard, PanelSectionHeader, DigitText, ResetCaption, SegmentedUsageBar, CategoryRow, MetricStatGrid } from "../components/kit.slint";
+import { TrackData, ModelsData, DailyData, FooterData, HeaderData, TabRowData, BarSegment, CategoryItem, MetricItem } from "types.slint";
 
 // Grok panel (spec 02 section 1.7).
 export component GrokPanel inherits PanelShell {
@@ -8,58 +9,66 @@ export component GrokPanel inherits PanelShell {
     out property <length> content-height: root.shell-content-height;
     callback select-tab(int, int);
     shell-select-tab(r, c) => { root.select-tab(r, c); }
+    callback open-settings();
+    callback sign-in();
+    callback sign-in-again();
+    callback sign-out();
     in property <HeaderData> header;
     in property <bool> has-usage;
     in property <string> message;
     in property <string> button;
+    callback previous-week();
+    callback next-week();
     in property <string> pool-title;
     in property <string> pool-used;
-    in property <[SegmentData]> segments;
+    in property <[BarSegment]> segments;
     in property <string> reset-caption;
     in property <bool> has-categories;
-    in property <[ChipData]> chips;
+    in property <[CategoryItem]> chips;
     in property <string> extra-credits;
     in property <DailyData> daily;
     in property <FooterData> footer;
-    PanelHeader { data: root.header; }
-    if !has-usage: MessageBlock { text: root.message; button: root.button; }
-    if has-usage: Card {
+    PanelHeader { data: root.header; open-settings => { root.open-settings(); } }
+    if !root.has-usage: MessageBlock {
+        text: root.message;
+        button: root.button;
+        clicked => { root.sign-in(); }
+    }
+    if root.has-usage: PanelCard {
         HorizontalLayout {
             spacing: 8px;
-            SectionHeader { text: root.pool-title; }
-            Rectangle { }
-            Text { text: root.pool-used; font-size: 12px; font-weight: 600; color: Palette.primary; }
+            PanelSectionHeader { title: root.pool-title; horizontal-stretch: 1; }
+            DigitText { text: root.pool-used; }
         }
-        Rectangle {
-            height: 8px;
-            for seg in root.segments: Rectangle {
-                x: seg.x;
-                width: seg.width;
-                border-radius: 2px;
-                background: seg.grey ? Palette.track : seg.color;
-            }
-        }
-        if root.reset-caption != "": Caption { text: root.reset-caption; }
+        SegmentedUsageBar { segments: root.segments; }
+        if root.reset-caption != "": ResetCaption { text: root.reset-caption; }
     }
-    if has-usage && has-categories: Card {
-        SectionHeader { text: "CATEGORIES"; }
+    if root.has-usage && root.has-categories: PanelCard {
+        PanelSectionHeader { title: "Categories"; }
         HorizontalLayout {
             spacing: 12px;
-            for chip in root.chips: HorizontalLayout {
-                spacing: 5px;
-                Rectangle { width: 7px; height: 7px; border-radius: 3.5px; background: chip.color; y: 5px; }
-                Text { text: chip.name; font-size: 12px; font-weight: 600; color: Palette.primary; }
-                Text { text: chip.percent; font-size: 12px; font-weight: 600; color: Palette.primary; }
+            alignment: start;
+            for chip in root.chips: CategoryRow {
+                name: chip.name;
+                percent-text: chip.percent-text;
+                dot: chip.color;
             }
         }
     }
-    if has-usage && extra-credits != "": Card {
+    if root.has-usage && root.extra-credits != "": PanelCard {
         HorizontalLayout {
-            SectionHeader { text: "EXTRA CREDITS"; }
-            Rectangle { }
-            Text { text: root.extra-credits; font-size: 12px; font-weight: 600; color: Palette.primary; }
+            PanelSectionHeader { title: "Extra Credits"; horizontal-stretch: 1; }
+            DigitText { text: root.extra-credits; }
         }
     }
-    if has-usage && daily.present: DailyCard { data: root.daily; }
-    if has-usage: FooterBlock { data: root.footer; }
+    if root.has-usage && root.daily.present: DailyCard {
+        data: root.daily;
+        previous-week => { root.previous-week(); }
+        next-week => { root.next-week(); }
+    }
+    if root.has-usage: FooterBlock {
+        data: root.footer;
+        sign-in-again => { root.sign-in-again(); }
+        sign-out => { root.sign-out(); }
+    }
 }

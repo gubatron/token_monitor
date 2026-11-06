@@ -1,10 +1,11 @@
 //! Display formatting shared by every panel view model.
 //!
-//! These mirror the macOS `Format` helpers (spec 03 section 1.7, spec 02 section 1.7).
-//! They live here until `tokenmon-core::util::Format` lands; the panels then
-//! switch over and these become thin wrappers or are deleted.
+//! Token, USD and reset-date formatting delegate to
+//! [`tokenmon_core::util::Format`]; what remains here are the panel-only
+//! helpers (percent labels, relative and age wording) core does not provide.
 
 use chrono::{DateTime, FixedOffset, Utc};
+use tokenmon_core::util::Format;
 
 /// Clamps a percentage into `0.0..=100.0`; NaN becomes 0.
 ///
@@ -44,24 +45,7 @@ pub fn percent_label(p: f64) -> String {
 /// assert_eq!(tokens(2_500_000_000), "2.5B");
 /// ```
 pub fn tokens(n: u64) -> String {
-    if n < 1000 {
-        return n.to_string();
-    }
-    let k = (n as f64 / 1_000.0).round();
-    if k < 1000.0 {
-        return format!("{}K", k as u64);
-    }
-    let m = n as f64 / 1_000_000.0;
-    let m1 = (m * 10.0).round() / 10.0;
-    if m1 < 10.0 {
-        return format!("{m1:.1}M");
-    }
-    let m0 = m.round();
-    if m0 < 1000.0 {
-        return format!("{}M", m0 as u64);
-    }
-    let b = (n as f64 / 1_000_000_000.0 * 10.0).round() / 10.0;
-    format!("{b:.1}B")
+    Format::tokens(i64::try_from(n).unwrap_or(i64::MAX))
 }
 
 /// en_US currency: `$1,234.56`.
@@ -72,19 +56,7 @@ pub fn tokens(n: u64) -> String {
 /// assert_eq!(usd(0.0), "$0.00");
 /// ```
 pub fn usd(v: f64) -> String {
-    let v = if v.is_nan() { 0.0 } else { v };
-    let cents = (v * 100.0).round() as i64;
-    let sign = if cents < 0 { "-" } else { "" };
-    let cents = cents.abs();
-    let whole = (cents / 100).to_string();
-    let mut grouped = String::new();
-    for (i, ch) in whole.chars().enumerate() {
-        if i > 0 && (whole.len() - i).is_multiple_of(3) {
-            grouped.push(',');
-        }
-        grouped.push(ch);
-    }
-    format!("{sign}${grouped}.{:02}", cents % 100)
+    Format::usd(v)
 }
 
 /// `"Resets " + EEE dd MMMM h:mma` in the given zone, with lowercase am/pm.
@@ -97,15 +69,12 @@ pub fn usd(v: f64) -> String {
 /// assert_eq!(reset_caption(t, utc), "Resets Thu 16 July 8:25pm");
 /// ```
 pub fn reset_caption(at: DateTime<Utc>, tz: FixedOffset) -> String {
-    format!(
-        "Resets {}",
-        at.with_timezone(&tz).format("%a %d %B %-I:%M%P")
-    )
+    Format::reset_caption(at, Format::DEFAULT_RESET_PATTERN, tz)
 }
 
 /// Weekly OpenCode caption: `Resets EEE h:mma` (e.g. `Resets Mon 12:00am`).
 pub fn reset_caption_short(at: DateTime<Utc>, tz: FixedOffset) -> String {
-    format!("Resets {}", at.with_timezone(&tz).format("%a %-I:%M%P"))
+    Format::reset_caption(at, "EEE h:mma", tz)
 }
 
 /// Named relative future time, e.g. `Resets in 2 hours`.
