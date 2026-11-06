@@ -22,10 +22,12 @@ reqwest = { workspace = true }
 url = { workspace = true }
 rust_decimal = { workspace = true }
 sha2 = { workspace = true }
+futures = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt", "macros", "time", "test-util"] }
 wiremock = { workspace = true }
+futures = { workspace = true, features = ["executor"] }
 proptest = { workspace = true }
 tempfile = { workspace = true }
 chrono-tz = "0.10"
