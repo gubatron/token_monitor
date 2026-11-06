@@ -49,7 +49,7 @@ pub struct DailyPayload {
 /// ```
 /// use tokenmon_core::storage::decode_daily_payload;
 /// assert!(decode_daily_payload(r#"{"days":[811058400,7],"lastUsedPercent":35}"#).is_some());
-/// assert!(decode_daily_payload("[]").is_none());
+/// assert!(decode_daily_payload("42").is_none());
 /// ```
 pub fn decode_daily_payload(raw: &str) -> Option<DailyPayload> {
     serde_json::from_str(raw).ok()

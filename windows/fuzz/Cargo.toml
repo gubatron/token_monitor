@@ -13,6 +13,8 @@ chrono = { version = "0.4", default-features = false, features = ["std", "clock"
 reqwest = { version = "0.13", default-features = false }
 tokenmon-platform = { path = "../crates/tokenmon-platform" }
 tokenmon-core = { path = "../crates/tokenmon-core" }
+arbitrary = { version = "1", features = ["derive"] }
+serde_json = "1.0"
 
 # Own workspace: nightly-only, never built by the stable workspace gate.
 [workspace]
@@ -69,3 +71,22 @@ name = "net_set_cookie"
 path = "fuzz_targets/net_set_cookie.rs"
 test = false
 doc = false
+name = "core_storage_hourly"
+path = "fuzz_targets/core_storage_hourly.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "core_storage_daily"
+path = "fuzz_targets/core_storage_daily.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "core_storage_ops"
+path = "fuzz_targets/core_storage_ops.rs"
+test = false
+doc = false
+bench = false
