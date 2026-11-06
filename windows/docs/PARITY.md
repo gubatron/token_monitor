@@ -14,13 +14,16 @@ specs do not list the test.
 ## How to use this file
 
 - **IDs.** Each Swift test has a stable ID, `<file>::<class>::<method>`.
-  `make test-core` checks in `Tests/Manual/CoreTestsMain.swift` use the
-  `assertTrue` label, lower-cased, as the method part. The IDs come from
-  `windows/scripts/parity/extract_swift_tests.py`; run it to list them.
+  Swift Testing `@Test` functions count too (the class part is the enclosing
+  type, or `global` at file scope). `make test-core` checks in
+  `Tests/Manual/CoreTestsMain.swift` use the `assertTrue` label, lower-cased,
+  as the method part; two labels that give the same ID fail CI. The IDs come
+  from `windows/scripts/parity/extract_swift_tests.py`; run it to list them.
 - **Status.** One of:
   - `todo`: not ported yet. CI accepts it.
   - `ported`: covered by the Rust test(s) in the **Rust test** column. CI checks
-    that each one exists.
+    that each one exists, is a test (`#[test]`, `#[tokio::test]`, a `#[test]`
+    inside `proptest!`, ...), and is not `#[ignore]`d.
   - `n/a`: macOS-only, with no Windows equivalent. The **Notes** column must
     give the reason (CI checks that it is not empty).
 - **Rust test.** `crates/<crate>/tests/<file>.rs::<fn>`, relative to `windows/`.

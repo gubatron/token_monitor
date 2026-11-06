@@ -35,10 +35,17 @@ class ClassifyAndReferenceTests(unittest.TestCase):
     def test_classify(self) -> None:
         mac, win = dg.classify(
             ["TokenMon/App/A.swift", "TokenMonTests/X.swift", "Tests/Manual/CoreTestsMain.swift",
-             "windows/docs/PARITY.md", "README.md", "TokenMon.xcodeproj/project.pbxproj", ""]
+             "windows/docs/PARITY.md", "README.md", "TokenMon.xcodeproj/project.pbxproj", "",
+             "TokenMon/Resources/Info.plist", "project.yml", "Makefile", "Scripts/notarize.sh",
+             "windows/Makefile", "Docs/x.md", "docs/Makefile", ".github/workflows/ci.yml"]
         )
-        self.assertEqual(mac, ["TokenMon/App/A.swift", "TokenMonTests/X.swift", "Tests/Manual/CoreTestsMain.swift"])
-        self.assertEqual(win, ["windows/docs/PARITY.md"])
+        self.assertEqual(
+            mac,
+            ["TokenMon/App/A.swift", "TokenMonTests/X.swift", "Tests/Manual/CoreTestsMain.swift",
+             "TokenMon.xcodeproj/project.pbxproj", "TokenMon/Resources/Info.plist", "project.yml", "Makefile",
+             "Scripts/notarize.sh"],
+        )
+        self.assertEqual(win, ["windows/docs/PARITY.md", "windows/Makefile"])
 
     def test_find_references(self) -> None:
         text = (
@@ -154,7 +161,7 @@ class MainTests(unittest.TestCase):
     def test_no_token_is_fine_when_not_needed(self) -> None:
         code, _, summary = self.run_main("README.md\n", "", None)
         self.assertEqual(code, 0)
-        self.assertIn("No macOS sources", summary)
+        self.assertIn("No macOS app files", summary)
 
 
 if __name__ == "__main__":

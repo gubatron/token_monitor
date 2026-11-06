@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """Zero-drift guard: a macOS change must come with Windows parity or a tracking issue.
 
-A change (pull request or push) that touches ``TokenMon/**``, ``TokenMonTests/**``
-or ``Tests/**`` must also do one of these:
+A change (pull request or push) that touches the macOS app must also do one of
+these. The macOS app is ``TokenMon/**`` (sources, ``Resources/``, Info.plist and
+entitlements), ``TokenMonTests/**``, ``Tests/**``, and the files that decide how
+it is built and released: ``project.yml``, ``Makefile``, ``Scripts/**`` and
+``TokenMon.xcodeproj/**``. Docs, README and CI-only files do not count.
 
 1. touch ``windows/**`` (the port is updated in the same change), or
 2. reference an **open** issue in this repository labeled ``windows-parity``,
@@ -34,7 +37,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
-MAC_PREFIXES = ("TokenMon/", "TokenMonTests/", "Tests/")
+# Directories (trailing /) and top-level files that make up the macOS app.
+MAC_PREFIXES = ("TokenMon/", "TokenMonTests/", "Tests/", "Scripts/", "TokenMon.xcodeproj/")
+MAC_FILES = ("project.yml", "Makefile")
 WINDOWS_PREFIX = "windows/"
 LABEL = "windows-parity"
 MAX_LISTED = 50
@@ -67,7 +72,7 @@ class Result:
 def classify(paths: list[str]) -> tuple[list[str], list[str]]:
     """Split changed paths into (macOS paths, windows/ paths)."""
     clean = [p.strip() for p in paths if p.strip()]
-    mac = [p for p in clean if p.startswith(MAC_PREFIXES)]
+    mac = [p for p in clean if p.startswith(MAC_PREFIXES) or p in MAC_FILES]
     win = [p for p in clean if p.startswith(WINDOWS_PREFIX)]
     return mac, win
 
@@ -162,7 +167,7 @@ def render_summary(result: Result, event: str, base: str, head: str, repo: str) 
         reason = (
             "macOS sources changed together with `windows/`."
             if result.mac_paths
-            else "No macOS sources (`TokenMon/`, `TokenMonTests/`, `Tests/`) changed."
+            else "No macOS app files (`TokenMon/`, `TokenMonTests/`, `Tests/`, `Scripts/`, `TokenMon.xcodeproj/`, `project.yml`, `Makefile`) changed."
         )
     elif result.ok:
         verdict = "PASS"

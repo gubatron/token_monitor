@@ -4,7 +4,8 @@ name: Windows parity
 #
 # - ledger: every Swift test has exactly one row in windows/docs/PARITY.md, and
 #   every row marked `ported` names a Rust test that exists. `todo` rows pass.
-# - drift-guard: a change to TokenMon/**, TokenMonTests/** or Tests/** must also
+# - drift-guard: a change to the macOS app (TokenMon/**, TokenMonTests/**, Tests/**,
+#   Scripts/**, TokenMon.xcodeproj/**, project.yml, Makefile) must also
 #   change windows/**, or be tracked by an open issue labeled `windows-parity`.
 #
 # Runs on every branch, master included, because macOS changes (including
