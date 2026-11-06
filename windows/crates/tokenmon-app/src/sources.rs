@@ -9,17 +9,17 @@
 use std::sync::Arc;
 
 use chrono::{DateTime, FixedOffset, Utc};
+use tokenmon_core::ProviderId;
 use tokenmon_core::overview::{CursorDay, DayHourly, OpenCodeDay};
 use tokenmon_core::settings::Settings;
 use tokenmon_core::usage::{Calendar, WeekOffset};
-use tokenmon_core::{ProviderId, ProviderUsagePoller};
 use tokenmon_provider_chatgpt::ChatGptPoller;
 use tokenmon_provider_claude::poller::ClaudeUsagePoller;
 use tokenmon_provider_cursor::poller::CursorUsagePoller;
 use tokenmon_provider_grok::provider_poller::GrokProviderPoller;
 use tokenmon_provider_grokbot::GrokbotUsagePoller;
 use tokenmon_provider_opencode::poller::OpenCodeUsagePoller;
-use tokenmon_provider_opencode::snapshot::WindowKind;
+use tokenmon_provider_opencode::snapshot::{WindowKind, WindowUsage};
 use tokenmon_provider_opencode::stats::{
     DayHourlyUsage, overview_hour_token_counts, overview_quota_hour_weights,
 };
@@ -97,7 +97,8 @@ pub type HourlySource = Arc<dyn Fn(&Calendar<'_>) -> Option<TodayPart> + Send + 
 fn chart<'a>(
     provider: ProviderId,
     q: &ViewQuery,
-    used: f64,
+    used: Option<f64>,
+    period_start: Option<DateTime<Utc>>,
     resets_at: Option<DateTime<Utc>>,
     calendar: &'a Calendar<'a>,
 ) -> ChartContext<'a> {
@@ -105,6 +106,7 @@ fn chart<'a>(
         provider,
         noun: noun_for(provider),
         period_used_percent: used,
+        period_start,
         resets_at,
         week_offset: q.week_offset,
         now: q.now,
@@ -124,7 +126,8 @@ pub fn grok_source(poller: &Arc<GrokProviderPoller>) -> ViewSource {
         let ctx = chart(
             ProviderId::Grok,
             q,
-            snapshot.used_percent,
+            Some(snapshot.used_percent),
+            None,
             snapshot.resets_at,
             &calendar,
         );
@@ -155,7 +158,8 @@ pub fn grokbot_source(poller: &Arc<GrokbotUsagePoller>) -> ViewSource {
         let ctx = chart(
             ProviderId::Grokbot,
             q,
-            snapshot.used_percent,
+            Some(snapshot.used_percent),
+            None,
             snapshot.resets_at,
             &calendar,
         );
@@ -175,8 +179,14 @@ pub fn cursor_source(poller: &Arc<CursorUsagePoller>) -> ViewSource {
             return SnapshotView::Cursor(None);
         };
         let calendar = Calendar::fixed(q.tz);
-        let used = poller.headline_used_percent().unwrap_or(0.0);
-        let ctx = chart(ProviderId::Cursor, q, used, snapshot.resets_at(), &calendar);
+        let ctx = chart(
+            ProviderId::Cursor,
+            q,
+            Some(snapshot.used_percent),
+            snapshot.billing_cycle_start,
+            snapshot.resets_at(),
+            &calendar,
+        );
         let days = poller
             .daily_budget_days_at(WeekOffset::new(q.week_offset))
             .unwrap_or_default();
@@ -202,8 +212,8 @@ pub fn claude_source(poller: &Arc<ClaudeUsagePoller>) -> ViewSource {
         };
         let calendar = Calendar::fixed(q.tz);
         let resets_at = poller.weekly_resets_at(q.now);
-        let used = snapshot.seven_day.as_ref().map_or(0.0, |w| w.used_percent);
-        let ctx = chart(ProviderId::Claude, q, used, resets_at, &calendar);
+        let used = snapshot.seven_day.as_ref().map(|w| w.used_percent);
+        let ctx = chart(ProviderId::Claude, q, used, None, resets_at, &calendar);
         let days = poller.daily_budget_days_at(WeekOffset::new(q.week_offset));
         let daily = daily_input(&days, &ctx);
         SnapshotView::Claude(
@@ -233,13 +243,20 @@ pub fn opencode_source(poller: &Arc<OpenCodeUsagePoller>) -> ViewSource {
             .windows
             .iter()
             .find(|w| w.kind == WindowKind::Monthly);
+        // Swift `monthlyUsedPercent`: monthly, else weekly, else 0.
+        let used = monthly
+            .or_else(|| {
+                snapshot
+                    .windows
+                    .iter()
+                    .find(|w| w.kind == WindowKind::Weekly)
+            })
+            .map_or(0.0, WindowUsage::used_percent);
         let ctx = chart(
             ProviderId::OpenCode,
             q,
-            monthly.map_or(
-                0.0,
-                tokenmon_provider_opencode::snapshot::WindowUsage::used_percent,
-            ),
+            Some(used),
+            poller.daily_budget_period_start(),
             monthly.and_then(|w| w.resets_at),
             &calendar,
         );
