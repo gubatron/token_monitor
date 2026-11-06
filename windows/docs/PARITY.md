@@ -1,0 +1,1033 @@
+# Windows parity ledger
+
+This ledger maps every macOS (Swift) test to the Rust test that covers the same
+behavior in the Windows port. It is how the project keeps **zero drift** between
+the two apps: CI (`.github/workflows/windows-parity.yml`) fails when a Swift test
+is missing from this file, when a row names a Swift test that no longer exists,
+or when a row marked `ported` points at a Rust test that is not there.
+
+The specs in `docs/spec/` are the source of truth for behavior; the
+**Behavior** column is a one-line summary taken from their test-parity
+checklists (spec 01 §7, 02 §5, 03 §7, 04 §5), or from the test name where the
+specs do not list the test.
+
+## How to use this file
+
+- **IDs.** Each Swift test has a stable ID, `<file>::<class>::<method>`.
+  `make test-core` checks in `Tests/Manual/CoreTestsMain.swift` use the
+  `assertTrue` label, lower-cased, as the method part. The IDs come from
+  `windows/scripts/parity/extract_swift_tests.py`; run it to list them.
+- **Status.** One of:
+  - `todo`: not ported yet. CI accepts it.
+  - `ported`: covered by the Rust test(s) in the **Rust test** column. CI checks
+    that each one exists.
+  - `n/a`: macOS-only, with no Windows equivalent. The **Notes** column must
+    give the reason (CI checks that it is not empty).
+- **Rust test.** `crates/<crate>/tests/<file>.rs::<fn>`, relative to `windows/`.
+  Several tests may be listed, separated by `<br>`. A Rust test may cover more
+  than one Swift test.
+- **Workstream.** The workstream that owns the port (see
+  `docs/IMPLEMENTATION_PLAN.md`). Rows are grouped by workstream; the issue
+  number is in each heading.
+- **Same commit.** When you port a test, flip its row to `ported` in the same
+  commit as the Rust test.
+- **New Swift test.** When a macOS change adds, renames or deletes a test, CI
+  lists the missing and stale IDs. Run
+  `python3 windows/scripts/parity/check_parity.py --print-missing-rows` to get
+  `todo` rows to paste into the right section, and delete stale rows (or
+  rename them when the test was renamed).
+- **Local check.** `python3 windows/scripts/parity/check_parity.py` prints the
+  same summary CI writes to the job summary.
+
+## Ledger
+
+### ws-foundation (#3)
+
+| Swift test | Behavior | Workstream | Status | Rust test | Notes |
+|---|---|---|---|---|---|
+| `TokenMonTests/Platform/Auth/ProviderAuthSessionTests.swift::ProviderAuthSessionTests::testStartsWithSignedOutState` | Starts with signed out state: 1.6.4 | ws-foundation | todo | |  |
+| `TokenMonTests/Platform/Auth/ProviderAuthSessionTests.swift::ProviderAuthSessionTests::testSaveAndLoadAccountEmailPersists` | Save and load account email persists: 1.6.4 | ws-foundation | todo | |  |
+| `TokenMonTests/Platform/Auth/ProviderAuthSessionTests.swift::ProviderAuthSessionTests::testMarkSessionInvalidClearsState` | Mark session invalid clears state: 1.6.4 | ws-foundation | todo | |  |
+| `TokenMonTests/Platform/Auth/ProviderAuthSessionTests.swift::ProviderAuthSessionTests::testGenerationInvalidatesInFlightRefresh` | Generation invalidates in flight refresh: 1.6.4 | ws-foundation | todo | |  |
+| `TokenMonTests/Platform/Auth/ProviderAuthSessionTests.swift::ProviderAuthSessionTests::testIsCurrentRequiresUsableSession` | Is current requires usable session: 1.6.4 | ws-foundation | todo | |  |
+| `TokenMonTests/Platform/Auth/ProviderAuthSessionTests.swift::ProviderAuthSessionTests::testLoadNarrowsStoredCookieJarToAllowlist` | Load narrows stored cookie jar to allowlist: "sso=z; sso-rw=w", persisted | ws-foundation | todo | |  |
+| `TokenMonTests/Platform/Auth/ProviderAuthSessionTests.swift::ProviderAuthSessionTests::testLoadKeepsJarWhenEssentialsAbsent` | Load keeps jar when essentials absent: unchanged | ws-foundation | todo | |  |
+| `TokenMonTests/Platform/Auth/ProviderAuthSessionTests.swift::ProviderAuthSessionTests::testLoadKeepsChunkedEssentialFamily` | Load keeps chunked essential family: chunks `.0` and `.1` only | ws-foundation | todo | |  |
+| `TokenMonTests/Platform/Auth/ProviderAuthSessionTests.swift::ProviderAuthSessionTests::testLoadLeavesJarWhenOnlyNonEssentialPresent` | Load leaves jar when only non essential present: unchanged | ws-foundation | todo | |  |
+| `TokenMonTests/Platform/Auth/ProviderAuthSessionTests.swift::ProviderAuthSessionTests::testSessionSurvivesRejectionsBelowThreshold` | Session survives rejections below threshold: threshold 3 | ws-foundation | todo | |  |
+| `TokenMonTests/Platform/Auth/ProviderAuthSessionTests.swift::ProviderAuthSessionTests::testAuthSuccessResetsRejectionStreak` | Auth success resets rejection streak: threshold 3 | ws-foundation | todo | |  |
+| `TokenMonTests/Platform/Auth/ProviderAuthSessionTests.swift::ProviderAuthSessionTests::testInvalidationDoesNotResetAccountData` | Invalidation does not reset account data: `accountReset` rules | ws-foundation | todo | |  |
+| `TokenMonTests/Platform/Auth/ProviderAuthSessionTests.swift::ProviderAuthSessionTests::testSignOutKeepsAccountDataUntilAnotherAccountSignsIn` | Sign out keeps account data until another account signs in: `accountReset` rules | ws-foundation | todo | |  |
+| `TokenMonTests/Platform/Auth/ProviderAuthSessionTests.swift::ProviderAuthSessionTests::testEmailIdentifiedAccountChangeResetsAccountData` | Email identified account change resets account data: `accountReset` rules | ws-foundation | todo | |  |
+| `TokenMonTests/Platform/Auth/ProviderAuthSessionTests.swift::ProviderAuthSessionTests::testCookieIdentifiedAccountChangeResetsAccountData` | Cookie identified account change resets account data: `accountReset` rules | ws-foundation | todo | |  |
+| `TokenMonTests/Platform/Auth/ProviderAuthSessionTests.swift::ProviderAuthSessionTests::testCaptureReplacesPreviousAccountEmail` | Capture replaces previous account email: a nil email removes the stored one | ws-foundation | todo | |  |
+| `TokenMonTests/Platform/Auth/ProviderAuthSessionTests.swift::ProviderAuthSessionTests::testRefreshedCookiesParseCommaFoldedHeader` | Refreshed cookies parse comma folded header: `applyRefreshedCookies` | ws-foundation | todo | |  |
+| `TokenMonTests/Platform/Auth/ProviderAuthSessionTests.swift::ProviderAuthSessionTests::testRefreshedDeletionCookieRemovesChunk` | Refreshed deletion cookie removes chunk: `applyRefreshedCookies` | ws-foundation | todo | |  |
+| `TokenMonTests/Platform/Auth/ProviderAuthSessionTests.swift::ProviderAuthSessionTests::testRenewedUnchunkedTokenReplacesStoredChunks` | Renewed unchunked token replaces stored chunks: `applyRefreshedCookies` | ws-foundation | todo | |  |
+| `TokenMonTests/Platform/Auth/ProviderAuthSessionTests.swift::ProviderAuthSessionTests::testRefreshedPastExpiryRemovesCookie` | Refreshed past expiry removes cookie: result "" | ws-foundation | todo | |  |
+
+### ws-core-net (#6)
+
+| Swift test | Behavior | Workstream | Status | Rust test | Notes |
+|---|---|---|---|---|---|
+| `TokenMonTests/Core/Networking/AuthenticatedRequestTests.swift::AuthenticatedRequestTests::testBuildsRequestWithCookieHeader` | Cookie, `Accept: application/json` and Referer are set | ws-core-net | todo | |  |
+| `TokenMonTests/Core/Networking/AuthenticatedRequestTests.swift::AuthenticatedRequestTests::testAddsBearerTokenWhenPresent` | Adds bearer token when present: `Authorization: Bearer tok123` | ws-core-net | todo | |  |
+| `TokenMonTests/Core/Networking/AuthenticatedRequestTests.swift::AuthenticatedRequestTests::testUnauthorizedStatusMapsToUnauthorized` | Unauthorized status maps to unauthorized: 401 and 403 give `.unauthorized` | ws-core-net | todo | |  |
+| `TokenMonTests/Core/Networking/AuthenticatedRequestTests.swift::AuthenticatedRequestTests::testTooManyRequestsMapsToRateLimitedWithRetryAfterSeconds` | 429 with `Retry-After: 120` gives `rateLimited(120)`; `.retryAfter == 120` | ws-core-net | todo | |  |
+| `TokenMonTests/Core/Networking/AuthenticatedRequestTests.swift::AuthenticatedRequestTests::testTooManyRequestsWithoutRetryAfter` | Too many requests without retry after: 429 alone gives `rateLimited(nil)` | ws-core-net | todo | |  |
+| `TokenMonTests/Core/Networking/AuthenticatedRequestTests.swift::AuthenticatedRequestTests::testRetryAfterParsesHTTPDate` | "Wed, 21 Oct 2015 07:28:00 GMT" at now 07:27:00 gives 60 | ws-core-net | todo | |  |
+| `TokenMonTests/Core/Networking/AuthenticatedRequestTests.swift::AuthenticatedRequestTests::testRetryAfterIsClamped` | "99999999999", "inf" and "Fri, 31 Dec 9999 23:59:59 GMT" give 3600; "-5" gives 0; "nan" gives nil | ws-core-net | todo | |  |
+| `TokenMonTests/Core/Networking/AuthenticatedRequestTests.swift::AuthenticatedRequestTests::testCancelledRequestThrowsCancellationError` | A cancelled in-flight request throws a cancellation, not a network error | ws-core-net | todo | |  |
+| `TokenMonTests/Core/Networking/AuthenticatedRequestTests.swift::AuthenticatedRequestTests::testRateLimitedProviderErrorKeepsRetryAfter` | `ProviderError(.rateLimited(30), .cursor)` keeps retryAfter and reads "Cursor is rate limiting requests. Retrying later." | ws-core-net | todo | |  |
+| `TokenMonTests/Core/Networking/AuthenticatedRequestTests.swift::AuthenticatedRequestTests::testNon2xxMapsToBadResponse` | Non2xx maps to bad response: 500 gives `badResponse("HTTP 500")` | ws-core-net | todo | |  |
+| `TokenMonTests/Core/Networking/AuthenticatedRequestTests.swift::AuthenticatedRequestTests::testNon2xxDoesNotLeakResponseBody` | Non2xx does not leak response body: The body's secret is not in the message | ws-core-net | todo | |  |
+| `TokenMonTests/Core/Networking/AuthenticatedRequestTests.swift::AuthenticatedRequestTests::testNoErrorOnSuccessRange` | No error on success range: 200 and 204 give nil | ws-core-net | todo | |  |
+| `TokenMonTests/Core/Networking/AuthenticatedRequestTests.swift::AuthenticatedRequestTests::testForbiddenHTMLIsTransientChallenge` | 403 with an HTML body gives the bot-challenge badResponse | ws-core-net | todo | |  |
+| `TokenMonTests/Core/Networking/AuthenticatedRequestTests.swift::AuthenticatedRequestTests::testCloudflareMitigatedHeaderIsTransientChallenge` | 403 with a `cf-mitigated` header and a JSON body gives the challenge badResponse | ws-core-net | todo | |  |
+| `TokenMonTests/Core/Networking/AuthenticatedRequestTests.swift::AuthenticatedRequestTests::testForbiddenJSONAndUnauthorizedStillRejectSession` | 403 with JSON gives unauthorized; 401 with HTML gives unauthorized | ws-core-net | todo | |  |
+| `TokenMonTests/Core/Networking/AuthenticatedRequestTests.swift::AuthenticatedRequestTests::testTwoHundredHTMLIsUnauthorizedOnlyForLoginPages` | `jsonObject` on a login page gives `.unauthorized(.cursor)`; on a challenge page or a maintenance page it gives `badResponse("Unexpected HTML response")` | ws-core-net | todo | |  |
+| `TokenMonTests/Core/Networking/AuthenticatedRequestTests.swift::AuthenticatedRequestTests::testProviderSessionHasNoCookieJarOrCache` | No cookie storage, no cookie setting, accept policy never, no URL cache | ws-core-net | todo | |  |
+| `TokenMonTests/Core/Networking/AuthenticatedRequestTests.swift::AuthenticatedRequestTests::testAppliesAppUserAgent` | Applies app user agent: `User-Agent == AppIdentity.userAgent` | ws-core-net | todo | |  |
+| `TokenMonTests/Core/Networking/AuthenticatedRequestTests.swift::AuthenticatedRequestTests::testStaticURLParsesLiteral` | Static URL parses literal: host == grok.com | ws-core-net | todo | |  |
+| `TokenMonTests/Core/Networking/UsageErrorTests.swift::UsageErrorTests::testLocalizedDescriptions` | Localized descriptions: Every case has a non-empty description | ws-core-net | todo | |  |
+| `TokenMonTests/Core/Networking/UsageErrorTests.swift::UsageErrorTests::testEquality` | Equality: Equality includes the payload | ws-core-net | todo | |  |
+| `TokenMonTests/Core/Networking/UsageErrorTests.swift::UsageErrorTests::testClientMappingsToCommonAuthCases` | `ProviderError.unauthorized`/`notSignedIn` give the matching `usageError` (cursor, openCode, grok) | ws-core-net | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokUsageParsingTests.swift::SharedHelpersTests::testDomainMatchesAcceptedHosts` | Domain match cases, including `www.grok.com` ✓, `grok.com.evil.example` ✗, `notopencode.ai` ✗, `x.com` ✓. (Core) | ws-core-net | todo | |  |
+| `TokenMonTests/Providers/OpenRouter/OpenRouterUsageClientTests.swift::OpenRouterUsageClientTests::testResolveTreatsBaseWithoutTrailingSlashAsDirectory` | Resolve treats base without trailing slash as directory: (Core resolve) both forms → `/api/v1/key` | ws-core-net | todo | |  |
+| `TokenMonTests/Providers/OpenRouter/OpenRouterUsageClientTests.swift::OpenRouterUsageClientTests::testResolveKeepsRootRelativeAndHostOnlyPaths` | Resolve keeps root relative and host only paths: (Core resolve) root-relative replaces path | ws-core-net | todo | |  |
+
+### ws-core-polling (#7)
+
+| Swift test | Behavior | Workstream | Status | Rust test | Notes |
+|---|---|---|---|---|---|
+| `TokenMonTests/Core/Polling/BackoffTimerTests.swift::BackoffTimerTests::testStartsAtZero` | Starts at zero: current == 0 | ws-core-polling | todo | |  |
+| `TokenMonTests/Core/Polling/BackoffTimerTests.swift::BackoffTimerTests::testDoublesGeometrically` | Doubles geometrically: 30, 60, 120 | ws-core-polling | todo | |  |
+| `TokenMonTests/Core/Polling/BackoffTimerTests.swift::BackoffTimerTests::testCapsAtMaximum` | Caps at maximum: 10 or more failures give 600 and stay there | ws-core-polling | todo | |  |
+| `TokenMonTests/Core/Polling/BackoffTimerTests.swift::BackoffTimerTests::testResetOnSuccess` | Reset on success: (15, 300): 15, 30, then reset to 0 | ws-core-polling | todo | |  |
+| `TokenMonTests/Core/Polling/PollingLoopTests.swift::PollingLoopTests::testRefreshesImmediatelyThenSleepsTheFullInterval` | start runs 1 refresh then sleeps 300; firing runs refresh 2 then sleeps 300 | ws-core-polling | todo | |  |
+| `TokenMonTests/Core/Polling/PollingLoopTests.swift::PollingLoopTests::testNilIntervalParksWithoutATimerUntilWoken` | nil: 0 refreshes and 0 pending; set 60 + wake: refresh and sleep 60; nil + wake cancels the pending wait | ws-core-polling | todo | |  |
+| `TokenMonTests/Core/Polling/PollingLoopTests.swift::PollingLoopTests::testWakeWithShorterIntervalRefreshesWhenOverdue` | after 100 s, interval 60 + wake: immediate refresh, sleep 60, 1 pending | ws-core-polling | todo | |  |
+| `TokenMonTests/Core/Polling/PollingLoopTests.swift::PollingLoopTests::testWakeRearmsTheRemainingWaitWhenNotYetDue` | after 20 s, interval 60 + wake: sleep 40, no refresh | ws-core-polling | todo | |  |
+| `TokenMonTests/Core/Polling/PollingLoopTests.swift::PollingLoopTests::testRefreshNowRestartsTheWaitFromThatRefresh` | after 250 s, refreshNow gives refresh 2 and the next sleep is 300 | ws-core-polling | todo | |  |
+| `TokenMonTests/Core/Polling/PollingLoopTests.swift::PollingLoopTests::testFailuresBackOffExponentiallyAndSuccessResets` | interval 10, failures: sleeps 30, 60, then 10 after a success | ws-core-polling | todo | |  |
+| `TokenMonTests/Core/Polling/PollingLoopTests.swift::PollingLoopTests::testRetryAfterIsHonoured` | Retry after is honoured: failure(retryAfter 500) gives a sleep of 500 | ws-core-polling | todo | |  |
+| `TokenMonTests/Core/Polling/PollingLoopTests.swift::PollingLoopTests::testSkippedRefreshKeepsTheInterval` | Skipped refresh keeps the interval: skipped gives a sleep of 10 | ws-core-polling | todo | |  |
+| `TokenMonTests/Core/Polling/PollingLoopTests.swift::PollingLoopTests::testJitterStretchesTheWaitAndIsClampedToTenPercent` | jitter 0.1 gives 330; −0.5 is clamped and gives 270 | ws-core-polling | todo | |  |
+| `TokenMonTests/Core/Polling/PollingLoopTests.swift::PollingLoopTests::testStopCancelsThePendingWait` | Stop cancels the pending wait: 0 pending, 1 cancelled, 1 refresh | ws-core-polling | todo | |  |
+| `TokenMonTests/Core/Polling/PollingLoopTests.swift::PollingLoopTests::testPauseCancelsTheWaitAndResumeRefreshesWhenOverdue` | pause gives 0 pending; resume after 1000 s refreshes | ws-core-polling | todo | |  |
+| `TokenMonTests/Core/Polling/PollingLoopTests.swift::PollingLoopTests::testDeinitCancelsTheWait` | A sleeping loop is not retained; its wait is cancelled | ws-core-polling | todo | |  |
+| `TokenMonTests/Core/Polling/PollingLoopTests.swift::PollingLoopTests::testOutcomeClassifiesCancellationAndRateLimits` | Cancellation gives skipped; rateLimited(42) gives failure(42); network gives failure(nil) | ws-core-polling | todo | |  |
+| `TokenMonTests/Core/Polling/ProviderRefreshTests.swift::ProviderRefreshTests::testSuccessPublishesAndResetsTheStreak` | success, published [7], recordAuthSuccess once, no errors | ws-core-polling | todo | |  |
+| `TokenMonTests/Core/Polling/ProviderRefreshTests.swift::ProviderRefreshTests::testResultForAStaleGenerationIsDropped` | A generation bumped during the fetch gives skipped; nothing published; no success | ws-core-polling | todo | |  |
+| `TokenMonTests/Core/Polling/ProviderRefreshTests.swift::ProviderRefreshTests::testRejectedSessionCountsTowardTheStreak` | unauthorized gives failure(nil), onRejected once, recordAuthFailure once, 1 error | ws-core-polling | todo | |  |
+| `TokenMonTests/Core/Polling/ProviderRefreshTests.swift::ProviderRefreshTests::testOtherFailuresDoNotCountAgainstTheSession` | URLError gives failure; no rejection or streak; 1 error | ws-core-polling | todo | |  |
+| `TokenMonTests/Core/Polling/ProviderRefreshTests.swift::ProviderRefreshTests::testFailureForAStaleGenerationIsIgnored` | Failure for a stale generation is ignored: skipped; no streak; no error reported | ws-core-polling | todo | |  |
+| `TokenMonTests/Core/Polling/ProviderRefreshTests.swift::ProviderRefreshTests::testCancellationIsSkipped` | Cancellation is skipped: skipped; no error | ws-core-polling | todo | |  |
+
+### ws-core-storage (#8)
+
+| Swift test | Behavior | Workstream | Status | Rust test | Notes |
+|---|---|---|---|---|---|
+| `TokenMonTests/Core/Storage/AppSupportTests.swift::AppSupportTests::testDirectoryIsCreatedAsDirectory` | Directory is created as directory: The directory exists and is a directory | ws-core-storage | todo | |  |
+| `TokenMonTests/Core/Storage/AppSupportTests.swift::AppSupportTests::testDefaultUsesExpectedSubdirectory` | last component "TokenMon", parent is the base | ws-core-storage | todo | |  |
+| `TokenMonTests/Core/Storage/AppSupportTests.swift::AppSupportTests::testTestHostUsesTemporaryBaseDirectory` | Under tests the base is under tmp, not the real Application Support | ws-core-storage | n/a | | macOS-only: XCTest host detection (`XCTestConfigurationFilePath`). Rust tests inject the base directory through the constructor, so there is no host to detect (spec 01 §1.3.1, §8). |
+| `TokenMonTests/Core/Storage/AppSupportTests.swift::AppSupportTests::testMovesModelMonitorDirectoryWhenCurrentIsAbsent` | legacy is moved; `auth_session.dat` is present in the new folder | ws-core-storage | todo | | Keep `migrate_legacy_directory_if_needed(from, to)` as a generic, tested helper (spec 01 §8). |
+| `TokenMonTests/Core/Storage/AppSupportTests.swift::AppSupportTests::testDoesNotOverwriteExistingCurrentDirectory` | Does not overwrite existing current directory: both folders are kept; no merge | ws-core-storage | todo | | Generic legacy-directory helper (spec 01 §8). |
+| `TokenMonTests/Core/Storage/AppSupportTests.swift::AppSupportTests::testRealHomeDirectoryIsTheUserHome` | Real home directory is the user home: equals the home directory, from any thread | ws-core-storage | todo | | Windows: `dirs::home_dir()` / `FOLDERID_Profile`. |
+| `TokenMonTests/Core/Storage/AppSupportTests.swift::AppModelTestIsolationTests::testTestHostUsesThrowawayDefaultsSuite` | Test host uses throwaway defaults suite: test defaults are separate from standard | ws-core-storage | n/a | | macOS-only: `UserDefaults` suite isolation under XCTest. Rust tests pass a temp-dir settings store (spec 01 §8). |
+| `TokenMonTests/Core/Storage/DailyQuotaDeltaStoreTests.swift::DailyQuotaDeltaStoreTests::testGrowthIsAttributedToTheSampledDay` | Growth is attributed to the sampled day: 10 then 25 gives 15 today | ws-core-storage | todo | |  |
+| `TokenMonTests/Core/Storage/DailyQuotaDeltaStoreTests.swift::DailyQuotaDeltaStoreTests::testWindowResetAttributesPostResetValueToTheSampledDay` | Window reset attributes post reset value to the sampled day: 40, 60, 25 gives 20 + 25 = 45 | ws-core-storage | todo | |  |
+| `TokenMonTests/Core/Storage/DailyQuotaDeltaStoreTests.swift::DailyQuotaDeltaStoreTests::testGrowthContinuesAfterWindowReset` | Growth continues after window reset: 60, 25, 30 gives 30 | ws-core-storage | todo | |  |
+| `TokenMonTests/Core/Storage/DailyQuotaDeltaStoreTests.swift::DailyQuotaDeltaStoreTests::testTinyDeltaIsIgnoredAsNoise` | Tiny delta is ignored as noise: 10 then 10.01 gives 0 | ws-core-storage | todo | |  |
+| `TokenMonTests/Core/Storage/DailyQuotaDeltaStoreTests.swift::DailyQuotaDeltaStoreTests::testSmallDownwardNoiseIsNotCreditedAsReset` | Small downward noise is not credited as reset: 50 then 49.9 gives 0 | ws-core-storage | todo | |  |
+| `TokenMonTests/Core/Storage/DailyQuotaDeltaStoreTests.swift::DailyQuotaDeltaStoreTests::testOldDaysArePrunedToRetentionWindow` | Old days are pruned to retention window: day −41 is pruned; today is 11; count 1 | ws-core-storage | todo | |  |
+| `TokenMonTests/Core/Storage/DailyQuotaDeltaStoreTests.swift::DailyQuotaDeltaStoreTests::testBeginNewWindowClearsDaysAndNextSampleIsCreditedAsReset` | Begin new window clears days and next sample is credited as reset: after begin, empty; 25 gives 25 | ws-core-storage | todo | |  |
+| `TokenMonTests/Core/Storage/DailyQuotaDeltaStoreTests.swift::DailyQuotaDeltaStoreTests::testBeginNewWindowCreditsRisingFirstSample` | Begin new window credits rising first sample: 20, begin, 30 gives 30 | ws-core-storage | todo | |  |
+| `TokenMonTests/Core/Storage/DailyQuotaDeltaStoreTests.swift::DailyQuotaDeltaStoreTests::testReloadRestoresPersistedDaysAndBaseline` | Reload restores persisted days and baseline: 10, 22, reload, 27 gives 17 | ws-core-storage | todo | |  |
+| `TokenMonTests/Core/Storage/DailyQuotaDeltaStoreTests.swift::DailyQuotaDeltaStoreTests::testEarlyResetPreservesPriorDaysAndCreditsFirstPostResetSample` | earlyReset; day −2 = 20, day −1 = 20, today = 4; windowStart today 08:00; interrupted = day −3 08:00 | ws-core-storage | todo | |  |
+| `TokenMonTests/Core/Storage/DailyQuotaDeltaStoreTests.swift::DailyQuotaDeltaStoreTests::testEarlyResetBaselineCreditsFirstSampleWhole` | 40, then (new window) 8, 11 gives 11 today; baseline 11 | ws-core-storage | todo | |  |
+| `TokenMonTests/Core/Storage/DailyQuotaDeltaStoreTests.swift::DailyQuotaDeltaStoreTests::testEarlyResetDropsOnlyTheBoundaryDay` | 8 recorded today in the old window, then a reset at 2 gives today = 2; day −1 kept at 20 | ws-core-storage | todo | |  |
+| `TokenMonTests/Core/Storage/DailyQuotaDeltaStoreTests.swift::DailyQuotaDeltaStoreTests::testNormalRolloverStillStartsFreshWindowAndKeepsEarlierDays` | rollover; day −1 = 40; today = 3; windowStart today 08:00; interrupted nil | ws-core-storage | todo | |  |
+| `TokenMonTests/Core/Storage/DailyQuotaDeltaStoreTests.swift::DailyQuotaDeltaStoreTests::testDropWithUnchangedWindowIsARebaseNotAnEarlyReset` | Drop with unchanged window is a rebase not an early reset: none; interrupted nil | ws-core-storage | todo | |  |
+| `TokenMonTests/Core/Storage/DailyQuotaDeltaStoreTests.swift::DailyQuotaDeltaStoreTests::testMovedWindowWithoutUsageDropIsNotAReset` | Moved window without usage drop is not a reset: none; today = 2 | ws-core-storage | todo | |  |
+| `TokenMonTests/Core/Storage/DailyQuotaDeltaStoreTests.swift::DailyQuotaDeltaStoreTests::testEarlyResetWithoutPeriodStartDerivesStartFromResetInstant` | resets_at only: earlyReset; day −1 = 25; windowStart = new reset − 7 days; interrupted = old reset − 7 days | ws-core-storage | todo | |  |
+| `TokenMonTests/Core/Storage/DailyQuotaDeltaStoreTests.swift::DailyQuotaDeltaStoreTests::testWindowMetadataSurvivesRelaunchSoAnEarlyResetWhileClosedIsStillSeen` | reload keeps `windowResetsAt`; the reset is detected; fields persist | ws-core-storage | todo | |  |
+| `TokenMonTests/Core/Storage/DailyQuotaDeltaStoreTests.swift::DailyQuotaDeltaStoreTests::testPayloadWithoutWindowMetadataDecodes` | legacy `{days:[…], lastUsedPercent}` loads; first windowed sample gives none and delta 5 | ws-core-storage | todo | |  |
+| `TokenMonTests/Core/Storage/DailyQuotaDeltaStoreTests.swift::DailyQuotaDeltaStoreTests::testClearDropsWindowMetadata` | Clear drops window metadata: all window fields nil; days empty | ws-core-storage | todo | |  |
+| `TokenMonTests/Core/Storage/DailyQuotaDeltaStoreTests.swift::DailyQuotaDeltaStoreTests::testClassifyNeedsProviderMetadataOnBothSides` | Classify needs provider metadata on both sides: missing resetsAt on either side gives none | ws-core-storage | todo | |  |
+| `TokenMonTests/Core/Storage/DailyQuotaDeltaStoreTests.swift::DailyQuotaDeltaStoreTests::testClassifyEarlyResetRequiresAUsageDrop` | 60→2 earlyReset; 60→58 none; nil previous none | ws-core-storage | todo | |  |
+| `TokenMonTests/Core/Storage/DailyQuotaDeltaStoreTests.swift::DailyQuotaDeltaStoreTests::testClassifyIgnoresResetInstantJitter` | Classify ignores reset instant jitter: +30 s gives none; +3 days gives earlyReset | ws-core-storage | todo | |  |
+| `TokenMonTests/Core/Storage/DailyQuotaDeltaStoreTests.swift::DailyQuotaDeltaStoreTests::testClassifyLateEarlyResetIsNotMistakenForRollover` | old reset tomorrow, drop 90→1, moved: earlyReset | ws-core-storage | todo | |  |
+| `TokenMonTests/Core/Storage/DailyQuotaDeltaStoreTests.swift::DailyQuotaDeltaStoreTests::testClassifyRolloverNeedsOldResetPassedAndHalfPeriodAdvance` | Classify rollover needs old reset passed and half period advance: +7 days gives rollover; +1 day gives none | ws-core-storage | todo | |  |
+| `TokenMonTests/Core/Storage/DailyQuotaDeltaStoreTests.swift::DailyQuotaDeltaStoreTests::testUnchangedSampleDoesNotRewriteTheFile` | the file is not rewritten for the same state; it is rewritten after a change | ws-core-storage | todo | |  |
+| `TokenMonTests/Core/Storage/DailyQuotaDeltaStoreTests.swift::DailyQuotaDeltaStoreTests::testInstantKeyedPayloadLoadsAndIsRewritten` | Denver: the flat `days` array loads; rewritten with `"2026-09-14":7` and `"days":[` | ws-core-storage | todo | |  |
+| `TokenMonTests/Core/Storage/DailyQuotaDeltaStoreTests.swift::DailyQuotaDeltaStoreTests::testInstantKeyedPayloadWithWindowMetadataLoads` | window fields as ref-seconds (813093922.556 and so on) | ws-core-storage | todo | |  |
+| `TokenMonTests/Core/Storage/DailyQuotaDeltaStoreTests.swift::DailyQuotaDeltaStoreTests::testDaysKeepTheirDatesAfterATimeZoneChange` | recorded in Denver, read in Tokyo: "2026-09-15" = 6 | ws-core-storage | todo | |  |
+| `TokenMonTests/Core/Storage/DailyQuotaDeltaStoreTests.swift::DailyQuotaDeltaStoreTests::testPruneKeepsFortyDaysInTheInjectedCalendar` | the day is kept at +31 days and pruned at +41 days | ws-core-storage | todo | |  |
+| `TokenMonTests/Core/Storage/HourlyDeltaActivityStoreTests.swift::HourlyDeltaActivityStoreTests::testGrowthWithinAWindowIsAttributedToTheSampledHour` | Growth within a window is attributed to the sampled hour: hour 9 = 15 | ws-core-storage | todo | |  |
+| `TokenMonTests/Core/Storage/HourlyDeltaActivityStoreTests.swift::HourlyDeltaActivityStoreTests::testWindowResetAttributesPostResetValueInsteadOfDroppingIt` | Window reset attributes post reset value instead of dropping it: 95 then 15: hour 10 = 15 | ws-core-storage | todo | |  |
+| `TokenMonTests/Core/Storage/HourlyDeltaActivityStoreTests.swift::HourlyDeltaActivityStoreTests::testTinyDeltaIsIgnoredAsNoise` | Tiny delta is ignored as noise | ws-core-storage | todo | |  |
+| `TokenMonTests/Core/Storage/HourlyDeltaActivityStoreTests.swift::HourlyDeltaActivityStoreTests::testSmallDownwardNoiseIsNotCreditedAsReset` | Small downward noise is not credited as reset | ws-core-storage | todo | |  |
+| `TokenMonTests/Core/Storage/HourlyDeltaActivityStoreTests.swift::HourlyDeltaActivityStoreTests::testDifferentKeysDoNotCollideOnDisk` | Different keys do not collide on disk: A = 10, B = 1 | ws-core-storage | todo | |  |
+| `TokenMonTests/Core/Storage/HourlyDeltaActivityStoreTests.swift::HourlyDeltaActivityStoreTests::testClearResetsSeriesAndBaseline` | zeros; next sample sets the baseline (0); then +7 | ws-core-storage | todo | |  |
+| `TokenMonTests/Core/Storage/HourlyDeltaActivityStoreTests.swift::HourlyDeltaActivityStoreTests::testBeginNewWindowCreditsRisingFirstSample` | Begin new window credits rising first sample | ws-core-storage | todo | |  |
+| `TokenMonTests/Core/Storage/HourlyDeltaActivityStoreTests.swift::HourlyDeltaActivityStoreTests::testBeginNewWindowKeepingHoursPreservesTodaysSeries` | Begin new window keeping hours preserves todays series: hour 9 = 15 kept; hour 11 = 4 | ws-core-storage | todo | |  |
+| `TokenMonTests/Core/Storage/HourlyDeltaActivityStoreTests.swift::HourlyDeltaActivityStoreTests::testUnchangedSampleDoesNotRewriteTheFile` | Unchanged sample does not rewrite the file: as for the daily store | ws-core-storage | todo | |  |
+| `TokenMonTests/Core/Storage/HourlyDeltaActivityStoreTests.swift::HourlyDeltaActivityStoreTests::testFirstDeltaAfterMidnightIsCredited` | 23:55 → 00:05 gives hour 0 = 7; dayStart is the new midnight | ws-core-storage | todo | |  |
+| `TokenMonTests/Core/Storage/HourlyDeltaActivityStoreTests.swift::HourlyDeltaActivityStoreTests::testGapOfSeveralDaysStartsWithoutBaseline` | a 2-day gap gives a total of 3 (only the later delta) | ws-core-storage | todo | |  |
+| `TokenMonTests/Core/Storage/HourlyDeltaActivityStoreTests.swift::HourlyDeltaActivityStoreTests::testInstantKeyedPayloadRestoresTodayAndIsRewritten` | weights restored; +3 at hour 15; rewritten with `"dayKey":"2026-10-10"` | ws-core-storage | todo | |  |
+| `TokenMonTests/Core/Storage/HourlyDeltaActivityStoreTests.swift::HourlyDeltaActivityStoreTests::testInstantKeyedPayloadFromAnotherDayStartsFresh` | Instant keyed payload from another day starts fresh: sum 0 | ws-core-storage | todo | |  |
+| `TokenMonTests/Core/Storage/LegacyCacheCleanupTests.swift::LegacyCacheCleanupTests::testRemovesOnlyCacheFilesAndRecordsCompletion` | Only the 4 cache items are removed; others and siblings are kept; flag set | ws-core-storage | n/a | | macOS-only: clears the legacy shared `HTTPCookieStorage`/`URLCache` and this app's WebKit cookie jars. `reqwest` keeps no jar or cache and there is no legacy install on Windows (spec 01 §1.3.3, §8). |
+| `TokenMonTests/Core/Storage/LegacyCacheCleanupTests.swift::LegacyCacheCleanupTests::testRunsOnlyOnce` | The second run returns false and deletes nothing | ws-core-storage | n/a | | macOS-only: clears the legacy shared `HTTPCookieStorage`/`URLCache` and this app's WebKit cookie jars. `reqwest` keeps no jar or cache and there is no legacy install on Windows (spec 01 §1.3.3, §8). |
+| `TokenMonTests/Core/Storage/LegacyCacheCleanupTests.swift::LegacyCacheCleanupTests::testMissingCacheFolderStillCompletes` | Missing cache folder still completes: true and the flag is set | ws-core-storage | n/a | | macOS-only: clears the legacy shared `HTTPCookieStorage`/`URLCache` and this app's WebKit cookie jars. `reqwest` keeps no jar or cache and there is no legacy install on Windows (spec 01 §1.3.3, §8). |
+| `TokenMonTests/Core/Storage/LegacyCacheCleanupTests.swift::LegacyCacheCleanupTests::testClearsTheGivenURLCache` | Clears the given URL cache: The injected cache is emptied | ws-core-storage | n/a | | macOS-only: clears the legacy shared `HTTPCookieStorage`/`URLCache` and this app's WebKit cookie jars. `reqwest` keeps no jar or cache and there is no legacy install on Windows (spec 01 §1.3.3, §8). |
+| `TokenMonTests/Core/Storage/LegacyCacheCleanupTests.swift::LegacyCacheCleanupTests::testRemovesOnlyThisAppsCookieJarFiles` | The jar and its `_tmp_*.dat` are deleted in Cookies and HTTPStorages; other jars, `.bak` and subfolders are kept | ws-core-storage | n/a | | macOS-only: clears the legacy shared `HTTPCookieStorage`/`URLCache` and this app's WebKit cookie jars. `reqwest` keeps no jar or cache and there is no legacy install on Windows (spec 01 §1.3.3, §8). |
+| `TokenMonTests/Core/Storage/LegacyCacheCleanupTests.swift::LegacyCacheCleanupTests::testCookieJarStepRunsOnceOnItsOwnFlag` | Runs even when the cache flag is set; never twice | ws-core-storage | n/a | | macOS-only: clears the legacy shared `HTTPCookieStorage`/`URLCache` and this app's WebKit cookie jars. `reqwest` keeps no jar or cache and there is no legacy install on Windows (spec 01 §1.3.3, §8). |
+| `TokenMonTests/Core/Storage/LegacyCacheCleanupTests.swift::LegacyCacheCleanupTests::testClearsTheGivenCookieStorage` | `removeCookies(since: distantPast)` is called | ws-core-storage | n/a | | macOS-only: clears the legacy shared `HTTPCookieStorage`/`URLCache` and this app's WebKit cookie jars. `reqwest` keeps no jar or cache and there is no legacy install on Windows (spec 01 §1.3.3, §8). |
+| `TokenMonTests/Providers/Grok/GrokUsageParsingTests.swift::SharedHelpersTests::testFileBackedStringStoreRoundTrip` | File backed string store round trip: set, get, overwrite, remove. (Core) | ws-core-storage | todo | |  |
+| `TokenMonTests/Providers/Grokbot/GrokbotUsagePollerTests.swift::GrokbotUsagePollerTests::testIsNewWindowDetectsRollover` | `QuotaWindowTransition.isRollover`: +7 days → true; +1 day → false; nil previous → false; backwards → false. (Core) | ws-core-storage | todo | |  |
+
+### ws-core-usage (#9)
+
+| Swift test | Behavior | Workstream | Status | Rust test | Notes |
+|---|---|---|---|---|---|
+| `TokenMonTests/Core/Usage/DailyTokenUsageTests.swift::DailyTokenUsageTests::testAddMergesModelsAndSortsByTokens` | Add merges models and sorts by tokens: total 116; cost 3.5; models [B:100, A:16] | ws-core-usage | todo | |  |
+| `TokenMonTests/Core/Usage/DailyTokenUsageTests.swift::DailyTokenUsageTests::testUnpricedUsageIsFlagged` | cost nil plus flag; empty model name counts only toward totals | ws-core-usage | todo | |  |
+| `TokenMonTests/Core/Usage/DailyTokenUsageTests.swift::DailyTokenUsageTests::testTallyGroupsByLocalDayAndAttachesToBars` | UTC day split; attaches to the matching bar only (P for the next two) | ws-core-usage | todo | |  |
+| `TokenMonTests/Core/Usage/DailyTokenUsageTests.swift::DailyTokenUsageTests::testOpenCodeDailyTokens` | Open code daily tokens: 2 rows give 668 tokens, cache 600, cost 1 | ws-core-usage | todo | |  |
+| `TokenMonTests/Core/Usage/DailyTokenUsageTests.swift::DailyTokenUsageTests::testCursorEventsRollUpPerDay` | chargedCents 150 gives $1.5; model tokens 334 | ws-core-usage | todo | |  |
+| `TokenMonTests/Core/Usage/DayKeyTests.swift::DayKeyTests::testKeyRoundTripsThroughStartOfDay` | Denver ref 811144800 + 15 h gives "2026-09-15"; the start round-trips; "garbage" gives nil | ws-core-usage | todo | |  |
+| `TokenMonTests/Core/Usage/DayKeyTests.swift::DayKeyTests::testAddingDaysCrossesMonths` | −40 from 2026-10-10 gives 2026-08-31; +1 from 2026-12-31 gives 2027-01-01 | ws-core-usage | todo | |  |
+| `TokenMonTests/Core/Usage/DayKeyTests.swift::DayKeyTests::testStoredStartOfDayKeepsItsDateAcrossZones` | Denver midnight read in 5 zones gives "2026-09-15" | ws-core-usage | todo | |  |
+| `TokenMonTests/Core/Usage/DayKeyTests.swift::DayKeyTests::testStoredStartOfDayFromEasternAndHalfHourZones` | Tokyo, Kolkata, Auckland and LA round-trip 2026-07-16 | ws-core-usage | todo | |  |
+| `TokenMonTests/Core/Usage/UsagePoolTests.swift::UsagePoolTests::testCombiningCollapsesCadences` | Combining collapses cadences: cadence mapping | ws-core-usage | todo | |  |
+| `TokenMonTests/Core/Usage/UsagePoolTests.swift::UsagePoolTests::testSectionTitles` | Section titles: cadence mapping | ws-core-usage | todo | |  |
+| `TokenMonTests/Core/Usage/UsagePoolTests.swift::UsagePoolTests::testGrokIsWeekly` | Grok is weekly: cadence mapping | ws-core-usage | todo | |  |
+| `TokenMonTests/Core/Usage/UsagePoolTests.swift::UsagePoolTests::testGrokbotPoolsFollowPeriodLength` | Grokbot pools follow period length: 7 days weekly, 30 days monthly, 14 days mixed | ws-core-usage | todo | |  |
+| `TokenMonTests/Core/Usage/UsagePoolTests.swift::UsagePoolTests::testClaudePools` | Claude pools: cadence mapping | ws-core-usage | todo | |  |
+| `TokenMonTests/Core/Usage/UsagePoolTests.swift::UsagePoolTests::testChatGPTPools` | Chat GPT pools: cadence mapping | ws-core-usage | todo | |  |
+| `TokenMonTests/Core/Usage/UsagePoolTests.swift::UsagePoolTests::testCursorIsMonthly` | Cursor is monthly: cadence mapping | ws-core-usage | todo | |  |
+| `TokenMonTests/Core/Usage/UsagePoolTests.swift::UsagePoolTests::testOpenCodeMixedPools` | Open code mixed pools: cadence mapping | ws-core-usage | todo | |  |
+| `TokenMonTests/Core/Usage/UsagePoolTests.swift::UsagePoolTests::testOpenCodeSingleWindowKeepsItsCadence` | Open code single window keeps its cadence: cadence mapping | ws-core-usage | todo | |  |
+| `TokenMonTests/Core/Utilities/FormatTests.swift::FormatTests::testTokensBelowThousandShowsBareCount` | Tokens below thousand shows bare count. | ws-core-usage | todo | |  |
+| `TokenMonTests/Core/Utilities/FormatTests.swift::FormatTests::testTokensThousands` | Tokens thousands. | ws-core-usage | todo | |  |
+| `TokenMonTests/Core/Utilities/FormatTests.swift::FormatTests::testTokensMillionsRoundsToOneDecimalBelowTen` | Tokens millions rounds to one decimal below ten. | ws-core-usage | todo | |  |
+| `TokenMonTests/Core/Utilities/FormatTests.swift::FormatTests::testTokensMillionsRoundsWholeAtTenPlus` | Tokens millions rounds whole at ten plus. | ws-core-usage | todo | |  |
+| `TokenMonTests/Core/Utilities/FormatTests.swift::FormatTests::testTokensBillions` | Tokens billions. | ws-core-usage | todo | |  |
+| `TokenMonTests/Core/Utilities/FormatTests.swift::FormatTests::testTokensRollToNextUnitAtRoundingBoundary` | Tokens roll to next unit at rounding boundary. | ws-core-usage | todo | |  |
+| `TokenMonTests/Core/Utilities/FormatTests.swift::FormatTests::testTokensRoundHalfAwayFromZero` | Tokens round half away from zero. | ws-core-usage | todo | |  |
+| `TokenMonTests/Core/Utilities/FormatTests.swift::FormatTests::testUSDFormatsCurrencyWithoutTilde` | USD formats currency without tilde: "$4.10", "$0.00" | ws-core-usage | todo | |  |
+| `TokenMonTests/Core/Utilities/FormatTests.swift::FormatTests::testHourLabelTwelveHourClock` | 0 "12a", 12 "12p", 5 "5a", 11 "11a", 13 "1p", 15 "3p", 23 "11p" | ws-core-usage | todo | |  |
+| `TokenMonTests/Core/Utilities/FormatTests.swift::FormatTests::testParseFlexiblePlainAndFractional` | "…20:25:00Z" gives 1784233500; ".123Z" gives +0.123 | ws-core-usage | todo | |  |
+| `TokenMonTests/Core/Utilities/FormatTests.swift::FormatTests::testParseFlexibleRejectsGarbage` | garbage, date-only and zone-less all give nil | ws-core-usage | todo | |  |
+| `TokenMonTests/Core/Utilities/FormatTests.swift::FormatTests::testParseFlexibleHandlesOffsetsAndMicroseconds` | Parse flexible handles offsets and microseconds: −06:00, +0530 and .123456+00:00 | ws-core-usage | todo | |  |
+| `TokenMonTests/Core/Utilities/FormatTests.swift::FormatTests::testResetDateMatchesNaiveFormatterAndLowercasesMeridian` | Reset date matches naive formatter and lowercases meridian: "EEE h:mma" ends in "pm" | ws-core-usage | todo | |  |
+| `TokenMonTests/Core/Utilities/FormatTests.swift::FormatTests::testResetDateUsesTheRequestedTimeZone` | Reset date uses the requested time zone: UTC "18:57"; Tokyo "03:57" | ws-core-usage | todo | |  |
+| `TokenMonTests/Core/Utilities/FormatTests.swift::FormatTests::testResetDateDefaultsToCurrentTimeZone` | Reset date defaults to current time zone: a nil zone uses the current zone | ws-core-usage | todo | |  |
+| `TokenMonTests/Core/Utilities/FormatTests.swift::FormatTests::testSystemTimeZoneChangeClearsFormatterCache` | the cache count goes to 0 after a zone-change notification | ws-core-usage | todo | | Windows: `WM_TIMECHANGE` / `WM_SETTINGCHANGE` "intl" broadcast clears the cache. |
+| `TokenMonTests/Core/Utilities/JSONTests.swift::JSONTests::testNumberFromVariousTypes` | Number from various types: the rules in 1.5 (`"1e400"` nil, `{"val":"0.1"}` gives exactly 0.1, `"1.5abc"` nil, numeric 0/1 accepted as a bool) | ws-core-usage | todo | |  |
+| `TokenMonTests/Core/Utilities/JSONTests.swift::JSONTests::testNumberRejectsBooleansAndNonFiniteValues` | Number rejects booleans and non finite values: the rules in 1.5 (`"1e400"` nil, `{"val":"0.1"}` gives exactly 0.1, `"1.5abc"` nil, numeric 0/1 accepted as a bool) | ws-core-usage | todo | |  |
+| `TokenMonTests/Core/Utilities/JSONTests.swift::JSONTests::testNumberDescendsIntoValAndValueDicts` | Number descends into val and value dicts: the rules in 1.5 (`"1e400"` nil, `{"val":"0.1"}` gives exactly 0.1, `"1.5abc"` nil, numeric 0/1 accepted as a bool) | ws-core-usage | todo | |  |
+| `TokenMonTests/Core/Utilities/JSONTests.swift::JSONTests::testString` | String: the rules in 1.5 (`"1e400"` nil, `{"val":"0.1"}` gives exactly 0.1, `"1.5abc"` nil, numeric 0/1 accepted as a bool) | ws-core-usage | todo | |  |
+| `TokenMonTests/Core/Utilities/JSONTests.swift::JSONTests::testNestedTraversesKeys` | Nested traverses keys: the rules in 1.5 (`"1e400"` nil, `{"val":"0.1"}` gives exactly 0.1, `"1.5abc"` nil, numeric 0/1 accepted as a bool) | ws-core-usage | todo | |  |
+| `TokenMonTests/Core/Utilities/JSONTests.swift::JSONTests::testFirstDoubleTriesKeysInOrder` | First double tries keys in order: the rules in 1.5 (`"1e400"` nil, `{"val":"0.1"}` gives exactly 0.1, `"1.5abc"` nil, numeric 0/1 accepted as a bool) | ws-core-usage | todo | |  |
+| `TokenMonTests/Core/Utilities/JSONTests.swift::JSONTests::testFirstString` | First string: the rules in 1.5 (`"1e400"` nil, `{"val":"0.1"}` gives exactly 0.1, `"1.5abc"` nil, numeric 0/1 accepted as a bool) | ws-core-usage | todo | |  |
+| `TokenMonTests/Core/Utilities/JSONTests.swift::JSONTests::testFirstDecimal` | First decimal: the rules in 1.5 (`"1e400"` nil, `{"val":"0.1"}` gives exactly 0.1, `"1.5abc"` nil, numeric 0/1 accepted as a bool) | ws-core-usage | todo | |  |
+| `TokenMonTests/Core/Utilities/JSONTests.swift::JSONTests::testFirstDecimalKeepsMoneyPrecision` | First decimal keeps money precision: the rules in 1.5 (`"1e400"` nil, `{"val":"0.1"}` gives exactly 0.1, `"1.5abc"` nil, numeric 0/1 accepted as a bool) | ws-core-usage | todo | |  |
+| `TokenMonTests/Core/Utilities/JSONTests.swift::JSONTests::testFirstBool` | First bool: the rules in 1.5 (`"1e400"` nil, `{"val":"0.1"}` gives exactly 0.1, `"1.5abc"` nil, numeric 0/1 accepted as a bool) | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testBudgetPerDayDividesEvenly` | Budget per day divides evenly. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testBudgetPerDayZeroGuards` | Budget per day zero guards. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testDaysInBillingCycleCountsInclusiveStartExclusiveEnd` | Days in billing cycle counts inclusive start exclusive end. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testDaysInBillingCycleMinimumOne` | Days in billing cycle minimum one. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testBuildDaysCoversWholePeriodWithPerDayBudget` | Build days covers whole period with per day budget. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testOverBudgetFlag` | Over budget flag. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testPercentOfBudgetZeroBudgetIsZero` | Percent of budget zero budget is zero. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testWeeklyWindowAnchorsToResetMidPeriod` | Weekly window anchors to reset mid period. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testWeeklyWindowBeforeResetInstantKeepsPeriodStartAsFirstBar` | Weekly window before reset instant keeps period start as first bar. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testWeeklyWindowRollsForwardAtResetInstant` | Weekly window rolls forward at reset instant. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testWeeklyWindowAdvancesWeeksStaleReset` | Weekly window advances weeks stale reset. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testPaceHeadroomZeroConsumedBanksPriorDays` | Pace headroom zero consumed banks prior days. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testPaceHeadroomPartialConsumedReducesHeadroom` | Pace headroom partial consumed reduces headroom. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testPaceHeadroomOverPaceWhenConsumedExceedsEarned` | Pace headroom over pace when consumed exceeds earned. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testPaceHeadroomIncludesTodayExcludesFutureDaysFromEarned` | Pace headroom includes today excludes future days from earned. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testPaceHeadroomNilWhenBudgetZero` | Pace headroom nil when budget zero. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testPaceHeadroomUsesElapsedDaysForFullPeriod` | Pace headroom uses elapsed days for full period. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testElapsedDaysThroughTodayIsInclusive` | Elapsed days through today is inclusive. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testPaceHeadroomCreditsTodayOnFinalPeriodDay` | Pace headroom credits today on final period day. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testPacePeriodStartPrefersKnownStart` | Pace period start prefers known start. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testMonthlyPacePeriodStartDerivesFromResetsAtWhenSliceIsShorterThanPeriod` | Monthly pace period start derives from resets at when slice is shorter than period. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testWeeklyPacePeriodStartUsesFirstBar` | Weekly pace period start uses first bar. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testMonthlyPacePeriodStartAdvancesStaleCycle` | Monthly pace period start advances stale cycle. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testMonthlyPacePeriodStartNilWithoutSubscriptionSignals` | Monthly pace period start nil without subscription signals. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testSubscriptionMonthFromResetsAtAlone` | Subscription month from resets at alone. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testSubscriptionMonthNilWithoutSignals` | Subscription month nil without signals. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testBuildSubscriptionMonthLast7DaysRequiresCycle` | Build subscription month last7 days requires cycle. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testMonthlyLast7IncludesTodayOnResetMorning` | Monthly last7 includes today on reset morning. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testSubscriptionMonthAdvancesStaleCycle` | Subscription month advances stale cycle. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testSubscriptionMonthAdvanceKeepsAnchorDayAfterShortMonth` | Subscription month advance keeps anchor day after short month. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testBuildDaysKeepsDailyShareOnFinalMorning` | Build days keeps daily share on final morning. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testStaleMonthlyEndDoesNotPaintClosedSuffix` | Stale monthly end does not paint closed suffix. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testPaceHeadroomPeriodStartCreditsToday` | Pace headroom period start credits today. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testPaceHeadroomCapsElapsedDaysAtPeriodLength` | Pace headroom caps elapsed days at period length. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testPaceCaptionNoUsageBanked` | Pace caption no usage banked. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testPaceCaptionNoUsage` | Pace caption no usage. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testPaceCaptionNilWithoutBudget` | Pace caption nil without budget. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testPaceCaptionOverPace` | Pace caption over pace. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testPaceCaptionBankedSurplus` | Pace caption banked surplus. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testPaceCaptionSurplus` | Pace caption surplus. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testPaceCaptionOnPace` | Pace caption on pace. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testOverPaceCaptionOmitsUsedAmount` | Over pace caption omits used amount. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testFirstDayRemainingIsWholeDayShare` | First day remaining is whole day share. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testFinalWindowDayAccountsForTimeUntilReset` | Final window day accounts for time until reset. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testCaptionWithoutResetInstant` | Caption without reset instant. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testMonthlyMidCycleNoFalseOverPace` | Monthly mid cycle no false over pace. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testMonthlyBurnedEarlyFlagsOverPace` | Monthly burned early flags over pace. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testWeeklyWindowAnchorsToEarlyResetStartAndLeadsWithPriorDays` | Weekly window anchors to early reset start and leads with prior days. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testPaceHeadroomIgnoresPriorWindowDays` | Pace headroom ignores prior window days. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testWeeklyWindowWithoutWindowStartIsUnchanged` | Weekly window without window start is unchanged. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testWindowStartNeverMovesBarsBeforeResetImpliedStart` | Window start never moves bars before reset implied start. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetTests.swift::DailyBudgetTests::testMondayWeekShowsPriorWindowDaysBeforeNewCycleStart` | Monday week shows prior window days before new cycle start. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetWeekOffsetTests.swift::DailyBudgetWeekOffsetTests::testWeekOffsetNeverMovesPastTheCurrentWeek` | previous(0) = −1, previous(−2) = −3, next(0) = 0, next(−1) = 0, next(−4) = −3, canGoNext(0) false, canGoNext(−1) true. (Other tests in this file cover `DailyBudget` builders; Core slice.) | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetWeekOffsetTests.swift::DailyBudgetWeekOffsetTests::testWeeklyWindowOffsetShowsPreviousPeriod` | Weekly window offset shows previous period. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetWeekOffsetTests.swift::DailyBudgetWeekOffsetTests::testWeeklyWindowOffsetSkipsEarlyResetLeadIn` | Weekly window offset skips early reset lead in. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetWeekOffsetTests.swift::DailyBudgetWeekOffsetTests::testMondayWeekOffsetShowsPreviousWeekInsidePeriod` | Monday week offset shows previous week inside period. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetWeekOffsetTests.swift::DailyBudgetWeekOffsetTests::testMondayWeekOffsetZeroIgnoresHistoryBeforePeriod` | Monday week offset zero ignores history before period. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/DailyBudgetWeekOffsetTests.swift::DailyBudgetWeekOffsetTests::testMondayWeekOffsetUsesHistoryBeforePeriod` | Monday week offset uses history before period. | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokUsageParsingTests.swift::SharedHelpersTests::testPercentClampBounds` | Percent clamp bounds: clamp 0, 100, −5→0, 140→100, 37.6. (Core) | ws-core-usage | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokUsageParsingTests.swift::SharedHelpersTests::testUsdCurrencyFormatter` | Usd currency formatter: 410 → `$410.00`; 4.1 → `$4.10`. (Core) | ws-core-usage | todo | |  |
+
+### ws-settings (#10)
+
+| Swift test | Behavior | Workstream | Status | Rust test | Notes |
+|---|---|---|---|---|---|
+| `TokenMonTests/Features/Settings/AppSettingsTests.swift::AppSettingsTests::testActivePollClampedToMinimum` | Active poll clamped to minimum: 15/300; 60/3600 | ws-settings | todo | |  |
+| `TokenMonTests/Features/Settings/AppSettingsTests.swift::AppSettingsTests::testActivePollClampedToMaximum` | Active poll clamped to maximum. | ws-settings | todo | |  |
+| `TokenMonTests/Features/Settings/AppSettingsTests.swift::AppSettingsTests::testIdlePollClamped` | Idle poll clamped: 15/300; 60/3600 | ws-settings | todo | |  |
+| `TokenMonTests/Features/Settings/AppSettingsTests.swift::AppSettingsTests::testValuesPersistAcrossInstances` | Values persist across instances: active poll and graph set persist | ws-settings | todo | |  |
+| `TokenMonTests/Features/Settings/AppSettingsTests.swift::AppSettingsTests::testPanelSectionsDefaultOpenAndPersist` | Panel sections default open and persist | ws-settings | todo | |  |
+| `TokenMonTests/Features/Settings/AppSettingsTests.swift::AppSettingsTests::testPanelSectionIgnoresUnknownSavedValues` | Panel section ignores unknown saved values | ws-settings | todo | |  |
+| `TokenMonTests/Features/Settings/AppSettingsTests.swift::AppSettingsTests::testShowSelectedProviderDefaultsOffAndPersists` | Show selected provider defaults off and persists | ws-settings | todo | |  |
+| `TokenMonTests/Features/Settings/AppSettingsTests.swift::AppSettingsTests::testThresholdAlertDefaultsOffAndPersists` | Threshold alert defaults off and persists | ws-settings | todo | |  |
+| `TokenMonTests/Features/Settings/AppSettingsTests.swift::AppSettingsTests::testNeedsGrokPollingFollowsBarAndProvider` | Needs grok polling follows bar and provider: the `needsPolling` formula | ws-settings | todo | |  |
+| `TokenMonTests/Features/Settings/AppSettingsTests.swift::AppSettingsTests::testThresholdAlertKeepsEveryProviderPolling` | Threshold alert keeps every provider polling: the `needsPolling` formula | ws-settings | todo | |  |
+| `TokenMonTests/Features/Settings/AppSettingsTests.swift::AppSettingsTests::testAlertProvidersLimitAlertPolling` | Alert providers limit alert polling: the `needsPolling` formula | ws-settings | todo | |  |
+| `TokenMonTests/Features/Settings/AppSettingsTests.swift::AppSettingsTests::testNeedsOpenCodeAndCursorPollingOnOverview` | Needs open code and cursor polling on overview: the `needsPolling` formula | ws-settings | todo | |  |
+| `TokenMonTests/Features/Settings/AppSettingsTests.swift::AppSettingsTests::testNeedsPollingOffWhenBarsHiddenAndOtherTabSelected` | Needs polling off when bars hidden and other tab selected: the `needsPolling` formula | ws-settings | todo | |  |
+| `TokenMonTests/Features/Settings/AppSettingsTests.swift::AppSettingsTests::testNeedsGrokbotPollingFollowsBarAndProvider` | Needs grokbot polling follows bar and provider: the `needsPolling` formula | ws-settings | todo | |  |
+| `TokenMonTests/Features/Settings/AppSettingsTests.swift::AppSettingsTests::testNeedsClaudePollingFollowsBarAndProvider` | Needs claude polling follows bar and provider: the `needsPolling` formula | ws-settings | todo | |  |
+| `TokenMonTests/Features/Settings/AppSettingsTests.swift::AppSettingsTests::testDisabledProviderDoesNotPoll` | Disabled provider does not poll: the `needsPolling` formula | ws-settings | todo | |  |
+| `TokenMonTests/Features/Settings/AppSettingsTests.swift::AppSettingsTests::testDisabledGrokbotDoesNotPollEvenWithBarEnabled` | Disabled grokbot does not poll even with bar enabled: the `needsPolling` formula | ws-settings | todo | |  |
+| `TokenMonTests/Features/Settings/AppSettingsTests.swift::AppSettingsTests::testEnabledProvidersDefaultToAllUsageProviders` | Enabled providers default to all usage providers: provider list rules | ws-settings | todo | |  |
+| `TokenMonTests/Features/Settings/AppSettingsTests.swift::AppSettingsTests::testVisibleUsageProvidersFollowUsageProviderOrder` | Visible usage providers follow usage provider order: provider list rules | ws-settings | todo | |  |
+| `TokenMonTests/Features/Settings/AppSettingsTests.swift::AppSettingsTests::testProviderOrderDefaultsToUsageProviders` | Provider order defaults to usage providers: provider list rules | ws-settings | todo | |  |
+| `TokenMonTests/Features/Settings/AppSettingsTests.swift::AppSettingsTests::testProviderOrderPersistsAndAppendsNewProviders` | Provider order persists and appends new providers: provider list rules | ws-settings | todo | |  |
+| `TokenMonTests/Features/Settings/AppSettingsTests.swift::AppSettingsTests::testMoveProviderInsertsAtTargetSlot` | Move provider inserts at target slot: provider list rules | ws-settings | todo | |  |
+| `TokenMonTests/Features/Settings/AppSettingsTests.swift::AppSettingsTests::testNormalizedOrderDropsOverviewAndDuplicates` | Normalized order drops overview and duplicates: provider list rules | ws-settings | todo | |  |
+| `TokenMonTests/Features/Settings/AppSettingsTests.swift::AppSettingsTests::testEnabledProvidersPersistAcrossInstances` | Enabled providers persist across instances: provider list rules | ws-settings | todo | |  |
+| `TokenMonTests/Features/Settings/AppSettingsTests.swift::AppSettingsTests::testCannotRemoveLastEnabledProvider` | Cannot remove last enabled provider: provider list rules | ws-settings | todo | |  |
+| `TokenMonTests/Features/Settings/AppSettingsTests.swift::AppSettingsTests::testStoredOverviewAndUnknownValuesAreIgnored` | Stored overview and unknown values are ignored: provider list rules | ws-settings | todo | |  |
+| `TokenMonTests/Features/Settings/AppSettingsTests.swift::AppSettingsTests::testStoredValidSubsetSurvivesLoad` | Stored valid subset survives load: provider list rules | ws-settings | todo | |  |
+| `TokenMonTests/Features/Settings/AppSettingsTests.swift::AppSettingsTests::testThresholdPercentIsClampedOnLoad` | Threshold percent is clamped on load: 250 gives 99; −5 gives 50 | ws-settings | todo | |  |
+| `TokenMonTests/Features/Settings/AppSettingsTests.swift::AppSettingsTests::testThresholdPercentIsClampedOnSet` | Threshold percent is clamped on set: 10 gives 50, persisted | ws-settings | todo | |  |
+| `TokenMonTests/Features/Settings/AppSettingsTests.swift::AppSettingsTests::testRetiredVisibleProductsFallBackToAllKnown` | Retired visible products fall back to all known | ws-settings | todo | |  |
+| `TokenMonTests/Features/Settings/AppSettingsTests.swift::AppSettingsTests::testEmptyVisibleProductsIsPreserved` | Empty visible products is preserved | ws-settings | todo | |  |
+| `TokenMonTests/Features/Settings/AppSettingsTests.swift::AppSettingsTests::testVisibleProductsDropUnknownIds` | Visible products drop unknown ids | ws-settings | todo | |  |
+| `TokenMonTests/Features/Settings/AppSettingsTests.swift::AppSettingsTests::testDisablingTheSelectedProviderFallsBackToOverview` | Disabling the selected provider falls back to overview: persisted | ws-settings | todo | |  |
+| `TokenMonTests/Features/Settings/AppSettingsTests.swift::AppSettingsTests::testDisablingAnotherProviderKeepsTheSelection` | Disabling another provider keeps the selection | ws-settings | todo | |  |
+| `TokenMonTests/Features/Settings/AppSettingsTests.swift::AppSettingsTests::testProviderOrderPersistsTheNormalizedValue` | Provider order persists the normalized value: provider list rules | ws-settings | todo | |  |
+| `TokenMonTests/Features/Settings/AppSettingsTests.swift::AppSettingsTests::testNeedsPollingFollowsTabAndDefaultGraphs` | Needs polling follows tab and default graphs: the `needsPolling` formula | ws-settings | todo | |  |
+| `TokenMonTests/Features/Settings/AppSettingsTests.swift::AppSettingsTests::testLaunchAtLoginShowsOnWhileAwaitingApproval` | Launch at login shows on while awaiting approval: fake login item | ws-settings | todo | | Windows: HKCU Run key; "awaiting approval" maps to disabled in `StartupApproved\Run` (first byte 0x03). Fake `LoginItemService`. |
+| `TokenMonTests/Features/Settings/AppSettingsTests.swift::AppSettingsTests::testLaunchAtLoginRegistersAndRevertsOnFailure` | Launch at login registers and reverts on failure: fake login item | ws-settings | todo | | Windows: HKCU Run key behind the `LoginItemService` trait (fake in tests). |
+| `TokenMonTests/Features/Settings/AppSettingsTests.swift::AppSettingsTests::testPerProviderGraphFlagsBecomeTheGraphSet` | Per provider graph flags become the graph set: migration | ws-settings | todo | |  |
+| `TokenMonTests/Features/Settings/AppSettingsTests.swift::AppSettingsTests::testGraphSetDefaultsToGrokOnly` | Graph set defaults to grok only: migration | ws-settings | todo | |  |
+| `TokenMonTests/Platform/ThresholdNotifierTests.swift::ThresholdNotifierTests::testFiresWhenCrossingThreshold` | Fires when crossing threshold: the `shouldNotify` rules | ws-settings | todo | |  |
+| `TokenMonTests/Platform/ThresholdNotifierTests.swift::ThresholdNotifierTests::testDoesNotFireBelowThreshold` | Does not fire below threshold: the `shouldNotify` rules | ws-settings | todo | |  |
+| `TokenMonTests/Platform/ThresholdNotifierTests.swift::ThresholdNotifierTests::testDoesNotRefireAtSameThreshold` | Does not refire at same threshold: the `shouldNotify` rules | ws-settings | todo | |  |
+| `TokenMonTests/Platform/ThresholdNotifierTests.swift::ThresholdNotifierTests::testReArmsAfterFivePointDrop` | Re arms after five point drop: the `shouldNotify` rules | ws-settings | todo | |  |
+| `TokenMonTests/Platform/ThresholdNotifierTests.swift::ThresholdNotifierTests::testExactBoundaryCountsAsCrossing` | Exact boundary counts as crossing: the `shouldNotify` rules | ws-settings | todo | |  |
+| `TokenMonTests/Platform/ThresholdNotifierTests.swift::ThresholdNotifierTests::testEvaluateFiresOnceAndDoesNotRefireWhileAbove` | Evaluate fires once and does not refire while above: [85] | ws-settings | todo | |  |
+| `TokenMonTests/Platform/ThresholdNotifierTests.swift::ThresholdNotifierTests::testEvaluatePersistsAcrossInstances` | Evaluate persists across instances: a new instance stays quiet | ws-settings | todo | |  |
+| `TokenMonTests/Platform/ThresholdNotifierTests.swift::ThresholdNotifierTests::testEvaluateIsAccountScoped` | Evaluate is account scoped: 2 accounts give 2 alerts | ws-settings | todo | |  |
+| `TokenMonTests/Platform/ThresholdNotifierTests.swift::ThresholdNotifierTests::testEvaluateIsProviderScoped` | keys `thresholdNotified.a@b.com` and `thresholdNotified.claude.a@b.com` | ws-settings | todo | |  |
+| `TokenMonTests/Platform/ThresholdNotifierTests.swift::ThresholdNotifierTests::testNotificationBodyNamesTheProvider` | Notification body names the provider: exact bodies | ws-settings | todo | |  |
+| `TokenMonTests/Platform/ThresholdNotifierTests.swift::ThresholdNotifierTests::testEvaluateReArmsAfterFivePointDrop` | Evaluate re arms after five point drop: 81 fires; 74 quiet; 69 clears; 76 fires | ws-settings | todo | |  |
+| `TokenMonTests/Platform/ThresholdNotifierTests.swift::ThresholdNotifierTests::testEvaluateNoOpWhenDisabled` | Evaluate no op when disabled: nothing | ws-settings | todo | |  |
+| `TokenMonTests/Platform/ThresholdNotifierTests.swift::ThresholdNotifierTests::testEvaluateReArmsForNewBillingPeriod` | +300 s is the same period; +7 days fires again; then quiet | ws-settings | todo | |  |
+| `TokenMonTests/Platform/ThresholdNotifierTests.swift::ThresholdNotifierTests::testEvaluateAdoptsPeriodForRecordWithoutOne` | a record without a period adopts the first one seen | ws-settings | todo | |  |
+| `TokenMonTests/Platform/ThresholdNotifierTests.swift::ThresholdNotifierTests::testEvaluateSkipsProvidersTheAlertDoesNotWatch` | Evaluate skips providers the alert does not watch: only claude fires | ws-settings | todo | |  |
+
+### ws-overview (#11)
+
+| Swift test | Behavior | Workstream | Status | Rust test | Notes |
+|---|---|---|---|---|---|
+| `TokenMonTests/Features/Overview/OverviewHourlyHistoryTests.swift::OverviewHourlyHistoryTests::testOpenCodeHoursAreAddedForTheSameDay` | Open code hours are added for the same day: section 4 | ws-overview | todo | |  |
+| `TokenMonTests/Features/Overview/OverviewHourlyHistoryTests.swift::OverviewHourlyHistoryTests::testOpenCodeHoursFromAnotherDayAreIgnored` | Open code hours from another day are ignored: P | ws-overview | todo | |  |
+| `TokenMonTests/Features/Overview/OverviewHourlyHistoryTests.swift::OverviewHourlyHistoryTests::testRecordKeepsTheLargerValueForEachHour` | Record keeps the larger value for each hour: section 4 | ws-overview | todo | |  |
+| `TokenMonTests/Features/Overview/OverviewHourlyHistoryTests.swift::OverviewHourlyHistoryTests::testAnEmptyDayIsNotSaved` | An empty day is not saved: section 4 | ws-overview | todo | |  |
+| `TokenMonTests/Features/Overview/OverviewHourlyHistoryTests.swift::OverviewHourlyHistoryTests::testHistoryReloadsFromDisk` | History reloads from disk: section 4 | ws-overview | todo | |  |
+| `TokenMonTests/Features/Overview/OverviewHourlyHistoryTests.swift::OverviewHourlyHistoryTests::testDaysPastTheRetentionWindowAreDropped` | Days past the retention window are dropped: Oct 31 drops Oct 1 | ws-overview | todo | |  |
+| `TokenMonTests/Features/Overview/OverviewHourlyHistoryTests.swift::OverviewHourlyHistoryTests::testSeriesKeysAreSavedByName` | Series keys are saved by name: section 4 | ws-overview | todo | |  |
+| `TokenMonTests/Features/Overview/OverviewHourlyHistoryTests.swift::OverviewHourlyHistoryTests::testSegmentHeightsAreProportionalAndSumToTheBar` | Segment heights are proportional and sum to the bar: [1,3]/40 gives 10/30 | ws-overview | todo | |  |
+| `TokenMonTests/Features/Overview/OverviewHourlyHistoryTests.swift::OverviewHourlyHistoryTests::testThinSlicesAreLiftedWithoutOverflowingTheBar` | Thin slices are lifted without overflowing the bar: gives 1, 1, 18 | ws-overview | todo | |  |
+| `TokenMonTests/Features/Overview/OverviewHourlyHistoryTests.swift::OverviewHourlyHistoryTests::testSlicesStayProportionalWhenTheBarIsTooShortForMinimums` | Slices stay proportional when the bar is too short for minimums: section 4 | ws-overview | todo | |  |
+| `TokenMonTests/Features/Overview/OverviewHourlyHistoryTests.swift::OverviewHourlyHistoryTests::testBarHeightFollowsActivityWithAVisibleMinimum` | Bar height follows activity with a visible minimum: 30, 60, 3, 0 | ws-overview | todo | |  |
+| `TokenMonTests/Features/Overview/OverviewHourlyHistoryTests.swift::OverviewHourlyHistoryTests::testVisibleHoursWidenToIncludeLateAndEarlyActivity` | Visible hours widen to include late and early activity: section 4 | ws-overview | todo | |  |
+| `TokenMonTests/Features/Overview/OverviewHourlyHistoryTests.swift::OverviewHourlyHistoryTests::testAxisLabelsMatchTheDefaultDayAndNeverCrowd` | Axis labels match the default day and never crowd: {6,9,12,15,18,22} and {2,6,9,12,15,18,21,23} | ws-overview | todo | |  |
+| `TokenMonTests/Features/Overview/OverviewHourlyHistoryTests.swift::OverviewHourlyHistoryTests::testDayTitles` | Day titles: section 4 | ws-overview | todo | |  |
+| `TokenMonTests/Features/Overview/OverviewHourlyHistoryTests.swift::OverviewHourlyHistoryTests::testBackArrowNeedsAnEarlierSavedDay` | Back arrow needs an earlier saved day: section 4 | ws-overview | todo | |  |
+| `TokenMonTests/Features/Overview/ProviderHourlyUsageTests.swift::ProviderHourlyUsageTests::testShortArraysArePaddedToTwentyFourHours` | Short arrays are padded to twenty four hours | ws-overview | todo | |  |
+| `TokenMonTests/Features/Overview/ProviderHourlyUsageTests.swift::ProviderHourlyUsageTests::testLongArraysAreTruncatedToTwentyFourHours` | Long arrays are truncated to twenty four hours | ws-overview | todo | |  |
+| `TokenMonTests/Features/Overview/ProviderHourlyUsageTests.swift::ProviderHourlyUsageTests::testMidnightScheduleStartsAtTodayThenEachLocalMidnight` | Midnight schedule starts at today then each local midnight: 8 entries; DST-safe; Denver 2026-03-08 | ws-overview | todo | |  |
+
+### ws-update (#12)
+
+| Swift test | Behavior | Workstream | Status | Rust test | Notes |
+|---|---|---|---|---|---|
+| `TokenMonTests/Features/Update/AppInstallerTests.swift::AppInstallerTests::testInstallsVerifiedUpdateInPlace` | Installs verified update in place: After every failure the installed app is untouched and has no siblings | ws-update | todo | |  |
+| `TokenMonTests/Features/Update/AppInstallerTests.swift::AppInstallerTests::testChecksumMismatchIsRefused` | Checksum mismatch is refused: After every failure the installed app is untouched and has no siblings | ws-update | todo | |  |
+| `TokenMonTests/Features/Update/AppInstallerTests.swift::AppInstallerTests::testWrongBundleIdentifierIsRefused` | Wrong bundle identifier is refused: After every failure the installed app is untouched and has no siblings | ws-update | todo | | Windows analog: version resource `ProductName == "TokenMon"`. |
+| `TokenMonTests/Features/Update/AppInstallerTests.swift::AppInstallerTests::testDowngradeIsRefused` | Downgrade is refused: After every failure the installed app is untouched and has no siblings | ws-update | todo | |  |
+| `TokenMonTests/Features/Update/AppInstallerTests.swift::AppInstallerTests::testSameVersionIsRefused` | Same version is refused: After every failure the installed app is untouched and has no siblings | ws-update | todo | |  |
+| `TokenMonTests/Features/Update/AppInstallerTests.swift::AppInstallerTests::testUnsignedAppIsRefused` | Unsigned app is refused: After every failure the installed app is untouched and has no siblings | ws-update | todo | | Windows analog: Authenticode via `WinVerifyTrust`; unsigned dev builds check the version resource (signing deferred). |
+| `TokenMonTests/Features/Update/AppInstallerTests.swift::AppInstallerTests::testAppModifiedAfterSigningIsRefused` | App modified after signing is refused: After every failure the installed app is untouched and has no siblings | ws-update | todo | | Windows analog: Authenticode signature fails after tampering. |
+| `TokenMonTests/Features/Update/AppInstallerTests.swift::AppInstallerTests::testSymbolicLinkInArchiveIsRefused` | Symbolic link in archive is refused: After every failure the installed app is untouched and has no siblings | ws-update | todo | | Windows: reject symlink entries and reparse points. |
+| `TokenMonTests/Features/Update/AppInstallerTests.swift::AppInstallerTests::testAppNestedBelowTopLevelIsRefused` | App nested below top level is refused: After every failure the installed app is untouched and has no siblings | ws-update | todo | | Windows: require `TokenMon.exe` at the archive top level. |
+| `TokenMonTests/Features/Update/AppInstallerTests.swift::AppInstallerTests::testDownloadOutsideThisRepositoryIsRefused` | Download outside this repository is refused: 0 requests | ws-update | todo | |  |
+| `TokenMonTests/Features/Update/AppInstallerTests.swift::AppInstallerTests::testReadOnlyInstallFolderIsRefused` | Read only install folder is refused: notWritable, 0 requests | ws-update | todo | | Windows: e.g. Program Files without elevation. |
+| `TokenMonTests/Features/Update/AppInstallerTests.swift::AppInstallerTests::testDownloadStopsAtSizeLimit` | Download stops at size limit: After every failure the installed app is untouched and has no siblings | ws-update | todo | |  |
+| `TokenMonTests/Features/Update/AppInstallerTests.swift::AppInstallerTests::testDownloadReturnsSHA256OfBody` | Download returns SHA256 of body: After every failure the installed app is untouched and has no siblings | ws-update | todo | |  |
+| `TokenMonTests/Features/Update/AppInstallerTests.swift::AppInstallerTests::testCanReplaceRunningAppChecksTheGivenBundle` | Can replace running app checks the given bundle: After every failure the installed app is untouched and has no siblings | ws-update | todo | | Windows analog: the exe directory is writable and not a temp/zip-extract folder. |
+| `TokenMonTests/Features/Update/AppInstallerTests.swift::AppInstallerTests::testDeclaredUncompressedBytesParsesZipinfoSummary` | Declared uncompressed bytes parses zipinfo summary: After every failure the installed app is untouched and has no siblings | ws-update | n/a | | macOS-only: parses `zipinfo` text output. Windows reads declared sizes from the zip central directory with the `zip` crate; the size cap is tracked as FEAT-update-zip-safety (spec 01 §8). |
+| `TokenMonTests/Features/Update/AppVersionTests.swift::AppVersionTests::testParsesPlainAndTaggedVersions` | Parses plain and tagged versions | ws-update | todo | |  |
+| `TokenMonTests/Features/Update/AppVersionTests.swift::AppVersionTests::testParsesBuildMetadata` | Parses build metadata | ws-update | todo | |  |
+| `TokenMonTests/Features/Update/AppVersionTests.swift::AppVersionTests::testParsesReleaseNamePrefix` | Parses release name prefix | ws-update | todo | |  |
+| `TokenMonTests/Features/Update/AppVersionTests.swift::AppVersionTests::testRejectsUnparseableTags` | Rejects unparseable tags | ws-update | todo | |  |
+| `TokenMonTests/Features/Update/AppVersionTests.swift::AppVersionTests::testComparesNumericallyNotLexically` | Compares numerically not lexically | ws-update | todo | |  |
+| `TokenMonTests/Features/Update/AppVersionTests.swift::AppVersionTests::testShorterVersionsPadWithZero` | Shorter versions pad with zero | ws-update | todo | |  |
+| `TokenMonTests/Features/Update/AppVersionTests.swift::AppVersionTests::testPrereleaseSortsBelowItsFinalRelease` | Prerelease sorts below its final release | ws-update | todo | |  |
+| `TokenMonTests/Features/Update/AppVersionTests.swift::AppVersionTests::testPrereleaseComparesNumericIdentifiersNumerically` | Prerelease compares numeric identifiers numerically | ws-update | todo | |  |
+| `TokenMonTests/Features/Update/ReleaseFeedTests.swift::ReleaseFeedTests::testReportsNewerRelease` | Reports newer release | ws-update | todo | |  |
+| `TokenMonTests/Features/Update/ReleaseFeedTests.swift::ReleaseFeedTests::testSameVersionIsNotAnUpdate` | Same version is not an update | ws-update | todo | |  |
+| `TokenMonTests/Features/Update/ReleaseFeedTests.swift::ReleaseFeedTests::testOlderVersionIsNotAnUpdate` | Older version is not an update | ws-update | todo | |  |
+| `TokenMonTests/Features/Update/ReleaseFeedTests.swift::ReleaseFeedTests::testDraftsAndPrereleasesAreIgnored` | Drafts and prereleases are ignored | ws-update | todo | |  |
+| `TokenMonTests/Features/Update/ReleaseFeedTests.swift::ReleaseFeedTests::testMissingPageURLFallsBackToReleasesPage` | Missing page URL falls back to releases page | ws-update | todo | |  |
+| `TokenMonTests/Features/Update/ReleaseFeedTests.swift::ReleaseFeedTests::testArchiveURLPrefersTokenMonZipOnGitHub` | Archive URL prefers token mon zip on git hub | ws-update | todo | |  |
+| `TokenMonTests/Features/Update/ReleaseFeedTests.swift::ReleaseFeedTests::testUntrustedArchiveIsIgnored` | Untrusted archive is ignored | ws-update | todo | |  |
+| `TokenMonTests/Features/Update/ReleaseFeedTests.swift::ReleaseFeedTests::testAssetDigestAndInstallerPackageAreRead` | Asset digest and installer package are read: uppercase hex is lowercased | ws-update | todo | |  |
+| `TokenMonTests/Features/Update/ReleaseFeedTests.swift::ReleaseFeedTests::testDSYMArchiveIsNotChosen` | DSYM archive is not chosen | ws-update | todo | |  |
+| `TokenMonTests/Features/Update/ReleaseFeedTests.swift::ReleaseFeedTests::testMalformedDigestIsDropped` | Malformed digest is dropped | ws-update | todo | |  |
+| `TokenMonTests/Features/Update/ReleaseFeedTests.swift::ReleaseFeedTests::testTrustedDownloadIsLimitedToThisRepositorysReleases` | Trusted download is limited to this repositorys releases: 4 trusted / 8 untrusted URLs; the CDN URL is not a "repository download" | ws-update | todo | |  |
+| `TokenMonTests/Features/Update/ReleaseFeedTests.swift::ReleaseFeedTests::testUnparseableTagThrows` | Unparseable tag throws | ws-update | todo | |  |
+| `TokenMonTests/Features/Update/UpdateCheckerTests.swift::UpdateCheckerTests::testNewerReleaseIsPublished` | Newer release is published: 3.4 / 3.5 | ws-update | todo | |  |
+| `TokenMonTests/Features/Update/UpdateCheckerTests.swift::UpdateCheckerTests::testSameOrOlderReleaseIsIgnored` | Same or older release is ignored: 3.4 / 3.5 | ws-update | todo | |  |
+| `TokenMonTests/Features/Update/UpdateCheckerTests.swift::UpdateCheckerTests::testDraftAndPrereleaseAreIgnored` | Draft and prerelease are ignored: 3.4 / 3.5 | ws-update | todo | |  |
+| `TokenMonTests/Features/Update/UpdateCheckerTests.swift::UpdateCheckerTests::testRateLimit403ReportsFriendlyError` | Rate limit403 reports friendly error: 3.4 / 3.5 | ws-update | todo | |  |
+| `TokenMonTests/Features/Update/UpdateCheckerTests.swift::UpdateCheckerTests::testServerErrorIsReported` | Server error is reported: 3.4 / 3.5 | ws-update | todo | |  |
+| `TokenMonTests/Features/Update/UpdateCheckerTests.swift::UpdateCheckerTests::testMissingBundleVersionSkipsCheck` | Missing bundle version skips check: 0 requests | ws-update | todo | | Windows: version from `CARGO_PKG_VERSION`. |
+| `TokenMonTests/Features/Update/UpdateCheckerTests.swift::UpdateCheckerTests::testManualCheckRunsWhenAutomaticChecksAreOff` | Manual check runs when automatic checks are off: "You're up to date." | ws-update | todo | |  |
+| `TokenMonTests/Features/Update/UpdateCheckerTests.swift::UpdateCheckerTests::testManualCheckSurfacesANewerRelease` | Manual check surfaces a newer release: actionTitle "Update to 1.5.1…" | ws-update | todo | |  |
+| `TokenMonTests/Features/Update/UpdateCheckerTests.swift::UpdateCheckerTests::testChecksDisabledSkipsRequest` | Checks disabled skips request: 3.4 / 3.5 | ws-update | todo | |  |
+| `TokenMonTests/Features/Update/UpdateCheckerTests.swift::UpdateCheckerTests::testNotWritableInstallOffersInstallerPackage` | Not writable install offers installer package: opens `.pkg`, 1 request | ws-update | todo | | Windows: offers the `.msi` instead of the `.pkg`. |
+| `TokenMonTests/Features/Update/UpdateCheckerTests.swift::UpdateCheckerTests::testMissingDigestOpensReleasePageInsteadOfInstalling` | Missing digest opens release page instead of installing: 3.4 / 3.5 | ws-update | todo | |  |
+
+### ws-grok (#13)
+
+| Swift test | Behavior | Workstream | Status | Rust test | Notes |
+|---|---|---|---|---|---|
+| `TokenMonTests/Core/Polling/PollerSessionGuardTests.swift::PollerSessionGuardTests::testGrokStaleUnauthorizedDoesNotInvalidateNewSession` | sign-out + new session during the fetch, then 401: still signed in | ws-grok | todo | |  |
+| `TokenMonTests/Core/Polling/PollerSessionGuardTests.swift::PollerSessionGuardTests::testGrokCurrentUnauthorizedInvalidatesSession` | 3 rejections in a row (signed in after each of the first 2): `needsSignIn`, not signed in | ws-grok | todo | |  |
+| `TokenMonTests/Core/Polling/PollerSessionGuardTests.swift::PollerSessionGuardTests::testGrokStaleTransportErrorDoesNotClobberNewSession` | A stale timeout leaves `lastError` nil and the session signed in | ws-grok | todo | |  |
+| `TokenMonTests/Platform/Auth/AuthInvalidationTests.swift::AuthInvalidationTests::testGrokInvalidationAndSignOutKeepHourlyDeltas` | Grok invalidation and sign out keep hourly deltas: history retention | ws-grok | todo | |  |
+| `TokenMonTests/Platform/Auth/ProviderCookieAllowlistTests.swift::ProviderCookieAllowlistTests::testGrokPolicyDropsXSessionCookies` | Grok policy drops x session cookies: real policies | ws-grok | todo | |  |
+| `TokenMonTests/Platform/Auth/ProviderCookieAllowlistTests.swift::ProviderCookieAllowlistTests::testGrokDomainExcludesXAndTwitter` | Grok domain excludes x and twitter: real policies | ws-grok | todo | |  |
+| `TokenMonTests/Platform/Auth/ProviderCookieAllowlistTests.swift::ProviderCookieAllowlistTests::testGrokPolicyWithoutSessionCookieCapturesNothing` | Grok policy without session cookie captures nothing: real policies | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/BillingPeriodWindowTests.swift::BillingPeriodWindowTests::testBillingPeriodWeekStartsOnPeriodStartDay` | Reset Thu 07-16T18:57Z. Expected bounds by `now`: 07-15T12Z: Thu 9 – Wed 15 (span 6). 07-16T12Z (reset morning): 9 – 16 (span 7). offset −1 from the reset morning: 2 – 8. 07-16T20Z (after the reset): 16 – 22, with exactly one Thursday. Next reset 07-23 at 0… | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/BillingPeriodWindowTests.swift::BillingPeriodWindowTests::testStaleResetRollsForwardToContainToday` | Reset 07-16, now 07-27: 23 – 29, contains today. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/BillingPeriodWindowTests.swift::BillingPeriodWindowTests::testWeeklyChartRefusedWithoutResetsAt` | Weekly chart refused without resets at: No reset gives a nil week. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/BillingPeriodWindowTests.swift::BillingPeriodWindowTests::testPeriodStartThursdayShowsUsage` | now 07-16T20Z, reset 07-23, single sample 12 (chat 8, build 4): week starts on Thursday, and Thursday's bar is 12 with segments. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/BillingPeriodWindowTests.swift::BillingPeriodWindowTests::testCrossResetDeltasDoNotInventDropBar` | Wed 90 (old reset) and Fri 8 (new reset), window from the new reset: Wed is outside the window; Fri is 0 (no drop bar, no segment > 50); estimated. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/BillingPeriodWindowTests.swift::BillingPeriodWindowTests::testPreviousWeekKeepsPriorPeriodDailyUsageAfterRollover` | Mon 40, Tue 55, Wed 70 (old), Fri 8 (new); offset −1: window 9 – 15, Tue 15, Wed 15, hasDailyData. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/BillingPeriodWindowTests.swift::BillingPeriodWindowTests::testResetDayUsageBeforeResetInstantIsCharted` | Wed 60 and Thu morning 72, now Thu 12Z before the 18:57 reset: 8 days, the last is today with 12. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/BillingPeriodWindowTests.swift::BillingPeriodWindowTests::testEarlyResetKeepsOldWindowHistoryOnThePreviousPage` | Old reset 10-07T18:05, new reset 10-09T18:05. Samples 09-30 10, 10-01 30 (old), 10-02T20 3, 10-03 8 (new); now 10-03T15. Current week starts Oct 2, and Oct 2's bar is 3. Previous page: Oct 1 is 20. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokHistoryStoreTests.swift::GrokHistoryStoreTests::testAppendInsertsAtFrontOfRecent` | Yesterday 20 then today 10: `recent.count` 2 with the newest first (10). | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokHistoryStoreTests.swift::GrokHistoryStoreTests::testSecondSameDaySampleReplacesInsteadOfPrepending` | 10, then 42, then 55 on the same day: 1 entry, 55, disk 1 row. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokHistoryStoreTests.swift::GrokHistoryStoreTests::testTinyChangeWithinSixtySecondsIsSkipped` | +0.01 at +30 s is ignored; the value stays 50. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokHistoryStoreTests.swift::GrokHistoryStoreTests::testSignificantChangeWithinSixtySecondsIsKept` | Significant change within sixty seconds is kept: +5 at +30 s replaces (55); count 1. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokHistoryStoreTests.swift::GrokHistoryStoreTests::testDifferentDaysProduceDistinctEntries` | Different days produce distinct entries: 2 entries. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokHistoryStoreTests.swift::GrokHistoryStoreTests::testRecentCapEvictsOldest` | 250 days appended: `recent ≤ 200`; disk keeps 250. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokHistoryStoreTests.swift::GrokHistoryStoreTests::testClearEmptiesRecentAndDisk` | Clear empties recent and disk: Both empty. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokHistoryStoreTests.swift::GrokHistoryStoreTests::testRowsAreKeyedByAccount` | Same day, accounts a (40) and b (5): 2 rows; active b; recent `[5]`. Switching to a gives `[40]`. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokHistoryStoreTests.swift::GrokHistoryStoreTests::testUnchangedUsageLaterTheSameDayLeavesTheRowAlone` | An identical later poll keeps the original `fetchedAt`; 31 then replaces it. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokHistoryStoreTests.swift::GrokHistoryStoreTests::testHistoryIsSavedAndReloaded` | After flush, a reload has `[42]`, recent 1, and `storeFailed` false. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokHistoryStoreTests.swift::GrokHistoryStoreTests::testUnreadableHistoryIsKept` | The file holds `not json`: `storeFailed`. After append and flush the file is still `not json`, and recent is 1 (in memory). | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokHistoryStoreTests.swift::GrokHistoryStoreTests::testSwiftDataHistoryIsImportedOnce` | macOS-only legacy import. **N/A on Windows**; drop or replace with a no-op test. | ws-grok | n/a | | macOS-only: one-time import of the legacy SwiftData `history.store`; no Windows equivalent (spec 02 §1.4, §5.5). |
+| `TokenMonTests/Providers/Grok/GrokPollerGatingTests.swift::GrokPollerGatingTests::testDisabledGrokNeverFetchesEvenWhenSignedIn` | Only Cursor enabled: `refreshNow` performs 0 fetches, and `delayUntilDue` is nil (parked). | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokPollerGatingTests.swift::GrokPollerGatingTests::testLoopParksWhileGrokIsNotNeeded` | Selected tab Cursor, no menu-bar graph, threshold off: parked. Turning the Grok menu-bar graph on gives `delayUntilDue == 0`. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokPollerGatingTests.swift::GrokPollerGatingTests::testCancellationIsNotReportedAsAFailure` | A fetch that throws cancellation leaves `lastError` nil and `needsSignIn` false. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokPollerGatingTests.swift::GrokPollerGatingTests::testFailureAfterASnapshotStillReportsTheError` | The snapshot is kept, and `lastError == "Grok network error: offline"`. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokPollerGatingTests.swift::GrokPollerGatingTests::testManualRefreshFetchesWhenEnabledButNotShown` | Manual refresh fetches when enabled but not shown: 1 fetch, snapshot set. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokPollerGatingTests.swift::GrokPollerGatingTests::testPollerBuildsTheCurrentWeek` | `currentWeek` is nil before a refresh. After a refresh with reset = now+3 days, the week is non-nil, `week(0) == currentWeek`, and `week(-1)` is non-nil. After `signOut`, `currentWeek` is nil. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokUsageClientTests.swift::GrokUsageClientTests::testCancelledFetchThrowsCancellationError` | Cancelling a never-responding request surfaces cancellation. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokUsageClientTests.swift::GrokUsageClientTests::testBillingSuccessSkipsRESTProbes` | Billing 200 with fixture A gives used 36; only the billing path is requested. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokUsageClientTests.swift::GrokUsageClientTests::testBillingUnauthorizedRejectsWithoutProbing` | Billing 401 gives `.unauthorized`; only billing is requested. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokUsageClientTests.swift::GrokUsageClientTests::testTrailersOnlyUnauthenticatedIsUnauthorized` | 200, headers `grpc-status: 16`, `grpc-message: unauthenticated`, empty body: `.unauthorized`. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokUsageClientTests.swift::GrokUsageClientTests::testBillingChallengeIsTransient` | 403 `text/html` "Just a moment..." is not `.unauthorized`. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokUsageClientTests.swift::GrokUsageClientTests::testRESTProbeRejectionNeverInvalidates` | Billing 500 and all REST 401: the error is not unauthorized; requested paths are billing followed by all 4 REST paths in order. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokUsageClientTests.swift::GrokUsageClientTests::testRESTProbeSuppliesUsageWhenBillingFails` | Billing 503 and REST #3 (`/rest/billing/usage`) returning `{"usage":{"usedPercent":42}}` give used 42. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokUsageClientTests.swift::GrokUsageClientTests::testUnrelatedPercentKeyIsNotUsage` | `{"data":{"percent":50,"name":"profile completion"}}` gives nil. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokUsageClientTests.swift::GrokUsageClientTests::testOutOfRangeUsageIsRejected` | Out of range usage is rejected: usedPercent 1500 → nil; −3 → nil. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokUsageClientTests.swift::GrokUsageClientTests::testProductsWithoutUsageKeysAreIgnored` | Products with only `value`/`percent` keys give nil. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokUsageParsingTests.swift::GrokUsageParsingTests::testParseFixtureJSON` | REST JSON `{usedPercent:35, remainingPercent:65, resetsAt:"2026-07-16T20:25:00Z", products:[build 25, api 9, chat 1]}` gives used 35, remaining 65, 3 products, `products[0].id=="build"` with colour `build`. Order is preserved; the REST array is **not** re-s… | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokUsageParsingTests.swift::GrokUsageParsingTests::testRemainingDefaultsFromUsed` | `WeeklyUsageSnapshot(used:40)` has remaining 60. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokUsageParsingTests.swift::GrokUsageParsingTests::testUsageValuesAreClampedAtModelBoundary` | used 140 → 100; remaining −20 → 0; product 140 → 100. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokUsageParsingTests.swift::GrokUsageParsingTests::testGrokDomainMatchingDoesNotAcceptLookalikes` | `.grok.com` ✓, `accounts.x.ai` ✓, `evilgrok.com` ✗, `x.ai.evil.example` ✗. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokUsageParsingTests.swift::GrokUsageParsingTests::testProductColorMapping` | `build`→build, `API`→api (case-insensitive), `imagine`→imagine. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokUsageParsingTests.swift::GrokUsageParsingTests::testExportCSVContainsHeader` | CSV of the `.preview` snapshot contains `fetchedAt,usedPercent` and `build:25`. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokUsageParsingTests.swift::GrokUsageParsingTests::testExportCSVNeutralizesFormulaInjection` | Export CSV neutralizes formula injection | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokUsageParsingTests.swift::GrokUsageParsingTests::testCSVEscapeGuardsLeadingTabAndCarriageReturn` | `"\t=1+1"`→`'\t=1+1`; `"\r=1+1"`→`"'\r=1+1"` (quoted); `"\r\n=1+1"`→`"'\r\n=1+1"`; `-5`→`'-5`; `plain`→`plain`. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokUsageParsingTests.swift::GrokUsageParsingTests::testCSVEscapeQuotesCarriageReturnAndLineBreaks` | `a\rb`, `a\r\nb`, `a\nb`, `a,b` are each wrapped in quotes; `say "hi"`→`"say ""hi"""`. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokUsageParsingTests.swift::GrokUsageParsingTests::testExportJSONRoundTrip` | Export JSON round trip: JSON export parses as an array. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokUsageParsingTests.swift::GrokUsageParsingTests::testByProductMapParse` | `{usedPercent:35, byProduct:{build:25,api:9,chat:1}}` gives 3 products. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokUsageParsingTests.swift::GrokUsageParsingTests::testGRPCProductBreakdown` | Hex fixture A (§5.8) gives used 36, 2 products: chat 23, build 13. The enum-6 entry with no percent is dropped. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokUsageParsingTests.swift::GrokUsageParsingTests::testOversizedLengthVarintDoesNotCrash` | Oversized length varint does not crash: Bytes `3A FF×9 7F` throw (no crash). | ws-grok | todo | | Fuzz target spec 02 §6 #1-2. |
+| `TokenMonTests/Providers/Grok/GrokUsageParsingTests.swift::GrokUsageParsingTests::testNestedKeyVarintPastMessageEndDoesNotCrash` | A key varint that runs past a nested sub-message end stops the walk without crashing (bytes `12 01 92 01 00`; upstream #51). | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokUsageParsingTests.swift::GrokUsageParsingTests::testProductKeyVarintPastMessageEndDoesNotCrash` | A product key varint past the field-7 sub-message end stops the product scan without crashing (upstream #51). | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokUsageParsingTests.swift::GrokUsageParsingTests::testProductValueVarintPastMessageEndRejectsProduct` | A product value varint past the sub-message end rejects that product instead of reading bytes outside it (upstream #51). | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokUsageParsingTests.swift::GrokUsageParsingTests::testDeeplyNestedMessagesDoNotOverflowStack` | 200,000 nested length-delimited fields do not overflow the stack; the product scan stops at depth 64 (upstream #51). | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokUsageParsingTests.swift::GrokUsageParsingTests::testGRPCLiveCreditsConfigEnumMap` | Hex fixture B gives used 64; build 30, chat 21, imagine 12, other 1; no voice; 4 products; order `[chat, build, imagine, other]`. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokUsageParsingTests.swift::GrokUsageParsingTests::testGRPCProductBreakdownWithVoiceGap` | Built frame: used 64, products (2:30),(4:21),(6:nil),(5:12),(3:1) give 4 products with correct pairing and no voice. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokUsageParsingTests.swift::GrokUsageParsingTests::testGRPCProductBreakdownWithExplicitZeroVoicePercent` | Same, with (6:0.0): imagine 12, other 1, no voice, count 4. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokUsageParsingTests.swift::GrokUsageParsingTests::testDailyUsageBuilderDeltas` | UTC, firstWeekday Monday. now 2026-07-15T12Z, reset 07-16T18:57Z. Yesterday 12:00 used 10 (build 7, chat 3); today 10:00 used 30 (build 20, chat 10). Result: 7 days, hasDailyData, not estimated; yesterday 0; today 20 with 2 segments. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokUsageParsingTests.swift::GrokUsageParsingTests::testDailyUsageOnlyShowsProductsThatGrew` | now 07-12T12Z, reset 07-13T09Z. Samples without resetsAt: 39 (chat 23, build 13, api 3) then 42 (chat 26, …). Today is 3, a single chat segment. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokUsageParsingTests.swift::GrokUsageParsingTests::testDailyUsageShowsYesterdayAfterDayRollover` | Flat 39 → 39 gives both days 0, not estimated, no daily data. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokUsageParsingTests.swift::GrokUsageParsingTests::testDailyUsageEmptyUntilSecondSampleDay` | A single sample gives no daily data, estimated, all segments empty. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokUsageParsingTests.swift::GrokUsageParsingTests::testDailyUsageExcludesFlatBuildFromToday` | 46 → 51 → 58 with build flat at 16: today is 7 with no build segment, and chat, api, and voice present. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokUsageParsingTests.swift::GrokUsageParsingTests::testDailyUsageMidPeriodRecalibrationRebasesOntoThatDay` | 51 → 71 → 28 with the same reset: today `isAfterReset`, earlier days 0, today ≈28 including build, estimated = true. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokUsageParsingTests.swift::GrokUsageParsingTests::testDailyUsageRealResetShowsPostResetUsage` | Yesterday 90 (old reset 07-16) and today 12 (new reset 07-23), window from the old reset, now 07-15T20Z: today `isAfterReset`, total 12, includes chat. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokUsageParsingTests.swift::GrokUsageParsingTests::testDailyUsageIgnoresPriorBillingPeriodSample` | A prior-period sample (reset 07-09) plus one in-week sample: all bars empty, estimated. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokUsageParsingTests.swift::GrokUsageParsingTests::testDailyCapFillFraction` | `fill(10) = 10/(100/7)`; `fill(21) = 1`; `fill(0) = 0`. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokUsageParsingTests.swift::GrokUsageParsingTests::testGRPCParseKeepsPastCanonicalReset` | Frame with reset varint 1_750_000_000 (in the past) gives `resetsAt` == that instant. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/GrokUsageParsingTests.swift::GrokUsageParsingTests::testDailyUsagePreviewHasSevenDays` | Preview: 7 days, hasDailyData, start weekday Thursday (5), end Wednesday (4). | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/ProductCatalogTests.swift::ProductCatalogTests::testFilteredKeepsVisibleAboveThreshold` | threshold 5 over chat 50, build 30, api 2 gives `[chat, build]`. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/ProductCatalogTests.swift::ProductCatalogTests::testFilteredExcludesHiddenProducts` | Filtered excludes hidden products: visible `{chat}` gives `[chat]`. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/ProductCatalogTests.swift::ProductCatalogTests::testFilteredOrdersByDisplayOrder` | Input other, chat, build gives `[chat, build, other]`. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/ProductCatalogTests.swift::ProductCatalogTests::testFilteredEmptyWhenNoneAboveThreshold` | Filtered empty when none above threshold: Empty. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/ProductCatalogTests.swift::ProductCatalogTests::testPanelProductsKeepsSynthesizedOtherSlice` | `synthesizeProducts(64)` gives `[other]` at 64. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/ProductCatalogTests.swift::ProductCatalogTests::testPanelProductsDropsZeroValueProducts` | Panel products drops zero value products: chat 0, build 40 gives `[build]`. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/ProductCatalogTests.swift::ProductCatalogTests::testPanelProductsRespectsVisibility` | Panel products respects visibility: `[chat]`. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/ProductCatalogTests.swift::ProductCatalogTests::testCategoryProductsAlwaysIncludesTheFourCategories` | chat 40, api 8, other 7 gives ids `[chat, build, imagine, voice]` with values `[40, 0, 0, 0]`. | ws-grok | todo | |  |
+| `TokenMonTests/Providers/Grok/ProductCatalogTests.swift::ProductCatalogTests::testCategoryProductsRespectsVisibility` | visible `{chat, voice}` gives `[chat, voice]`. | ws-grok | todo | |  |
+| `TokenMonTests/UI/SignIn/SignInBrowserNavigationTests.swift::SignInBrowserNavigationTests::testGrokAuthHostUsesExactOrSuffixMatch` | accounts.x.ai, x.com, api.x.com true; netflix.com, x.com.evil.example false. (Provider slice.) | ws-grok | todo | |  |
+| `TokenMonTests/UI/SignIn/SignInBrowserNavigationTests.swift::SignInBrowserNavigationTests::testGrokReturnPageRejectsLookalikeHost` | grok.com/?_s=usage, www.grok.com true; grok.com.evil.example, notgrok.com false. (Provider slice.) | ws-grok | todo | |  |
+| `Tests/Manual/CoreTestsMain.swift::CoreTestsMain::usedpercent` | REST JSON fixture parses with used 35%. | ws-grok | todo | | `make test-core` smoke; same behavior as XCTest `GrokUsageParsingTests::testParseFixtureJSON` (may share its Rust test). |
+| `Tests/Manual/CoreTestsMain.swift::CoreTestsMain::remainingpercent` | REST JSON fixture parses with remaining 65%. | ws-grok | todo | | `make test-core` smoke; same behavior as XCTest `GrokUsageParsingTests::testParseFixtureJSON` (may share its Rust test). |
+| `Tests/Manual/CoreTestsMain.swift::CoreTestsMain::product_count` | REST JSON fixture yields 3 products. | ws-grok | todo | | `make test-core` smoke; same behavior as XCTest `GrokUsageParsingTests::testParseFixtureJSON` (may share its Rust test). |
+| `Tests/Manual/CoreTestsMain.swift::CoreTestsMain::build_color` | First REST product (`build`) gets the build colour token. | ws-grok | todo | | `make test-core` smoke; same behavior as XCTest `GrokUsageParsingTests::testParseFixtureJSON` (may share its Rust test). |
+| `Tests/Manual/CoreTestsMain.swift::CoreTestsMain::remaining_default` | `WeeklyUsageSnapshot(used: 40)` has remaining 60. | ws-grok | todo | | `make test-core` smoke; same behavior as XCTest `GrokUsageParsingTests::testRemainingDefaultsFromUsed` (may share its Rust test). |
+| `Tests/Manual/CoreTestsMain.swift::CoreTestsMain::csv_header` | CSV export of the preview snapshot contains `fetchedAt,usedPercent`. | ws-grok | todo | | `make test-core` smoke; same behavior as XCTest `GrokUsageParsingTests::testExportCSVContainsHeader` (may share its Rust test). |
+| `Tests/Manual/CoreTestsMain.swift::CoreTestsMain::csv_products` | CSV export contains the product cell `build:25`. | ws-grok | todo | | `make test-core` smoke; same behavior as XCTest `GrokUsageParsingTests::testExportCSVContainsHeader` (may share its Rust test). |
+| `Tests/Manual/CoreTestsMain.swift::CoreTestsMain::json_array` | JSON export parses as an array. | ws-grok | todo | | `make test-core` smoke; same behavior as XCTest `GrokUsageParsingTests::testExportJSONRoundTrip` (may share its Rust test). |
+| `Tests/Manual/CoreTestsMain.swift::CoreTestsMain::color_map_build` | Product id `build` maps to the build colour. | ws-grok | todo | | `make test-core` smoke; same behavior as XCTest `GrokUsageParsingTests::testProductColorMapping` (may share its Rust test). |
+| `Tests/Manual/CoreTestsMain.swift::CoreTestsMain::color_map_api` | Product id `API` maps to the api colour (case-insensitive). | ws-grok | todo | | `make test-core` smoke; same behavior as XCTest `GrokUsageParsingTests::testProductColorMapping` (may share its Rust test). |
+| `Tests/Manual/CoreTestsMain.swift::CoreTestsMain::byproduct_count` | REST `byProduct` map form yields 3 products. | ws-grok | todo | | `make test-core` smoke; same behavior as XCTest `GrokUsageParsingTests::testByProductMapParse` (may share its Rust test). |
+| `Tests/Manual/CoreTestsMain.swift::CoreTestsMain::grpc_usedpercent` | Live gRPC fixture A gives used 36%. | ws-grok | todo | | `make test-core` smoke; same behavior as XCTest `GrokUsageParsingTests::testGRPCProductBreakdown` (may share its Rust test). |
+| `Tests/Manual/CoreTestsMain.swift::CoreTestsMain::grpc_product_count` | gRPC fixture A yields 2 products. | ws-grok | todo | | `make test-core` smoke; same behavior as XCTest `GrokUsageParsingTests::testGRPCProductBreakdown` (may share its Rust test). |
+| `Tests/Manual/CoreTestsMain.swift::CoreTestsMain::grpc_chat` | gRPC fixture A has chat at 23%. | ws-grok | todo | | `make test-core` smoke; same behavior as XCTest `GrokUsageParsingTests::testGRPCProductBreakdown` (may share its Rust test). |
+| `Tests/Manual/CoreTestsMain.swift::CoreTestsMain::grpc_build` | gRPC fixture A has build at 13%. | ws-grok | todo | | `make test-core` smoke; same behavior as XCTest `GrokUsageParsingTests::testGRPCProductBreakdown` (may share its Rust test). |
+| `Tests/Manual/CoreTestsMain.swift::CoreTestsMain::daily_week_days` | Daily preview week has 7 days. | ws-grok | todo | | `make test-core` smoke; same behavior as XCTest `GrokUsageParsingTests::testDailyUsagePreviewHasSevenDays` (may share its Rust test). |
+| `Tests/Manual/CoreTestsMain.swift::CoreTestsMain::daily_has_data` | Daily preview week has daily data. | ws-grok | todo | | `make test-core` smoke; same behavior as XCTest `GrokUsageParsingTests::testDailyUsagePreviewHasSevenDays` (may share its Rust test). |
+| `Tests/Manual/CoreTestsMain.swift::CoreTestsMain::daily_cap_math` | `fillFraction(10) == 10 / (100/7)`. | ws-grok | todo | | `make test-core` smoke; same behavior as XCTest `GrokUsageParsingTests::testDailyCapFillFraction` (may share its Rust test). |
+| `Tests/Manual/CoreTestsMain.swift::CoreTestsMain::period_starts_thursday` | Billing-period week for reset Thu 07-16 18:57Z at now 07-15 starts on Thursday. | ws-grok | todo | | `make test-core` smoke; same behavior as XCTest `BillingPeriodWindowTests::testBillingPeriodWeekStartsOnPeriodStartDay` (may share its Rust test). |
+| `Tests/Manual/CoreTestsMain.swift::CoreTestsMain::period_ends_wednesday` | The same billing-period week ends on Wednesday. | ws-grok | todo | | `make test-core` smoke; same behavior as XCTest `BillingPeriodWindowTests::testBillingPeriodWeekStartsOnPeriodStartDay` (may share its Rust test). |
+
+### ws-cursor (#14)
+
+| Swift test | Behavior | Workstream | Status | Rust test | Notes |
+|---|---|---|---|---|---|
+| `TokenMonTests/Core/Polling/PollerSessionGuardTests.swift::PollerSessionGuardTests::testCursorStaleSuccessIsDropped` | Cursor stale success is dropped: snapshot stays nil | ws-cursor | todo | |  |
+| `TokenMonTests/Core/Polling/PollerSessionGuardTests.swift::PollerSessionGuardTests::testCursorStaleUnauthorizedDoesNotInvalidateNewSession` | Cursor stale unauthorized does not invalidate new session: still signed in | ws-cursor | todo | |  |
+| `TokenMonTests/Core/Polling/PollerSessionGuardTests.swift::PollerSessionGuardTests::testCursorCurrentUnauthorizedInvalidatesSession` | Cursor current unauthorized invalidates session: invalidated after 3 | ws-cursor | todo | |  |
+| `TokenMonTests/Platform/Auth/ProviderCookieAllowlistTests.swift::ProviderCookieAllowlistTests::testCursorPolicyStoresOnlyTheSessionToken` | Cursor policy stores only the session token: real policies | ws-cursor | todo | |  |
+| `TokenMonTests/Providers/Cursor/CursorEventCacheTests.swift::CursorEventCacheTests::testEventsWindowStartIsCycleStartWithinCap` | A cycle start 10 days back is returned as-is. | ws-cursor | todo | |  |
+| `TokenMonTests/Providers/Cursor/CursorEventCacheTests.swift::CursorEventCacheTests::testEventsWindowStartCapsAtThirtyOneDays` | A cycle start 90 days back, or nil, gives `startOfDay(now) − 31 days`. | ws-cursor | todo | |  |
+| `TokenMonTests/Providers/Cursor/CursorEventCacheTests.swift::CursorEventCacheTests::testEventsArePagedOnceWithinRefreshInterval` | Two fetches 60 s apart: 1 events page, 2 summaries, same costStats ($2.50). At +301 s, 2 pages. | ws-cursor | todo | |  |
+| `TokenMonTests/Providers/Cursor/CursorEventCacheTests.swift::CursorEventCacheTests::testRefreshPagesOnlyEventsSinceTheLastFetch` | The second fetch's startMs equals `(now − 900 s)` in ms; the cached event (1 h before) is kept, $2.50. | ws-cursor | todo | |  |
+| `TokenMonTests/Providers/Cursor/CursorEventCacheTests.swift::CursorEventCacheTests::testWholeWindowIsPagedAgainAfterTheFullRefreshInterval` | At +3601 s both start values are equal (full window); $2.50. | ws-cursor | todo | |  |
+| `TokenMonTests/Providers/Cursor/CursorEventCacheTests.swift::CursorEventCacheTests::testEventsFailureReusesCachedAggregates` | A later events failure returns the cached $4 and a non-empty hourly. | ws-cursor | todo | |  |
+| `TokenMonTests/Providers/Cursor/CursorEventCacheTests.swift::CursorEventCacheTests::testEventsFailureWithoutCacheLeavesCostStatsNil` | Events failure without cache leaves cost stats nil: costStats nil; hourly and weights empty. | ws-cursor | todo | |  |
+| `TokenMonTests/Providers/Cursor/CursorEventCacheTests.swift::CursorEventCacheTests::testCacheIsScopedToSession` | Cache is scoped to session: Key `a` hits; `b` misses; `clear` empties. | ws-cursor | todo | |  |
+| `TokenMonTests/Providers/Cursor/CursorEventCacheTests.swift::CursorEventCacheTests::testPollerKeepsPreviousEventFiguresWhenEventsAreUnavailable` | The second poll (costStats nil, same nil cycle start) keeps the stats ($7/70) and the previous hourly. | ws-cursor | todo | |  |
+| `TokenMonTests/Providers/Cursor/CursorEventCacheTests.swift::CursorEventCacheTests::testAuthPageMatchesIdentityHostsExactlyOrBySuffix` | Auth page matches identity hosts exactly or by suffix: See §3.1. | ws-cursor | todo | |  |
+| `TokenMonTests/Providers/Cursor/CursorUsageClientTests.swift::CursorUsageClientTests::testParseSummaryUsesTotalAutoAPIPercents` | Summary with `billingCycleStart:"2026-07-13T00:00:00.000Z"`, `billingCycleEnd:"2026-08-14T12:00:00.000Z"`, `membershipType:"ultra"`, plan {used 7600, limit 40000, total 19, auto 16, api 30}, onDemand {enabled, used 2309, limit null} gives used 19; 3 pools (… | ws-cursor | todo | |  |
+| `TokenMonTests/Providers/Cursor/CursorUsageClientTests.swift::CursorUsageClientTests::testParseSummaryLeavesCycleDatesNilWhenOmitted` | Parse summary leaves cycle dates nil when omitted: Dates nil. | ws-cursor | todo | |  |
+| `TokenMonTests/Providers/Cursor/CursorUsageClientTests.swift::CursorUsageClientTests::testParseSummaryAveragesAutoAndAPIWhenTotalMissing` | Parse summary averages auto and API when total missing: auto 10, api 30 gives 20; 3 pools. | ws-cursor | todo | |  |
+| `TokenMonTests/Providers/Cursor/CursorUsageClientTests.swift::CursorUsageClientTests::testParseSummaryFallsBackToUsedOverLimitCents` | used 2500, limit 10000 gives 25%, $25/$100, 1 pool. | ws-cursor | todo | |  |
+| `TokenMonTests/Providers/Cursor/CursorUsageClientTests.swift::CursorUsageClientTests::testAggregateCostStats` | Events (1202¢, 1M in + 0.5M out, now) and (5000¢, 2M in, −2 days), cycle −20 days: $62.02, tokens 3.5M, in 3M, out 0.5M. With a cycle start of −1 day: $12.02. | ws-cursor | todo | |  |
+| `TokenMonTests/Providers/Cursor/CursorUsageClientTests.swift::CursorUsageClientTests::testHourWeightsBucketByRequestsCosts` | requestsCosts 2.5 + 1.5 at 10h gives 4; tokens 150 at 14h gives 150; hour 9 gives 0. | ws-cursor | todo | |  |
+| `TokenMonTests/Providers/Cursor/CursorUsageClientTests.swift::CursorUsageClientTests::testQuotaHourWeightsUseChargedCentsAndPlanLimit` | 100 + 300 cents, limit $400: `weights[10] = averageWeeksPerMonth`. | ws-cursor | todo | |  |
+| `TokenMonTests/Providers/Cursor/CursorUsageClientTests.swift::CursorUsageClientTests::testTokenHourWeightsAggregateEventTokens` | Token hour weights aggregate event tokens: 100+50+25+5 = 180. | ws-cursor | todo | |  |
+| `TokenMonTests/Providers/Cursor/CursorUsageClientTests.swift::CursorUsageClientTests::testParseUsageEventsPage` | Parse usage events page: total 2, pageCount 2, 2 events. | ws-cursor | todo | |  |
+| `TokenMonTests/Providers/Cursor/CursorUsageClientTests.swift::CursorUsageClientTests::testParseUsageEventsPageCoercesTotal` | Parse usage events page coerces total: `"1234"` → 1234; missing → 0. | ws-cursor | todo | |  |
+| `TokenMonTests/Providers/Cursor/CursorUsageClientTests.swift::CursorUsageClientTests::testSafeIntegerConversionDoesNotTrap` | 1e30 → Int64.max; −1e30 → Int64.min; NaN and ∞ → 0; `safeInt(1e30)` = Int.max. | ws-cursor | todo | |  |
+| `TokenMonTests/Providers/Cursor/CursorUsageClientTests.swift::CursorUsageClientTests::testTokenCountHandlesHugeValues` | Token count handles huge values: Input 1e30 gives Int64.max. | ws-cursor | todo | |  |
+| `TokenMonTests/Providers/Cursor/CursorUsageClientTests.swift::CursorUsageClientTests::testEventTimestampStringUnits` | `"1775418973898"` → ms; `"1775418973"` → s; `"0"`, `"-5"` → nil. | ws-cursor | todo | |  |
+| `TokenMonTests/Providers/Cursor/CursorUsageClientTests.swift::CursorUsageClientTests::testCursorDomainFilter` | Cursor domain filter: See §3.1. | ws-cursor | todo | |  |
+| `TokenMonTests/Providers/Cursor/CursorUsageClientTests.swift::CursorUsageClientTests::testDailyEstimateWeightByDayExcludesBotAndClipsToCycle` | Cycle Aug 22 17:00 – Aug 23 17:00. Events: 22@10 (5000, before the cycle), 22@20 (300), 22@21 `grok-bot-default`, 23@12 (1220) give `{22: 300, 23: 1220}`, sum 1520. | ws-cursor | todo | |  |
+| `TokenMonTests/Providers/Cursor/CursorUsageClientTests.swift::CursorUsageClientTests::testRejectUnauthorizedBodyTreatsHTMLAsUnauthorized` | An HTML "Sign in to Cursor" page gives `.unauthorized(cursor)`. | ws-cursor | todo | |  |
+| `TokenMonTests/Providers/Cursor/CursorUsageClientTests.swift::CursorUsageClientTests::testRejectUnauthorizedBodyMapsErrorString` | `not_authenticated` and `unauthorized` both give `.unauthorized`. | ws-cursor | todo | |  |
+| `TokenMonTests/Providers/Cursor/CursorUsageClientTests.swift::CursorUsageClientTests::testRejectUnauthorizedBodyTreatsMalformedAsBadResponse` | Reject unauthorized body treats malformed as bad response: `{"individualUsage":` gives `.badResponse`. | ws-cursor | todo | |  |
+| `TokenMonTests/Providers/Cursor/CursorUsageClientTests.swift::CursorUsageClientTests::testRejectUnauthorizedBodyPassesNormalSummary` | Reject unauthorized body passes normal summary: No throw. | ws-cursor | todo | |  |
+| `TokenMonTests/Providers/Cursor/CursorUsageClientTests.swift::CursorUsageClientTests::testGrokBotEventsAreExcludedFromAggregations` | default (100¢, 1000 tok) and grok-bot (900¢, 9000 tok) give cost $1, tokens 1000, activity 1000, tokens/hour 1000, quota < 2. | ws-cursor | todo | |  |
+| `TokenMonTests/Providers/Cursor/CursorUsageClientTests.swift::CursorUsageClientTests::testParseUsageEventsPageCountsSkippedEvents` | 3 raw events (one bot, one without a timestamp) give pageCount 3, 1 event. | ws-cursor | todo | |  |
+| `TokenMonTests/Providers/Cursor/CursorUsagePollerTests.swift::CursorUsagePollerTests::testTrackedDayUsesMeasuredDeltaAndOthersBackfilled` | Observed {23: 9, 25: 3}; estimate 100 each on 22, 23, 24, 26, 27; used 9; cycle Aug 22 17:00 → Sep 22 17:00; now Aug 28. Result: 7 bars from Mon Aug 24, budget 100/31; Aug 25 = 3; Aug 26 = 1.2. | ws-cursor | todo | |  |
+| `TokenMonTests/Providers/Cursor/CursorUsagePollerTests.swift::CursorUsagePollerTests::testFirstTrackedDayUsesEstimate` | Observed {25: 1}, estimates 50 + 50, used 4: Aug 25 = 2. | ws-cursor | todo | |  |
+| `TokenMonTests/Providers/Cursor/CursorUsagePollerTests.swift::CursorUsagePollerTests::testCompletedDayUsesPoolPercentDelta` | Store records 66 → 68 yesterday and 68 → 71 today: today = 3. | ws-cursor | todo | |  |
+| `TokenMonTests/Providers/Cursor/CursorUsagePollerTests.swift::CursorUsagePollerTests::testBuildDailyBudgetDaysNilWithoutCycleDates` | Build daily budget days nil without cycle dates: nil. | ws-cursor | todo | |  |
+| `TokenMonTests/Providers/Cursor/CursorUsagePollerTests.swift::CursorUsagePollerTests::testTrackedExceedingPoolPercentIsRescaled` | Observed {23:1, 25:6, 26:4}, used 5: Aug 25 = 3, Aug 26 = 2, chart sum 5. | ws-cursor | todo | |  |
+| `TokenMonTests/Providers/Cursor/CursorUsagePollerTests.swift::CursorUsagePollerTests::testEarlyResetKeepsOldCycleDaysAsHistoryAndRestartsPoolMath` | Interrupted start Sep 10, new cycle Oct 2 17:00. Week of Mon Sep 28: Sep 29 prior 2, Oct 1 prior 5, Oct 3 live 3; budget 100/31; live sum ≤ 4. | ws-cursor | todo | |  |
+| `TokenMonTests/Providers/Cursor/CursorUsagePollerTests.swift::CursorUsagePollerTests::testWithoutEarlyResetOldDaysStayHidden` | Without early reset old days stay hidden: No prior flags; Oct 1 = 0. | ws-cursor | todo | |  |
+| `TokenMonTests/Providers/Cursor/CursorUsagePollerTests.swift::CursorUsagePollerTests::testBuildDailyBudgetDaysWeekOffsetShowsPreviousMonday` | offset −1: starts Aug 17; Aug 18 = 4, not prior. | ws-cursor | todo | |  |
+
+### ws-grokbot (#15)
+
+| Swift test | Behavior | Workstream | Status | Rust test | Notes |
+|---|---|---|---|---|---|
+| `TokenMonTests/Core/Polling/PollerSessionGuardTests.swift::PollerSessionGuardTests::testGrokbotStaleUnauthorizedDoesNotInvalidateNewSession` | Grokbot stale unauthorized does not invalidate new session. | ws-grokbot | todo | |  |
+| `TokenMonTests/Core/Polling/PollerSessionGuardTests.swift::PollerSessionGuardTests::testGrokbotCurrentUnauthorizedInvalidatesSession` | Grokbot current unauthorized invalidates session: on the Cursor session | ws-grokbot | todo | |  |
+| `TokenMonTests/Platform/Auth/AuthInvalidationTests.swift::AuthInvalidationTests::testGrokbotForbiddenDoesNotInvalidateCursorSession` | Grokbot forbidden does not invalidate cursor session: 4 × 403-forbidden: counter 0, lastError = forbidden message | ws-grokbot | todo | |  |
+| `TokenMonTests/Platform/Auth/AuthInvalidationTests.swift::AuthInvalidationTests::testGrokbotKeepsHistoryWhileSignedOut` | Grokbot keeps history while signed out: history retention | ws-grokbot | todo | |  |
+| `TokenMonTests/Providers/Grokbot/GrokbotUsageClientTests.swift::GrokbotUsageClientTests::testParsesCursorFundedWeeklyAllowance` | `{currentPeriodStart:"2026-08-20T11:00:00Z", nextResetTimestampUtc:"2026-08-27T11:00:00Z", usagePercent:42.5, includedLimitZero:false, hasNonZeroIncludedLimit:true, hasAvailableUsage:true}` gives used 42.5, remaining 57.5, `.cursor`, allowance true, reset p… | ws-grokbot | todo | |  |
+| `TokenMonTests/Providers/Grokbot/GrokbotUsageClientTests.swift::GrokbotUsageClientTests::testParsesSuperGrokFundedAllowance` | `includedUsageSuperGrokPlan:"super_grok_heavy"`, `grokPlanLabel:"SuperGrok Heavy"` gives `.superGrok("SuperGrok Heavy")` and caption `via SuperGrok Heavy`. | ws-grokbot | todo | |  |
+| `TokenMonTests/Providers/Grokbot/GrokbotUsageClientTests.swift::GrokbotUsageClientTests::testSuperGrokPlanWithoutLabelUsesPlanIdentifier` | Super grok plan without label uses plan identifier: `.superGrok("super_grok")`. | ws-grokbot | todo | |  |
+| `TokenMonTests/Providers/Grokbot/GrokbotUsageClientTests.swift::GrokbotUsageClientTests::testMissingResetYieldsNilRatherThanSubstitutedDate` | Only usagePercent and currentPeriodStart: `resetsAt` nil. | ws-grokbot | todo | |  |
+| `TokenMonTests/Providers/Grokbot/GrokbotUsageClientTests.swift::GrokbotUsageClientTests::testAcceptsSnakeCaseProtoFieldNames` | snake_case fields, `included_limit_zero:true`: used 77, reset set, allowance false. | ws-grokbot | todo | |  |
+| `TokenMonTests/Providers/Grokbot/GrokbotUsageClientTests.swift::GrokbotUsageClientTests::testParsesStructuredTimestamps` | `{seconds:1787000000, nanos:500000000}` gives 1_787_000_000.5. | ws-grokbot | todo | |  |
+| `TokenMonTests/Providers/Grokbot/GrokbotUsageClientTests.swift::GrokbotUsageClientTests::testHTMLBodyIsTreatedAsUnauthorized` | `<!doctype html>…Sign in…` gives `.unauthorized(grokbot)`. | ws-grokbot | todo | |  |
+| `TokenMonTests/Providers/Grokbot/GrokbotUsageClientTests.swift::GrokbotUsageClientTests::testNotAuthenticatedErrorPayloadIsUnauthorized` | `{"error":"not_authenticated"}` gives `.unauthorized(grokbot)`. | ws-grokbot | todo | |  |
+| `TokenMonTests/Providers/Grokbot/GrokbotUsageClientTests.swift::GrokbotUsageClientTests::testMissingUsagePercentReportsNoBotAccess` | `{"hasAvailableUsage":false}` gives `.custom` (no access). | ws-grokbot | todo | |  |
+| `TokenMonTests/Providers/Grokbot/GrokbotUsageClientTests.swift::GrokbotUsageClientTests::testMissingUsagePercentWithAllowanceFieldsIsZero` | Period fields and hasNonZeroIncludedLimit give 0%, allowance true, reset set. | ws-grokbot | todo | |  |
+| `TokenMonTests/Providers/Grokbot/GrokbotUsageClientTests.swift::GrokbotUsageClientTests::testMissingUsagePercentSnakeCaseAllowanceFieldsIsZero` | Missing usage percent snake case allowance fields is zero: Only `next_reset_timestamp_utc` gives 0%. | ws-grokbot | todo | |  |
+| `TokenMonTests/Providers/Grokbot/GrokbotUsageClientTests.swift::GrokbotUsageClientTests::testPercentIsClampedToPoolBounds` | Percent is clamped to pool bounds: 140 → 100; −8 → 0. | ws-grokbot | todo | |  |
+| `TokenMonTests/Providers/Grokbot/GrokbotUsagePollerTests.swift::GrokbotUsagePollerTests::testBarsAnchorToTheProviderResetInstant` | Reset Aug 27 11:00, now Aug 25 15:00: 7 bars Aug 20–26, budget 100/7. | ws-grokbot | todo | |  |
+| `TokenMonTests/Providers/Grokbot/GrokbotUsagePollerTests.swift::GrokbotUsagePollerTests::testNoResetYieldsNoBars` | No reset yields no bars: Empty. | ws-grokbot | todo | |  |
+| `TokenMonTests/Providers/Grokbot/GrokbotUsagePollerTests.swift::GrokbotUsagePollerTests::testResetMorningKeepsPeriodStartAsFirstBar` | now Aug 27 09:00: first bar is Thursday Aug 20, last Aug 26. | ws-grokbot | todo | |  |
+| `TokenMonTests/Providers/Grokbot/GrokbotUsagePollerTests.swift::GrokbotUsagePollerTests::testPeriodLengthIsDerivedFromTheSnapshotSpan` | A 14-day span gives `daysInPeriod` 7, 7 bars, budget 100/7. | ws-grokbot | todo | |  |
+| `TokenMonTests/Providers/Grokbot/GrokbotUsagePollerTests.swift::GrokbotUsagePollerTests::testFiveDaySpanStillYieldsSevenBars` | Five day span still yields seven bars: 5-day span gives 7. | ws-grokbot | todo | |  |
+| `TokenMonTests/Providers/Grokbot/GrokbotUsagePollerTests.swift::GrokbotUsagePollerTests::testDaysInPeriodUsesCalendarDaysNotTruncatedHours` | Days in period uses calendar days not truncated hours: Aug 20 12:00 → Aug 27 11:00 gives 7. | ws-grokbot | todo | |  |
+| `TokenMonTests/Providers/Grokbot/GrokbotUsagePollerTests.swift::GrokbotUsagePollerTests::testSameDayStartAndResetFallsBackToAWeek` | Same day start and reset falls back to a week: Gives 7, 7 bars. | ws-grokbot | todo | |  |
+| `TokenMonTests/Providers/Grokbot/GrokbotUsagePollerTests.swift::GrokbotUsagePollerTests::testDaysInPeriodFallsBackToSevenWithoutPeriodStart` | Days in period falls back to seven without period start: Gives 7. | ws-grokbot | todo | |  |
+| `TokenMonTests/Providers/Grokbot/GrokbotUsagePollerTests.swift::GrokbotUsagePollerTests::testReportedSpanIsNotSanitized` | `reportedSpanDays` 14, `daysInPeriod` 7; nil without dates. | ws-grokbot | todo | |  |
+| `TokenMonTests/Providers/Grokbot/GrokbotUsagePollerTests.swift::GrokbotUsagePollerTests::testEntitlementCaptions` | `via Cursor`, `via SuperGrok Heavy`, `via SuperGrok`. | ws-grokbot | todo | |  |
+| `TokenMonTests/Providers/Grokbot/GrokbotUsagePollerTests.swift::GrokbotUsagePollerTests::testGrokbotIsARegisteredUsageProvider` | Present in `usageProviders`; displayName `Grokbot`; polled by `grokbot` and `overview`, not by `cursor`. | ws-grokbot | todo | |  |
+| `TokenMonTests/Providers/Grokbot/GrokbotUsagePollerTests.swift::GrokbotUsagePollerTests::testEarlyResetKeepsHistoryAndAnchorsBarsToNewPeriodStart` | Real `DailyQuotaDeltaStore`. Polls 10, 30, 50 (start −3d, reset +4d), then 3 (start 0, reset +7): 7 window bars from today (first 3); 3 prior bars (−3d first; 20, 20). Pace start is today; earned 100/7; headroom 100/7 − 3. | ws-grokbot | todo | |  |
+| `TokenMonTests/Providers/Grokbot/GrokbotUsagePollerTests.swift::GrokbotUsagePollerTests::testNewPeriodStartWinsOverUnchangedResetInstant` | `interruptedWindowStart` = the old start day; the window opens today; 7 bars. | ws-grokbot | todo | |  |
+| `TokenMonTests/Providers/Grokbot/GrokbotUsagePollerTests.swift::GrokbotUsagePollerTests::testNormalRolloverShowsNoPriorWindowBars` | 7 bars, no prior bars, first 3; the store keeps yesterday at 40. | ws-grokbot | todo | |  |
+| `TokenMonTests/Providers/Grokbot/GrokbotUsagePollerTests.swift::GrokbotUsagePollerTests::testSamePeriodDropIsNotTreatedAsEarlyReset` | 60 → 20 in the same period: no interrupted start, no prior bars. | ws-grokbot | todo | |  |
+
+### ws-claude (#16)
+
+| Swift test | Behavior | Workstream | Status | Rust test | Notes |
+|---|---|---|---|---|---|
+| `TokenMonTests/Core/Polling/PollerSessionGuardTests.swift::PollerSessionGuardTests::testClaudeStaleUnauthorizedDoesNotInvalidateNewSession` | Claude stale unauthorized does not invalidate new session: as above | ws-claude | todo | |  |
+| `TokenMonTests/Core/Polling/PollerSessionGuardTests.swift::PollerSessionGuardTests::testClaudeCurrentUnauthorizedInvalidatesSession` | Claude current unauthorized invalidates session: as above | ws-claude | todo | |  |
+| `TokenMonTests/Platform/Auth/AuthInvalidationTests.swift::AuthInvalidationTests::testClaudeInvalidationKeepsHistory` | Claude invalidation keeps history: history retention | ws-claude | todo | |  |
+| `TokenMonTests/Platform/Auth/AuthInvalidationTests.swift::AuthInvalidationTests::testClaudeFailureAfterDataReportsError` | Claude failure after data reports error: history retention | ws-claude | todo | |  |
+| `TokenMonTests/Platform/Auth/AuthInvalidationTests.swift::AuthInvalidationTests::testClaudeSignOutKeepsHistoryUntilAnotherAccountSignsIn` | Claude sign out keeps history until another account signs in: history retention | ws-claude | todo | |  |
+| `TokenMonTests/Platform/Auth/ProviderCookieAllowlistTests.swift::ProviderCookieAllowlistTests::testClaudePolicyKeepsSessionKeyAndOrg` | Claude policy keeps session key and org: real policies | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeCodeLocalStatsTests.swift::ClaudeCodeLocalStatsTests::testParsesAssistantUsageAndSkipsOtherLines` | user line, valid, `<synthetic>`, `not json` → 1 entry; tokens 10/20/300; 5m 40, 1h 0; key `msg_1:req_1` | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeCodeLocalStatsTests.swift::ClaudeCodeLocalStatsTests::testParsesASliceOfALargerBuffer` | parsing a sub-slice with non-zero start index works; keys `msg_1:req_1`,`msg_2:req_2` | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeCodeLocalStatsTests.swift::ClaudeCodeLocalStatsTests::testParsesTimestampsWithAndWithoutFractionalSeconds` | Parses timestamps with and without fractional seconds: `…01.500Z` vs `…01Z` differ by 0.5 s | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeCodeLocalStatsTests.swift::ClaudeCodeLocalStatsTests::testSplitsCacheWritesByLifetime` | Splits cache writes by lifetime: total 100, 1h 70 → 5m 30, 1h 70 | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeCodeLocalStatsTests.swift::ClaudeCodeLocalStatsTests::testOneHourCacheWritesNeverExceedTheTotal` | One hour cache writes never exceed the total: total 10, 1h 50 → 5m 0, 1h 10 | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeCodeLocalStatsTests.swift::ClaudeCodeLocalStatsTests::testDailyTokensDedupeAndGroupByDayAndModel` | duplicate msg_1/req_1 counted once; 10-10 opus responses 2, in 11, out 22, total 380; sonnet 1; 10-11 opus total 370 | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeCodeLocalStatsTests.swift::ClaudeCodeLocalStatsTests::testDailyTokensUseTheCalendarsLocalDay` | 2026-10-10T20:00Z in Asia/Tokyo → key `2026-10-11` | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeCodeLocalStatsTests.swift::ClaudeCodeLocalStatsTests::testScanReadsNestedTranscripts` | `projects/-Users-me-app/session.jsonl` + `…/session/subagents/agent.jsonl` → 2 responses | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeCodeLocalStatsTests.swift::ClaudeCodeLocalStatsTests::testRepeatScansFollowAppendsRewritesAndRemovals` | 2 files → 2; partial append (20 bytes, no newline) → still 2; finish line → 3; rewrite shorter → 2; delete other → 1 | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeCodeLocalStatsTests.swift::ClaudeCodeLocalStatsTests::testScanKeepsSeparateRunningTotalsPerCalendar` | UTC vs Tokyo keys `2026-10-10` vs `2026-10-11`; after append both counts 2; a newly asked calendar counts 2 total | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeCodeLocalStatsTests.swift::ClaudeCodeLocalStatsTests::testScanIsNilWithoutClaudeCode` | Scan is nil without claude code: nonexistent dir → nil | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeCodeLocalStatsTests.swift::ClaudeCodeLocalStatsTests::testProjectsDirectoriesHonorsConfigDir` | no env → `[/Users/me/.config/claude/projects, /Users/me/.claude/projects]`; `CLAUDE_CONFIG_DIR="/a, /b"` → `[/a/projects, /b/projects]` | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeCodeUsageLedgerTests.swift::ClaudeCodeUsageLedgerTests::testCostUsesEachRateIncludingBothCacheLifetimes` | 1M of each of 5 token kinds on `claude-opus-5-5` → `$37.20` (4+20+0.20+5+8) | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeCodeUsageLedgerTests.swift::ClaudeCodeUsageLedgerTests::testPricingIgnoresSnapshotDateSuffix` | `baseModelID("claude-haiku-4-5-20251001") == "claude-haiku-4-5"`; unchanged for `claude-opus-5-5`; rates found for dated id | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeCodeUsageLedgerTests.swift::ClaudeCodeUsageLedgerTests::testUnknownModelHasNoPrice` | Unknown model has no price: `claude-unknown-9` → no rates, cost nil | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeCodeUsageLedgerTests.swift::ClaudeCodeUsageLedgerTests::testModelDisplayNames` | Model display names: `Opus 5.5`, `Fable 5.1`, `Haiku 4.5` | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeCodeUsageLedgerTests.swift::ClaudeCodeUsageLedgerTests::testMergeKeepsTheLargerCountsAndDaysNoLongerScanned` | saved {09-01 opus in50; 10-01 opus in10/out90} ⊕ scanned {10-01 opus in30/out40, sonnet in5} → 09-01 in 50 kept; 10-01 opus in30 out90; sonnet in5 | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeCodeUsageLedgerTests.swift::ClaudeCodeUsageLedgerTests::testLedgerKeepsDaysAfterTheirTranscriptsAreDeleted` | ledger A merges 09-01; new ledger B on same store merges 10-01 → both days present | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeCodeUsageLedgerTests.swift::ClaudeCodeUsageLedgerTests::testLedgerDiscardsAnEarlierFormat` | stored `{"version":1,…10-01…}` → merged lacks 10-01, has new 10-02 | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeCodeUsageLedgerTests.swift::ClaudeCodeUsageLedgerTests::testLedgerDaysAreUTC` | Ledger days are UTC: ledger calendar offset 0 | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeCodeUsageLedgerTests.swift::ClaudeCodeUsageLedgerTests::testSpendMarksLeftOutUnpricedUsage` | Spend marks left out unpriced usage: `$12.50`, `$12.50+` | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeCodeUsageLedgerTests.swift::ClaudeCodeUsageLedgerTests::testLedgerStartsEmptyWhenTheSavedFileIsUnreadable` | stored `not json` → merged has only the 1 scanned day | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeCodeUsageLedgerTests.swift::ClaudeCodeUsageLedgerTests::testSummarySplitsMonthFromAllTimeAndRanksModelsByValue` | days 09-30 opus out1M; 10-01 opus+sonnet out1M; 10-22 sonnet out1M; now 2026-10-22T12Z → month tokens 3M, $40; all-time 4M, $60; ranking [sonnet, opus]; shares [50,50]; first cost $20 | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeCodeUsageLedgerTests.swift::ClaudeCodeUsageLedgerTests::testSummaryFlagsUnpricedModels` | opus out1M + unknown out500 → month.hasUnpriced; unknown isUnpriced, share 0; first share 100 | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeCodeUsageLedgerTests.swift::ClaudeCodeUsageLedgerTests::testSummaryIsEmptyAtTheStartOfAMonth` | data only 09-30, now 10-01T00:30Z → month 0, no models, all-time 10 | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeUsageClientTests.swift::ClaudeUsageClientTests::testParseWindows` | fixture five_hour 42.5 (`resets_at 2026-08-21T14:00:00.127279+00:00`), seven_day 87.0 (`2026-08-27T11:00:00+00:00`) | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeUsageClientTests.swift::ClaudeUsageClientTests::testParseResetDates` | 5h reset 14:00 UTC; weekly hour 11 (no-fraction form) | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeUsageClientTests.swift::ClaudeUsageClientTests::testParseMissingWindowsYieldsNil` | Parse missing windows yields nil: `{}` → both nil | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeUsageClientTests.swift::ClaudeUsageClientTests::testParseClampsOutOfRangeUtilization` | Parse clamps out of range utilization: 130 → 100 | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeUsageClientTests.swift::ClaudeUsageClientTests::testParseHTMLBodyIsUnauthorized` | `<!doctype html>…Sign in to Claude…` → `unauthorized(.claude)` | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeUsageClientTests.swift::ClaudeUsageClientTests::testParseMalformedBodyIsBadResponse` | Parse malformed body is bad response: `not json` → `badResponse` | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeUsageClientTests.swift::ClaudeUsageClientTests::testOrganizationIDFromCookieHeader` | `__cf_bm=abc; lastActiveOrg=9d7a…678; sessionKey=…` → uuid; `sessionKey=abc` → nil; `""` → nil | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeUsageClientTests.swift::ClaudeUsageClientTests::testParseFallsBackToWeeklyLimitWhenSevenDayIsNull` | limits fixture (session 14 active unscoped; weekly_scoped 3 scope Fable inactive, reset 2026-10-11T08:00Z) → weekly 3, scope `Fable`, reset matches; 5h 14; label `Weekly · Fable` | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeUsageClientTests.swift::ClaudeUsageClientTests::testParsePrefersAccountWideWeeklyLimit` | weekly scoped 80 active vs unscoped 20 inactive → 20, no scope, no reset | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeUsageClientTests.swift::ClaudeUsageClientTests::testParseSevenDayObjectWinsOverLimits` | Parse seven day object wins over limits: seven_day 40 beats limits weekly 5 | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeUsagePollerTests.swift::ClaudeUsagePollerTests::testBuildDailyBudgetDaysAnchorsFirstBarToPeriodStart` | reset 2026-08-27 11:00, now 08-25 15:00 → 7 bars, Aug 20 … Aug 26, budget 100/7 | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeUsagePollerTests.swift::ClaudeUsagePollerTests::testBuildDailyBudgetDaysEmptyWithoutResetTime` | Build daily budget days empty without reset time: resetsAt nil → [] | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeUsagePollerTests.swift::ClaudeUsagePollerTests::testEarlyResetKeepsPriorDaysAndRestartsTheWeeklyWindow` | (local cal) polls 20%@−2d, 45%@−1d with reset +5d; then 2%@today with reset +7d → 7 live bars starting today, first spent 2; last prior-window bar 25; weekly pace start = today | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeUsagePollerTests.swift::ClaudeUsagePollerTests::testSameResetInstantDropLeavesBarsUnchanged` | 60% then 10% same reset → 7 bars, no prior-window | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeUsagePollerTests.swift::ClaudeUsagePollerTests::testBuildDailyBudgetDaysWeekOffsetShowsPriorPeriod` | spent {Aug 14: 6}, weekOffset −1 → first bar Aug 13, bar[1] = 6, no prior-window | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeUsagePollerTests.swift::ClaudeUsagePollerTests::testProjectWeeklyResetCarriesPastInstantForwardByWholeWeeks` | 09-13 08:00 with now 10-10 09:00 → 10-11 08:00; future unchanged; nil → nil | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeUsagePollerTests.swift::ClaudeUsagePollerTests::testRefreshBuildsBarsFromWeeklyLimitWhenSevenDayIsNull` | payload with limits weekly 3 reset 2099 → 7 bars, store lastUsedPercent 3, windowResetsAt set | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeUsagePollerTests.swift::ClaudeUsagePollerTests::testRefreshWithoutResetTimeReusesPersistedReset` | store has reset 9 days ago; payload weekly 9% w/o reset → 7 bars; projected reset in (now, now+7d] | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeUsagePollerTests.swift::ClaudeUsagePollerTests::testRefreshLoadsClaudeCodeUsage` | injected loader → codeUsage == summary; injected fetch without loader → codeUsage nil | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeUsagePollerTests.swift::ClaudeUsagePollerTests::testClaudeCodeUsageLoadsWithoutSessionAndOnFetchFailure` | fetch throws → snapshot nil, codeUsage set; signed out → fetch never called, codeUsage set | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeUsagePollerTests.swift::ClaudeUsagePollerTests::testSignOutKeepsClaudeCodeUsage` | Sign out keeps claude code usage: `clearSnapshot()` keeps codeUsage | ws-claude | todo | |  |
+| `TokenMonTests/Providers/Claude/ClaudeUsagePollerTests.swift::ClaudeUsagePollerTests::testAttachTokensAddsEachLocalDaysTokens` | America/Denver; 2026-11-02 opus(10,20,1M,30,40)+sonnet(5,5)+mystery(out1) → in 15, out 26, cr 1M, cw 70, total 1,000,111; first model `Opus 5.5`; 3 models; cost > 0; hasUnpriced; next day tokens nil; spent kept 5 | ws-claude | todo | |  |
+| `TokenMonTests/UI/SignIn/SignInBrowserNavigationTests.swift::SignInBrowserNavigationTests::testClaudeReturnPageExcludesClerkAndAuthPaths` | clerk.claude.ai/sign-in is authHost and never a return page; claude.ai/new, www.claude.ai/chat/abc are; /login, /signin, clerk, auth.claude.ai are not. (Provider slice.) | ws-claude | todo | |  |
+
+### ws-chatgpt (#17)
+
+| Swift test | Behavior | Workstream | Status | Rust test | Notes |
+|---|---|---|---|---|---|
+| `TokenMonTests/Core/Polling/PollerSessionGuardTests.swift::PollerSessionGuardTests::testChatGPTStaleUnauthorizedDoesNotInvalidateNewSession` | Chat GPT stale unauthorized does not invalidate new session: as above | ws-chatgpt | todo | |  |
+| `TokenMonTests/Core/Polling/PollerSessionGuardTests.swift::PollerSessionGuardTests::testChatGPTCurrentUnauthorizedInvalidatesSession` | Chat GPT current unauthorized invalidates session: as above | ws-chatgpt | todo | |  |
+| `TokenMonTests/Core/Polling/PollerSessionGuardTests.swift::PollerSessionGuardTests::testChatGPTTransientUnauthorizedRecoversOnNextPoll` | after one 401, the counter is 1 and the session is signed in; a success resets it to 0 and a snapshot exists | ws-chatgpt | todo | |  |
+| `TokenMonTests/Core/Polling/PollerSessionGuardTests.swift::PollerSessionGuardTests::testChatGPTFailureAfterDataReportsError` | success (lastError nil), then network failure (snapshot kept, lastError set, session still signed in), then success (lastError nil) | ws-chatgpt | todo | |  |
+| `TokenMonTests/Core/Polling/PollerSessionGuardTests.swift::PollerSessionGuardTests::testChatGPTRefreshedCookieIsPersisted` | Set-Cookie renewal plus `_ga` gives the stored header `__Secure-next-auth.session-token=renewed` | ws-chatgpt | todo | |  |
+| `TokenMonTests/Platform/Auth/ProviderCookieAllowlistTests.swift::ProviderCookieAllowlistTests::testChatGPTPolicyStoresOnlyTheSessionCookie` | Chat GPT policy stores only the session cookie: real policies | ws-chatgpt | todo | |  |
+| `TokenMonTests/Platform/Auth/ProviderCookieAllowlistTests.swift::ProviderCookieAllowlistTests::testChatGPTPolicyKeepsChunkedSessionAndDropsCSRF` | Chat GPT policy keeps chunked session and drops CSRF: real policies | ws-chatgpt | todo | |  |
+| `TokenMonTests/Platform/Auth/ProviderCookieAllowlistTests.swift::ProviderCookieAllowlistTests::testChatGPTPolicyRejectsCSRFOnlyJar` | Chat GPT policy rejects CSRF only jar: real policies | ws-chatgpt | todo | |  |
+| `TokenMonTests/Providers/ChatGPT/ChatGPTAccessTokenCacheTests.swift::ChatGPTAccessTokenCacheTests::testTokenIsReusedUntilRenewDeadline` | exp +1h: fetch at t, t+60 → 1 exchange; at t+1801 → 2 exchanges; 3 usage calls | ws-chatgpt | todo | |  |
+| `TokenMonTests/Providers/ChatGPT/ChatGPTAccessTokenCacheTests.swift::ChatGPTAccessTokenCacheTests::testSessionCookiesAreReturnedOnlyWithAnExchange` | first fetch setCookies `["session=renewed"]`, cached second `[]` | ws-chatgpt | todo | |  |
+| `TokenMonTests/Providers/ChatGPT/ChatGPTAccessTokenCacheTests.swift::ChatGPTAccessTokenCacheTests::testRejectedCachedTokenIsReexchangedOnce` | 2nd usage throws unauthorized once → retried, primary 12; exchanges 2 | ws-chatgpt | todo | |  |
+| `TokenMonTests/Providers/ChatGPT/ChatGPTAccessTokenCacheTests.swift::ChatGPTAccessTokenCacheTests::testValidUntilHonoursTokenExpiryAndRenewInterval` | exp+10min → now+5min; exp+1d → now+30min; `opaque` → now+5min | ws-chatgpt | todo | |  |
+| `TokenMonTests/Providers/ChatGPT/ChatGPTAccessTokenCacheTests.swift::ChatGPTAccessTokenCacheTests::testCacheIsScopedToKey` | Cache is scoped to key: key "1" hit; key "2" miss; t+61 miss | ws-chatgpt | todo | |  |
+| `TokenMonTests/Providers/ChatGPT/ChatGPTAccessTokenCacheTests.swift::ChatGPTAccessTokenCacheTests::testTokenIsReusedAfterCookieRenewal` | new client with renewed cookie, same key → 1 exchange | ws-chatgpt | todo | |  |
+| `TokenMonTests/Providers/ChatGPT/ChatGPTAccessTokenCacheTests.swift::ChatGPTAccessTokenCacheTests::testWindowLabelsDeriveFromWindowSeconds` | 18000/3600/86400/604800/2592000/5400/nil → `5-Hour Window`,`1-Hour Window`,`Daily`,`Weekly`,`30-Day Window`,`Fallback`,`Fallback` | ws-chatgpt | todo | |  |
+| `TokenMonTests/Providers/ChatGPT/ChatGPTUsageClientTests.swift::ChatGPTUsageClientTests::testParseWindows` | Parse windows: plan `plus`, allowed, not reached, 12, 57.5 | ws-chatgpt | todo | |  |
+| `TokenMonTests/Providers/ChatGPT/ChatGPTUsageClientTests.swift::ChatGPTUsageClientTests::testParseWindowMetadata` | windowSeconds 18000 / 604800; reset epoch 1787300000 | ws-chatgpt | todo | |  |
+| `TokenMonTests/Providers/ChatGPT/ChatGPTUsageClientTests.swift::ChatGPTUsageClientTests::testParseAlternateFieldNames` | `{"five_hour":{"used_percent":30},"weekly":{"utilization":40}}` → 30 / 40 | ws-chatgpt | todo | |  |
+| `TokenMonTests/Providers/ChatGPT/ChatGPTUsageClientTests.swift::ChatGPTUsageClientTests::testParseMissingWindowsYieldsNil` | `{"plan_type":"free"}` → nil windows, plan `free` | ws-chatgpt | todo | |  |
+| `TokenMonTests/Providers/ChatGPT/ChatGPTUsageClientTests.swift::ChatGPTUsageClientTests::testParseClampsOutOfRangePercent` | Parse clamps out of range percent: 140 → 100 | ws-chatgpt | todo | |  |
+| `TokenMonTests/Providers/ChatGPT/ChatGPTUsageClientTests.swift::ChatGPTUsageClientTests::testParseInvalidPayloadThrows` | Parse invalid payload throws: `nope` throws | ws-chatgpt | todo | |  |
+| `TokenMonTests/Providers/ChatGPT/ChatGPTUsageClientTests.swift::ChatGPTUsageClientTests::testSessionTokenParsing` | Session token parsing: `accessToken tok-123` ok; `{}` throws | ws-chatgpt | todo | |  |
+| `TokenMonTests/Providers/ChatGPT/ChatGPTUsageClientTests.swift::ChatGPTUsageClientTests::testSessionTokenHTMLIsTransientNotUnauthorized` | `<!DOCTYPE html>…Just a moment...` → badResponse | ws-chatgpt | todo | |  |
+| `TokenMonTests/Providers/ChatGPT/ChatGPTUsageClientTests.swift::ChatGPTUsageClientTests::testAccountIDFromAccessToken` | `chatggpt_account_id` (fallback) → `acct_42`; `chatgpt_account_id` → `acct_alt`; `garbage` → nil | ws-chatgpt | todo | |  |
+| `TokenMonTests/UI/SignIn/SignInBrowserNavigationTests.swift::SignInBrowserNavigationTests::testChatGPTReturnPageExcludesLoginAndAuth` | ChatGPT predicates: auth.openai.com and chatgpt.com/auth/login are auth hosts; chatgpt.com/ and /c/abc return pages; /auth/login, /login, auth.openai.com are not. (Provider slice.) | ws-chatgpt | todo | |  |
+
+### ws-opencode (#18)
+
+| Swift test | Behavior | Workstream | Status | Rust test | Notes |
+|---|---|---|---|---|---|
+| `TokenMonTests/Core/Polling/PollerSessionGuardTests.swift::PollerSessionGuardTests::testOpenCodeStaleSuccessIsDropped` | Open code stale success is dropped: snapshot nil | ws-opencode | todo | |  |
+| `TokenMonTests/Core/Polling/PollerSessionGuardTests.swift::PollerSessionGuardTests::testOpenCodeLateSuccessDoesNotRestoreWorkspaceID` | Open code late success does not restore workspace ID: the workspace stays cleared after sign-out | ws-opencode | todo | |  |
+| `TokenMonTests/Core/Polling/PollerSessionGuardTests.swift::PollerSessionGuardTests::testOpenCodeStaleUnauthorizedDoesNotInvalidateNewSession` | Open code stale unauthorized does not invalidate new session. | ws-opencode | todo | |  |
+| `TokenMonTests/Core/Polling/PollerSessionGuardTests.swift::PollerSessionGuardTests::testOpenCodeCurrentUnauthorizedInvalidatesSession` | Open code current unauthorized invalidates session. | ws-opencode | todo | |  |
+| `TokenMonTests/Core/Polling/PollerSessionGuardTests.swift::PollerSessionGuardTests::testOpenCodeLocalEstimatePublishesWhenStartedSignedOut` | snapshot set; `dataSourceLabel == "Local estimate"` | ws-opencode | todo | |  |
+| `TokenMonTests/Core/Polling/PollerSessionGuardTests.swift::PollerSessionGuardTests::testOpenCodeLocalEstimateSuppressedAfterMidPollSignOut` | Open code local estimate suppressed after mid poll sign out: snapshot nil | ws-opencode | todo | |  |
+| `TokenMonTests/Platform/Auth/ProviderCookieAllowlistTests.swift::ProviderCookieAllowlistTests::testOpenCodePolicyKeepsConsoleAndSiteCookies` | Open code policy keeps console and site cookies: real policies | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeConsoleClientTests.swift::OpenCodeConsoleClientTests::testParseGoMeters` | fixture: 5h limit 12, used 0.16726299, reset set; week 30 / 3.59502844; month 60; monthResetsAt set | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeConsoleClientTests.swift::OpenCodeConsoleClientTests::testSnapshotPercentagesAndMonthlyResetFallback` | kinds [5h, weekly, monthly]; % 1.393858 / 11.983428 / 5.991714; monthly reset = endsAt; monthlyUsedPercent = monthly | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeConsoleClientTests.swift::OpenCodeConsoleClientTests::testParseGoMetersWithoutSubscriptionIsEmpty` | Parse go meters without subscription is empty: `{"access":null}` and `{}` → no meters | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeConsoleClientTests.swift::OpenCodeConsoleClientTests::testParseOrgs` | `[{"id":"wrk_01KTEST123",…},{"name":"no id"}]` → one id | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeConsoleClientTests.swift::OpenCodeConsoleClientTests::testParseSessionEmail` | Parse session email: `user.email` → `a@b.com`; `{}` → nil | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeConsoleClientTests.swift::OpenCodeConsoleClientTests::testMicroCentsToUSD` | `"3000000000"` → 30; 600000000 → 6; nil → nil | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeConsoleClientTests.swift::OpenCodeConsoleClientTests::testWorkspaceIDFromURL` | `/console/wrk_…`, `/workspace/wrk_…/go` → id; `/auth` → nil | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeConsoleClientTests.swift::OpenCodeConsoleClientTests::testLoginRedirectRecognizesConsoleLoginPages` | `/console/login`, `/auth/authorize`, `/auth/login` true; `/console/wrk_…` false | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeConsoleClientTests.swift::OpenCodeConsoleWorkspaceTests::testPreferredWorkspaceWithSeatIsUsedWithoutListing` | seated preferred → org `wrk_redirect`; `/console/api/orgs` never requested | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeConsoleClientTests.swift::OpenCodeConsoleWorkspaceTests::testOtherWorkspacesAreTriedForAGoSeat` | orgs [first, redirect, go]; only go seated → `wrk_go`, monthly 10% | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeConsoleClientTests.swift::OpenCodeConsoleWorkspaceTests::testForbiddenEverywhereReportsDeniedWorkspace` | all orgForbidden → `badResponse("The OpenCode console denied access to this workspace.")` | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeConsoleClientTests.swift::OpenCodeConsoleWorkspaceTests::testResolveOrgIDKeepsPreferredWorkspace` | Resolve org ID keeps preferred workspace: preferred kept; nil → first listed | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeConsoleClientTests.swift::OpenCodeConsoleWorkspaceTests::testServerErrorMessageCarriesNoBodyBytes` | 500 with body `secret-token` → `badResponse("HTTP 500")` | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeLocalScanTests.swift::OpenCodeLocalScanTests::testSessionStartedBeforeRollingWindowCountsItsRecentMessages` | Session started before rolling window counts its recent messages: msgs −6h $1, −1h $3 → rolling $3, 1 session | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeLocalScanTests.swift::OpenCodeLocalScanTests::testLongSessionSplitsAcrossWeeksByMessageTime` | msg before week start $5, after $2 → weekly $2 | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeLocalScanTests.swift::OpenCodeLocalScanTests::testMonthlyTotalsComeFromTheMonthOnly` | anchor so month starts week.start+1d; msg in week before month $40; in month $2 (10/5/7/3) → monthly $2, est $2, in 10, out 5, total 25 | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeLocalScanTests.swift::OpenCodeLocalScanTests::testHeadlineAndDailyBarsValueZeroCostGoRowsAlike` | $0 Go minimax-m3 1M in → weekly > 0 and equals daily spends sum | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeLocalScanTests.swift::OpenCodeLocalScanTests::testMalformedMessageRowsAreSkipped` | Malformed message rows are skipped: `data='not json'` row ignored; rolling $1 | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeLocalScanTests.swift::OpenCodeLocalScanTests::testScanCacheReusesUnchangedDatabase` | same/later since → cached (1 load); earlier since → reload; DB changed → reload (3) | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeLocalScanTests.swift::OpenCodeLocalScanTests::testFetchesShareOneScanUntilTheDatabaseChanges` | Fetches share one scan until the database changes: 1 row + subscribedAt; after insert → 2 rows | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeModelNameTests.swift::OpenCodeModelNameTests::testModelDisplayNames` | Model display names: `Opus 5.5`, `Fable 5.1`, `Haiku 4.5` | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeMonthBudgetWeekTests.swift::OpenCodeMonthBudgetWeekTests::testMonthDailyBudgetWeekOffsetKeepsHistoryOutOfHeadlineScale` | Go msgs Jul 20 $6, Aug 18 $4; now Aug 20 (UTC), reset Sep 5, limit 60, used 20 → current week sum 20, Aug 18 = 20; weekOffset −4 → first bar Jul 20 = 10 (6/60×100), not prior-window | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodePollerFallbackTests.swift::OpenCodePollerFallbackTests::testExpiredConsoleSessionFallsBackToLocalEstimate` | console always unauthorized, local estimate snapshot: poll 1 → not needsSignIn, estimated, `Console fetch failed — showing local estimate.`; after polls 2–3 → needsSignIn, estimated, source `Local estimate`, error `Console session expired — showing local es… | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodePriceTableTests.swift::OpenCodePriceTableTests::testPricedModelsAreNotFlaggedUnpriced` | Zen `claude-haiku-5-5` 1M in at $0 → 0.10, estimated, not unpriced; recorded 1.5 on unknown model → not unpriced | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodePriceTableTests.swift::OpenCodePriceTableTests::testRatesCarryAVerificationDate` | Rates carry a verification date: `ratesVerifiedOn` parses as a DayKey | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeStatsTests.swift::OpenCodeStatsTests::testAggregationWindowsAndModels` | Go minimax $4 + $2 in rolling, anthropic $90 −2d, Zen $3, Go kimi $500 −40d, archived kimi $99 → rolling $6/2 sessions/50%; weekly $6/2; monthly $6/2 (anchor −40d); Go model sessions 2, in 15M, out 1M, cr 3M, $6; no anthropic; top = minimax; primary 10%; Ze… | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeStatsTests.swift::OpenCodeStatsTests::testZenDoesNotCountTowardGoLimits` | Zen $8 + Go $1 → rolling $1, 1 session, 8.33% | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeStatsTests.swift::OpenCodeStatsTests::testRollingResetTracksLastEligibleSession` | Rolling reset tracks last eligible session: reset = last Go (−1h) + 5h; Zen −10m ignored | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeStatsTests.swift::OpenCodeStatsTests::testModelsUseWeeklyWindow` | Models use weekly window: Go $2 −3d → 1 model; primary 2/60×100 | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeStatsTests.swift::OpenCodeStatsTests::testDatabaseMissingThrows` | Database missing throws: missing DB throws | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeStatsTests.swift::OpenCodeStatsTests::testClampedPercent` | Clamped percent: 6/12→50; 15/12→100; 0→0; limit 0→0 | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeStatsTests.swift::OpenCodeStatsTests::testHasLocalStatsReflectsLocalContribution` | Has local stats reflects local contribution: console-only false; with a model true | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeStatsTests.swift::OpenCodeStatsTests::testWindowLabelsAndLimits` | Window labels and limits: labels + 12/30/60 | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeStatsTests.swift::OpenCodeStatsTests::testWeeklyBoundsUTCMonday` | Wed 2026-07-15 13:00 → start 1_783_900_800 (Mon 07-13), 7 days; Sunday 07-19 → same start | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeStatsTests.swift::OpenCodeStatsTests::testMonthlyBoundsSubscriptionAnchored` | subscribed 1_779_114_281, now 1_785_596_400 → [1_784_384_681, 1_787_063_081] ±2 | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeStatsTests.swift::OpenCodeStatsTests::testMonthlyAggregationUsesSubscriptionWindow` | anchor + before-month $20 + in-month $7 + $3 → monthly $10, 2 sessions | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeStatsTests.swift::OpenCodeStatsTests::testScaledSpendsPercentAnchorsTotalToUsedPercent` | Scaled spends percent anchors total to used percent: {5,15} to 30 → {7.5, 22.5} | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeStatsTests.swift::OpenCodeStatsTests::testScaledSpendsPercentUnchangedWhenNothingToAnchor` | Scaled spends percent unchanged when nothing to anchor: used 0 → unchanged; empty stays empty | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeStatsTests.swift::OpenCodeStatsTests::testMonthDailyBudgetDaysAnchorsBarsToUsedPercent` | anchor Aug 1, spends {Aug4 3, Aug5 7}, used 30 → 7 bars, periodStart Aug 1, sum 30, 9 and 21 | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeStatsTests.swift::OpenCodeStatsTests::testMonthDailyBudgetDaysPrefersConsoleResetsAtOverLocalAnniversary` | Month daily budget days prefers console resets at over local anniversary: reset Aug 20 → periodStart Jul 20 | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeStatsTests.swift::OpenCodeStatsTests::testMonthDailyBudgetDaysNilWithoutSignals` | Month daily budget days nil without signals: no reset, no Go session → nil | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeStatsTests.swift::OpenCodeStatsTests::testMonthDailySpendsTrackGoOnly` | Month daily spends track go only: Go $3, Zen $5, deepseek $4 → only {3} | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeStatsTests.swift::OpenCodeStatsTests::testMonthlyBoundsClampsShortMonths` | Monthly bounds clamps short months: Jan 31 → start Jan 31, end Feb 28 | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeStatsTests.swift::OpenCodeStatsTests::testGoEligibleProvider` | `opencode-go`, `OpenCode-Go` true; others false | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeStatsTests.swift::OpenCodeStatsTests::testPlanEligibleProvider` | `opencode-go`, `opencode`, `OpenCode` true; deepseek/xai/openai/anthropic false | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeStatsTests.swift::OpenCodeStatsTests::testBYOKProvidersExcludedFromModels` | models providers {opencode-go, opencode}; rolling $2 | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeStatsTests.swift::OpenCodeStatsTests::testOverviewCountsOnlyPlanUsage` | hour 10 has 2 segments; xai/deepseek in 11/12; quota weights with monthly 10: Go[10] = 30×4.348…, Zen[10] = 10×4.348…; hours 11/12 zero; tokens Go/Zen 1/1; Overview build shares (Core) | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeStatsTests.swift::OpenCodeStatsTests::testProviderHourlyUsageUsesQuotaDeltasWithoutDailyNormalization` | (Overview/Core) activity 3 and 0.5; grok share 66.67% | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeStatsTests.swift::OpenCodeStatsTests::testProviderHourlyUsageIncludesGrokbotShare` | Provider hourly usage includes grokbot share: (Overview/Core) activity 5, grokbot 80% | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeStatsTests.swift::OpenCodeStatsTests::testCatalogNames` | Go/Zen/DeepSeek; `DeepSeek · deepseek-v4-pro` | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeStatsTests.swift::OpenCodeStatsTests::testOverviewHourlyBarHeightIsProportional` | Overview hourly bar height is proportional: (Overview UI) heightFraction 0.5/1/0/0/1 | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeStatsTests.swift::OpenCodeStatsTests::testOverviewHourlyRelativeStackKeepsSmallProvidersVisible` | Overview hourly relative stack keeps small providers visible: (Overview UI) 0.5 vs 1.0 | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeStatsTests.swift::OpenCodeStatsTests::testModelPaletteDeterministic` | Model palette deterministic: same seed same colour, components in [0,1] | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeStatsTests.swift::OpenCodeStatsTests::testModelPaletteProviderColors` | Model palette provider colors: Go → orange, Zen → purple | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeStatsTests.swift::OpenCodeStatsTests::testUnusedModelsExcludedFromList` | Unused models excluded from list: $0/0-token model dropped | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeStatsTests.swift::OpenCodeStatsTests::testZenZeroCostUsesPublishedTokenValue` | Zen `deepseek-v4-flash-free` 1M in + 0.5M out at $0 → $0.28 estimated; Go $2 not estimated | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeStatsTests.swift::OpenCodeStatsTests::testZenPublishedCostHelpers` | 1M in → $0.14 estimated; recorded 1.5 → 1.5 not estimated | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeStatsTests.swift::OpenCodeStatsTests::testMuseSparkFreeAliasEstimatesPaidEquivalentValue` | `muse-spark-1.3-contributor-free` 1M+1M → $0.30 | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeStatsTests.swift::OpenCodeStatsTests::testFreeAliasResolvesToBaseRates` | Free alias resolves to base rates: catalog `kimi-k3-free` 1M in → $3.00 | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeStatsTests.swift::OpenCodeStatsTests::testUnknownModelIsFlaggedUnpriced` | Unknown model is flagged unpriced: `totally-new-model-free` → (0, false, true) | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeStatsTests.swift::OpenCodeStatsTests::testMonthlyTokensAndEstimatedValue` | Monthly tokens and estimated value: monthly tokens ≥ 2M; est $2.14 (±0.02) | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeStatsTests.swift::OpenCodeStatsTests::testDayHourlyUsageStacksModelsByLocalHour` | 24 hours, total $7, hour 9 $3 with 2 segs, hour 14 $4, hour 0 empty, legend excludes yesterday's `old`, first `minimax-m3` | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeStatsTests.swift::OpenCodeStatsTests::testHourlyAndModelsTrackMidSessionModelSwitch` | message model `gpt-5.6-luna` (Go) appears in hour 15 with cost > 0 and in models | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeStatsTests.swift::OpenCodeStatsTests::testPreviewSnapshot` | preview 3 windows, first rolling, primary 16.9/60×100 | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeStatsTests.swift::OpenCodeStatsTests::testMonthlyDailyBudgetUsesSubscriptionMonthDenominator` | reset Sep 5, now Aug 20 → first bar budget 100/31 | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeStatsTests.swift::OpenCodeStatsTests::testFetchDailySpendsFiltersToWindow` | Sep 10 $5, 16 $3, 17 $9, window [16,18) → {16:3, 17:9}, sum 12 (local-cal keys) | ws-opencode | todo | |  |
+| `TokenMonTests/Providers/OpenCode/OpenCodeStatsTests.swift::OpenCodeStatsTests::testMonthlyDailyBudgetSpreadsWhenNoLocalSpends` | no rows, used 12, window Aug 5–Sep 5, now Aug 7 → bars sum 12, today > 0 | ws-opencode | todo | |  |
+
+### ws-openrouter (#19)
+
+| Swift test | Behavior | Workstream | Status | Rust test | Notes |
+|---|---|---|---|---|---|
+| `TokenMonTests/Core/Polling/PollerSessionGuardTests.swift::PollerSessionGuardTests::testOpenRouterStaleUnauthorizedDoesNotInvalidateNewKey` | Open router stale unauthorized does not invalidate new key: same semantics for the API key | ws-openrouter | todo | |  |
+| `TokenMonTests/Core/Polling/PollerSessionGuardTests.swift::PollerSessionGuardTests::testOpenRouterCurrentUnauthorizedInvalidatesKey` | Open router current unauthorized invalidates key: same semantics for the API key | ws-openrouter | todo | |  |
+| `TokenMonTests/Providers/OpenRouter/OpenRouterAuthSessionTests.swift::OpenRouterAuthSessionTests::testStartsSignedOut` | Starts signed out: not signed in, needsSignIn, key nil | ws-openrouter | todo | |  |
+| `TokenMonTests/Providers/OpenRouter/OpenRouterAuthSessionTests.swift::OpenRouterAuthSessionTests::testSaveRejectsNonOpenRouterKey` | `not-a-key` rejected with error; `" sk-or-v1-abc123 \n"` saved trimmed | ws-openrouter | todo | |  |
+| `TokenMonTests/Providers/OpenRouter/OpenRouterAuthSessionTests.swift::OpenRouterAuthSessionTests::testSavePersistsAcrossInstances` | Save persists across instances: new instance reads key | ws-openrouter | todo | |  |
+| `TokenMonTests/Providers/OpenRouter/OpenRouterAuthSessionTests.swift::OpenRouterAuthSessionTests::testSignOutClearsKey` | Sign out clears key: key removed | ws-openrouter | todo | |  |
+| `TokenMonTests/Providers/OpenRouter/OpenRouterAuthSessionTests.swift::OpenRouterAuthSessionTests::testMarkSessionInvalidKeepsKeyButPromptsReauth` | Mark session invalid keeps key but prompts reauth: key kept, needsSignIn, error set | ws-openrouter | todo | |  |
+| `TokenMonTests/Providers/OpenRouter/OpenRouterAuthSessionTests.swift::OpenRouterAuthSessionTests::testRejectedKeyIsNotCurrentUntilReplaced` | generation not current after invalidation; new key current | ws-openrouter | todo | |  |
+| `TokenMonTests/Providers/OpenRouter/OpenRouterModelsTests.swift::OpenRouterModelsTests::testParseKeyPayload` | label, usage 25.5, daily 2.5, limit 100, management true | ws-openrouter | todo | |  |
+| `TokenMonTests/Providers/OpenRouter/OpenRouterModelsTests.swift::OpenRouterModelsTests::testParseCreditsPayload` | Parse credits payload: 100.5 / 25.75 | ws-openrouter | todo | |  |
+| `TokenMonTests/Providers/OpenRouter/OpenRouterModelsTests.swift::OpenRouterModelsTests::testBudgetPrefersAccountCredits` | credits 120/30 → accountCredits, 120, used 30, remaining 90, 25%, `Credits purchased` | ws-openrouter | todo | |  |
+| `TokenMonTests/Providers/OpenRouter/OpenRouterModelsTests.swift::OpenRouterModelsTests::testBudgetFallsBackToKeyLimit` | non-mgmt usage 25 limit 100 → keyLimit, used 25, remaining 75, 25%, `Key spending limit`, value `$100.00` | ws-openrouter | todo | |  |
+| `TokenMonTests/Providers/OpenRouter/OpenRouterModelsTests.swift::OpenRouterModelsTests::testNoBudgetYieldsNilPercent` | no limit → nil source/budget/remaining/percent; used 12.5; `None` | ws-openrouter | todo | |  |
+| `TokenMonTests/Providers/OpenRouter/OpenRouterModelsTests.swift::OpenRouterModelsTests::testKeyLimitWindowUsesLimitRemainingWhenResetSet` | remaining 90, reset monthly → used 10, remaining 90 | ws-openrouter | todo | |  |
+| `TokenMonTests/Providers/OpenRouter/OpenRouterModelsTests.swift::OpenRouterModelsTests::testKeyLimitWindowFallsBackToMatchingUsageField` | no remaining, weekly 14, reset weekly → used 14, remaining 86 | ws-openrouter | todo | |  |
+| `TokenMonTests/Providers/OpenRouter/OpenRouterModelsTests.swift::OpenRouterModelsTests::testKeyLimitUnknownResetKeepsAllTimeUsage` | reset `hourly`, no fields → used 25, remaining 75 | ws-openrouter | todo | |  |
+| `TokenMonTests/Providers/OpenRouter/OpenRouterModelsTests.swift::OpenRouterModelsTests::testZeroCreditBalanceHasNoDenominator` | Zero credit balance has no denominator: credits 0, no limit → no source | ws-openrouter | todo | |  |
+| `TokenMonTests/Providers/OpenRouter/OpenRouterModelsTests.swift::OpenRouterModelsTests::testNegativeUsageClampsToZero` | Negative usage clamps to zero: credits 8 / usage −0.5 → used 0, 0% | ws-openrouter | todo | |  |
+| `TokenMonTests/Providers/OpenRouter/OpenRouterModelsTests.swift::OpenRouterModelsTests::testKeyParsingDefaults` | Key parsing defaults: `{"data":{"usage":3}}` → defaults false/0 | ws-openrouter | todo | |  |
+| `TokenMonTests/Providers/OpenRouter/OpenRouterModelsTests.swift::OpenRouterModelsTests::testParseActivityPayload` | 2 rows parsed incl. stealth tokens 3,489,882 / 110,726 | ws-openrouter | todo | |  |
+| `TokenMonTests/Providers/OpenRouter/OpenRouterModelsTests.swift::OpenRouterModelsTests::testStealthModelRevealedAndValued` | `stealth/ox-alpha` → `z-ai/glm-5.3-flash`, revealed, estimated $0.185 | ws-openrouter | todo | |  |
+| `TokenMonTests/Providers/OpenRouter/OpenRouterModelsTests.swift::OpenRouterModelsTests::testReportedCostIsNotEstimatedAndAggregates` | Reported cost is not estimated and aggregates: 2.1292 + 0.5 → 2.6292, requests 500, 100% | ws-openrouter | todo | |  |
+| `TokenMonTests/Providers/OpenRouter/OpenRouterModelsTests.swift::OpenRouterModelsTests::testUnpricedFreeSlugStaysZero` | `moonshotai/kimi-k2.6:free` → $0, not estimated | ws-openrouter | todo | |  |
+| `TokenMonTests/Providers/OpenRouter/OpenRouterUsageClientTests.swift::OpenRouterUsageClientTests::testEndpointURLsResolveUnderAPIVersionPath` | Endpoint UR ls resolve under API version path: `/api/v1/key`, `/credits`, `/activity` | ws-openrouter | todo | |  |
+| `TokenMonTests/Providers/OpenRouter/OpenRouterUsageClientTests.swift::OpenRouterUsageClientTests::testNonManagementKeySkipsAccountEndpoints` | Non management key skips account endpoints: only `.key` requested; keyLimit | ws-openrouter | todo | |  |
+| `TokenMonTests/Providers/OpenRouter/OpenRouterUsageClientTests.swift::OpenRouterUsageClientTests::testManagementKeyFetchesCreditsAndActivity` | Management key fetches credits and activity: all 3 requested; accountCredits 40 | ws-openrouter | todo | |  |
+| `TokenMonTests/Providers/OpenRouter/OpenRouterUsageClientTests.swift::OpenRouterUsageClientTests::testAccountEndpointFailureDegradesToKeyLimit` | Account endpoint failure degrades to key limit: credits/activity throw → keyLimit, no models | ws-openrouter | todo | |  |
+
+### ws-secrets (#20)
+
+| Swift test | Behavior | Workstream | Status | Rust test | Notes |
+|---|---|---|---|---|---|
+| `TokenMonTests/Platform/Auth/CredentialStoreTests.swift::CredentialStoreTests::testInjectedStoreBacksSession` | Injected store backs session: the store seam | ws-secrets | todo | |  |
+| `TokenMonTests/Platform/Auth/CredentialStoreTests.swift::CredentialStoreTests::testSignOutRemovesCredentialThroughStore` | Sign out removes credential through store: the store seam | ws-secrets | todo | |  |
+| `TokenMonTests/Platform/Auth/CredentialStoreTests.swift::CredentialStoreTests::testFileBackedCredentialStoreDelegates` | File backed credential store delegates: the store seam | ws-secrets | todo | |  |
+| `TokenMonTests/Platform/Auth/CredentialStoreTests.swift::CredentialStoreTests::testFilePermissionsAreUserOnly` | File permissions are user only: mode 0600 (Windows: owner-only ACL) | ws-secrets | todo | | Windows: owner-only DACL, no inheritance, instead of mode 0600. |
+| `TokenMonTests/Platform/Auth/CredentialStoreTests.swift::CredentialStoreTests::testMigrationMovesSecretFileIntoSecureStore` | Migration moves secret file into secure store: the session moves; email stays in the file | ws-secrets | todo | |  |
+| `TokenMonTests/Platform/Auth/CredentialStoreTests.swift::CredentialStoreTests::testMigrationFailureKeepsFileAndKeepsWorking` | Migration failure keeps file and keeps working: the file stays authoritative | ws-secrets | todo | |  |
+| `TokenMonTests/Platform/Auth/CredentialStoreTests.swift::CredentialStoreTests::testSecureWriteRemovesLeftoverFile` | Secure write removes leftover file | ws-secrets | todo | |  |
+| `TokenMonTests/Platform/Auth/CredentialStoreTests.swift::CredentialStoreTests::testProvidersShareOneVaultItem` | Providers share one vault item: one item only | ws-secrets | todo | | Windows: one DPAPI vault file `vault.bin`. |
+| `TokenMonTests/Platform/Auth/CredentialStoreTests.swift::CredentialStoreTests::testVaultCachesReads` | Vault caches reads: reads == 1 | ws-secrets | todo | |  |
+| `TokenMonTests/Platform/Auth/CredentialStoreTests.swift::CredentialStoreTests::testSeparateItemMovesIntoVault` | Separate item moves into vault: adoption | ws-secrets | n/a | | Keychain-specific: adopting pre-vault per-provider Keychain items. Windows starts with the DPAPI vault; separate-item adoption is not needed (spec 01 §1.6.3, §8). |
+| `TokenMonTests/Platform/Auth/CredentialStoreTests.swift::CredentialStoreTests::testSignedOutAccountIsNotRestoredFromSeparateItem` | Signed out account is not restored from separate item: an undeletable legacy item stays signed out | ws-secrets | n/a | | Keychain-specific: an undeletable legacy separate Keychain item. No separate items exist on Windows (spec 01 §8). |
+| `TokenMonTests/Platform/Auth/CredentialStoreTests.swift::CredentialStoreTests::testRefusedSeparateItemIsNotRetried` | Refused separate item is not retried: no re-read | ws-secrets | n/a | | Keychain-specific: a separate Keychain item the user refused access to. No separate items or access prompts with DPAPI (spec 01 §8). |
+| `TokenMonTests/Platform/Auth/CredentialStoreTests.swift::CredentialStoreTests::testRefusedVaultIsNeverOverwritten` | set returns false; the item bytes are unchanged | ws-secrets | todo | |  |
+| `TokenMonTests/Platform/Auth/CredentialStoreTests.swift::CredentialStoreTests::testRemovalWhileVaultUnavailableIsAppliedOnNextLoad` | Removal while vault unavailable is applied on next load: the pending list is applied, then cleared | ws-secrets | todo | |  |
+| `TokenMonTests/Platform/Auth/CredentialStoreTests.swift::CredentialStoreTests::testKeychainStoreReportsFailedWrite` | Keychain store reports failed write: false | ws-secrets | todo | | Windows: DPAPI vault write failure. |
+| `TokenMonTests/Platform/Auth/CredentialStoreTests.swift::CredentialStoreTests::testKeychainStoreVerifiesWriteByReadingBack` | Keychain store verifies write by reading back: corruption keeps the file | ws-secrets | todo | | Windows: DPAPI vault read-back verify. |
+| `TokenMonTests/Platform/Auth/CredentialStoreTests.swift::CredentialStoreTests::testFileStoreFirstWriteIsAtomicAndLeavesNoStagingFile` | File store first write is atomic and leaves no staging file: only `activity_k.dat` exists | ws-secrets | todo | |  |
+| `TokenMonTests/Platform/Auth/CredentialStoreTests.swift::CredentialStoreTests::testFileStoreReportsFailedWrite` | File store reports failed write: false for a missing directory | ws-secrets | todo | |  |
+
+### ws-power (#22)
+
+| Swift test | Behavior | Workstream | Status | Rust test | Notes |
+|---|---|---|---|---|---|
+| `TokenMonTests/Platform/SystemWakeGateTests.swift::SystemWakeGateTests::testWakeWaitsForASatisfiedPath` | sleep, wake, false: only "sleep"; then true gives "ready"; the fallback is cancelled | ws-power | todo | | Windows: `WM_POWERBROADCAST` + Network List Manager. |
+| `TokenMonTests/Platform/SystemWakeGateTests.swift::SystemWakeGateTests::testPathThatCameBackDuringWakeResumesImmediately` | Path that came back during wake resumes immediately: sleep, path true, wake: ready at once | ws-power | todo | |  |
+| `TokenMonTests/Platform/SystemWakeGateTests.swift::SystemWakeGateTests::testFallbackResumesWhenThePathNeverChanges` | Fallback resumes when the path never changes: 30 s fallback gives ready | ws-power | todo | |  |
+| `TokenMonTests/Platform/SystemWakeGateTests.swift::SystemWakeGateTests::testPathChangesOutsideAWakeDoNothing` | Path changes outside a wake do nothing: no events | ws-power | todo | |  |
+
+### ws-webauth (#24)
+
+| Swift test | Behavior | Workstream | Status | Rust test | Notes |
+|---|---|---|---|---|---|
+| `TokenMonTests/Platform/Auth/ProviderCookieAllowlistTests.swift::ProviderCookieAllowlistTests::testForeignDomainCookiesAreIgnored` | Foreign domain cookies are ignored: real policies | ws-webauth | todo | |  |
+| `TokenMonTests/Platform/Auth/WebKitCookieCaptureTests.swift::WebKitCookieCaptureTests::testEssentialNamesNarrowWhatIsStored` | Essential names narrow what is stored: `select` | ws-webauth | todo | |  |
+| `TokenMonTests/Platform/Auth/WebKitCookieCaptureTests.swift::WebKitCookieCaptureTests::testAllowlistWithoutSessionCookieCapturesNothing` | Allowlist without session cookie captures nothing: `select` | ws-webauth | todo | |  |
+| `TokenMonTests/Platform/Auth/WebKitCookieCaptureTests.swift::WebKitCookieCaptureTests::testEmptyAllowlistKeepsBroadCapture` | Empty allowlist keeps broad capture: `select` | ws-webauth | todo | |  |
+| `TokenMonTests/Platform/Auth/WebKitCookieCaptureTests.swift::WebKitCookieCaptureTests::testOtherDomainCookiesAreIgnored` | Other domain cookies are ignored: `select` | ws-webauth | todo | |  |
+| `TokenMonTests/Platform/Auth/WebKitCookieCaptureTests.swift::WebKitCookieCaptureTests::testExtractsEmailNamedCookie` | Extracts email named cookie: `dev%40example.com` gives decoded | ws-webauth | todo | |  |
+| `TokenMonTests/Platform/Auth/WebKitCookieCaptureTests.swift::WebKitCookieCaptureTests::testExtractsUserEmailNamedCookie` | Extracts user email named cookie: email extraction | ws-webauth | todo | |  |
+| `TokenMonTests/Platform/Auth/WebKitCookieCaptureTests.swift::WebKitCookieCaptureTests::testFallsBackToShortValueContainingAt` | Falls back to short value containing at: email extraction | ws-webauth | todo | |  |
+| `TokenMonTests/Platform/Auth/WebKitCookieCaptureTests.swift::WebKitCookieCaptureTests::testRejectsImplausibleEmailValues` | Rejects implausible email values: `a@b`, `@example.com`, `user@`, `x@y@z.com`, `token@abc.12`, `user@example.com; path=/`, `"q"@example.com`, `https://u@example.com`, `not-an-email@localhost` | ws-webauth | todo | |  |
+| `TokenMonTests/Platform/Auth/WebKitCookieCaptureTests.swift::WebKitCookieCaptureTests::testIgnoresLongValuesWithSpaces` | Ignores long values with spaces: email extraction | ws-webauth | todo | |  |
+| `TokenMonTests/Platform/Auth/WebKitCookieCaptureTests.swift::WebKitCookieCaptureTests::testReturnsNilWithoutEmailLikeCookies` | Returns nil without email like cookies: email extraction | ws-webauth | todo | |  |
+| `TokenMonTests/Platform/Auth/WebKitCookieCaptureTests.swift::WebKitCookieCaptureTests::testPrefersExplicitEmailCookieOverFallback` | Prefers explicit email cookie over fallback: email extraction | ws-webauth | todo | |  |
+| `TokenMonTests/UI/SignIn/SignInBrowserNavigationTests.swift::SignInBrowserNavigationTests::testBackGoesBackWhenHistoryExists` | Back goes back when history exists: canGoBack → goBack at depth 0 and 1. | ws-webauth | todo | |  |
+| `TokenMonTests/UI/SignIn/SignInBrowserNavigationTests.swift::SignInBrowserNavigationTests::testBackClosesPopupWhenPopupHasNoHistory` | Back closes popup when popup has no history: no history, depth 1 or 2 → closePopup. | ws-webauth | todo | |  |
+| `TokenMonTests/UI/SignIn/SignInBrowserNavigationTests.swift::SignInBrowserNavigationTests::testBackDoesNothingOnMainPageWithoutHistory` | Back does nothing on main page without history: no history, depth 0 → none. | ws-webauth | todo | |  |
+| `TokenMonTests/UI/SignIn/SignInBrowserNavigationTests.swift::SignInBrowserNavigationTests::testBackActionRawValuesRoundTrip` | All cases round-trip raw values; non-empty display names; unknown raw → nil. | ws-webauth | todo | |  |
+| `TokenMonTests/UI/SignIn/SignInBrowserNavigationTests.swift::SignInBrowserNavigationTests::testReturnGateIgnoresStartURLUntilAuthHost` | Cursor start URL → none; Google auth → authHost (didSeeAuth true); start URL again → returnPage. | ws-webauth | todo | |  |
+| `TokenMonTests/UI/SignIn/SignInBrowserNavigationTests.swift::SignInBrowserNavigationTests::testReturnGateDoesNotCaptureBeforeAuth` | claude.ai/new → none; claude.ai/login → authHost; /new → returnPage. | ws-webauth | todo | |  |
+| `TokenMonTests/UI/SignIn/SignInBrowserNavigationTests.swift::SignInBrowserNavigationTests::testApplyDoesNotPublishWhenNothingChanged` | First apply notifies observers; 5 identical applies notify nothing. | ws-webauth | todo | |  |
+| `TokenMonTests/UI/SignIn/SignInBrowserNavigationTests.swift::SignInBrowserNavigationTests::testApplyPublishesOnceForEachRealChange` | depth 0 → hasPopup/backIsEnabled false; depth 1 → change notified, both true; URL change → notified and stored. | ws-webauth | todo | |  |
+| `TokenMonTests/UI/SignIn/SignInBrowserNavigationTests.swift::SignInBrowserNavigationTests::testAttachIsIdempotent` | Re-attaching the same browser 5× notifies nothing. | ws-webauth | todo | |  |
+| `TokenMonTests/UI/SignIn/SignInBrowserNavigationTests.swift::SignInBrowserNavigationTests::testSignInBrowserDoesNotOverrideTheUserAgent` | No custom UA; (opt-in `TOKENMON_RUN_WEBKIT_TESTS=1`) `navigator.userAgent` contains "Mozilla/5.0" and "AppleWebKit", not "TokenMon". Windows: assert WebView2 UA unmodified, contains "Mozilla/5.0", not "TokenMon". | ws-webauth | todo | | Windows: WebView2 UA unmodified, contains "Mozilla/5.0", not "TokenMon". |
+| `TokenMonTests/UI/SignIn/SignInBrowserNavigationTests.swift::SignInBrowserNavigationTests::testRearmReturnDoesNotPublish` | Rearm return does not publish: `rearmReturn()` notifies nothing. | ws-webauth | todo | |  |
+
+### ws-ui-kit (#25)
+
+| Swift test | Behavior | Workstream | Status | Rust test | Notes |
+|---|---|---|---|---|---|
+| `TokenMonTests/UI/Components/ColorPaletteTests.swift::ColorPaletteTests::testSRGBComponentsRoundTrip` | SRGB(0.5,0.25,0.75,0.4) keeps components (±1e-4). | ws-ui-kit | todo | |  |
+| `TokenMonTests/UI/Components/ColorPaletteTests.swift::ColorPaletteTests::testSRGBConversionHelpers` | SRGB(0.25,0.5,0.75) → framework color → RGB 0.25/0.5/0.75 (±1e-3). | ws-ui-kit | todo | |  |
+| `TokenMonTests/UI/Components/ColorPaletteTests.swift::ColorPaletteTests::testProductColorSRGB` | Product color SRGB: build.blue == 1.0; chat.red == 0.11. | ws-ui-kit | todo | |  |
+| `TokenMonTests/UI/Components/DailyBudgetHoverTests.swift::DailyBudgetHoverTests::testColumnIndexMapsThePointerToABar` | (0,40,7)→0; (119.9)→2; (279)→6; (280)→nil; (−1)→nil; (10, width 0, cols 0)→nil. | ws-ui-kit | todo | |  |
+| `TokenMonTests/UI/Components/DailyBudgetHoverTests.swift::DailyBudgetHoverTests::testLabelFloatsBesideThePointer` | size 100×60, container 300: pointer (200,50) → (86,20); (40,50) → (54,20); size 250×60 at (100,50) → (0,20). | ws-ui-kit | todo | |  |
+| `TokenMonTests/UI/Components/DailyBudgetHoverTests.swift::DailyBudgetHoverTests::testUsageLineDescribesTheDay` | spent 31, budget 100/7, "weekly" → "31.0% of weekly · 217% of daily allowance"; spent 0 → "0% of the 14.3% daily allowance". | ws-ui-kit | todo | |  |
+| `TokenMonTests/UI/Components/MonthlyDailyBudgetBarsViewTests.swift::MonthlyDailyBudgetBarsViewTests::testResetsAtReachesTheSharedBars` | Monthly view passes `resetsAt` unchanged to the shared bars and sets allowancePeriod `.monthly`. | ws-ui-kit | todo | |  |
+| `TokenMonTests/UI/MenuBar/SegmentedUsageBarTests.swift::SegmentedUsageBarTests::testWidthsAreProportionalWhenTheyFit` | `[50,25,25]`, usable 100, min 3 → `[50,25,25]`. | ws-ui-kit | todo | |  |
+| `TokenMonTests/UI/MenuBar/SegmentedUsageBarTests.swift::SegmentedUsageBarTests::testFloorsAreNormalizedSoTheyDoNotOverflow` | `[0.1,0.1,0.1]`, usable 5, min 3 → sum 5 (±1e-4). | ws-ui-kit | todo | |  |
+| `TokenMonTests/UI/MenuBar/SegmentedUsageBarTests.swift::SegmentedUsageBarTests::testZeroUsableKeepsFloors` | Zero usable keeps floors: `[50,50]`, usable 0 → `[3,3]`. | ws-ui-kit | todo | |  |
+
+### ws-ui-panels (#26)
+
+| Swift test | Behavior | Workstream | Status | Rust test | Notes |
+|---|---|---|---|---|---|
+| `TokenMonTests/Providers/Registry/ProviderSwitcherLayoutTests.swift::ProviderSwitcherLayoutTests::testRowsPadTheLastRowToFullWidth` | For 1..8 tabs, every row from `rows(for:)` has exactly 4 cells; flattening non-nil cells reproduces the input order. | ws-ui-panels | todo | |  |
+| `TokenMonTests/Providers/Registry/ProviderSwitcherLayoutTests.swift::ProviderSwitcherLayoutTests::testGridEdgesMatchCardEdgesForEveryProviderCount` | At width 396 and scales 1x/2x (light), the switcher's leftmost/rightmost drawn pixel (alpha > 0.02) equals a PanelCard's within 0.01pt for 1..8 tabs. | ws-ui-panels | todo | | Windows: render the Slint switcher and PanelCard offscreen (software renderer) and compare edge pixels. |
+
+### ws-tray (#28)
+
+| Swift test | Behavior | Workstream | Status | Rust test | Notes |
+|---|---|---|---|---|---|
+| `TokenMonTests/UI/MenuBar/MenuBarStatusRendererTests.swift::MenuBarStatusRendererTests::testAppearanceIsPartOfTheRenderedKey` | Light vs dark render: different keys and different bitmaps; same appearance re-render reuses the key. | ws-tray | todo | | Windows analog: taskbar theme (`SystemUsesLightTheme`) plus icon pixel size in the tray cache key (spec 04 §2.7). |
+| `TokenMonTests/UI/MenuBar/MenuBarStatusRendererTests.swift::MenuBarStatusRendererTests::testSelectedProviderLabelHasFixedWidthAcrossProviders` | Selected mode: all 8 providers (incl. Overview) produce identical image size. | ws-tray | todo | | Windows analog: the tray bitmap is always `SM_CXSMICON` square for every provider. |
+| `TokenMonTests/UI/MenuBar/MenuBarStatusRendererTests.swift::MenuBarStatusRendererTests::testSelectedProviderLabelMatchesOverviewSwitchGeometry` | Selected mode: Overview size == OpenRouter size. | ws-tray | todo | | Windows analog: same tray bitmap size for Overview and providers. |
+| `TokenMonTests/UI/MenuBar/MenuBarStatusRendererTests.swift::MenuBarStatusRendererTests::testSelectedProviderLabelHasFixedWidthWithAndWithoutData` | Selected mode: Grok with no data == Claude with 42% (same width/height). | ws-tray | todo | | Windows analog: same tray bitmap size with and without data. |
+| `TokenMonTests/UI/MenuBar/MenuBarStatusRendererTests.swift::MenuBarStatusRendererTests::testCompositeModeRendersVisibleTrackAtZeroUsage` | Composite: 0% and 9% Grok produce the same width; the 0% image has non-transparent pixels. | ws-tray | todo | |  |
+| `TokenMonTests/UI/MenuBar/MenuBarStatusRendererTests.swift::MenuBarStatusRendererTests::testCompositeModeGrokbotBarWidensLabel` | Enabling the Grokbot graph widens the composite; height unchanged. | ws-tray | todo | | Windows analog: enabling the Grokbot graph adds a mini-bar (Mode B, up to 4) instead of widening. |
+| `TokenMonTests/UI/MenuBar/MenuBarStatusRendererTests.swift::MenuBarStatusRendererTests::testCompositeModeIgnoresSelectedProvider` | Composite width is the same for selected Grok and OpenRouter. | ws-tray | todo | |  |
+| `TokenMonTests/UI/MenuBar/MenuBarStatusRendererTests.swift::MenuBarStatusRendererTests::testCompositeRegionsFollowProviderOrder` | Graphs {grok, opencode, cursor, claude, grokbot}, default order → regions `[grok, cursor, opencode, claude, grokbot]`, non-overlapping, minX ≤ maxX, region midpoint maps back to its provider; x = last.maxX+50 and x = −5 → nil. | ws-tray | todo | | Windows analog: right-click menu items follow composite order (spec 04 §2.7). |
+| `TokenMonTests/UI/MenuBar/MenuBarStatusRendererTests.swift::MenuBarStatusRendererTests::testSelectedProviderModeHasSingleRegion` | Selected Claude → one region `[0, imageWidth]`. | ws-tray | todo | | Windows analog: selected mode gives one provider entry in the tray menu. |
+| `TokenMonTests/UI/MenuBar/MenuBarStatusRendererTests.swift::MenuBarStatusRendererTests::testCompositeOmitsDisabledProviderRegion` | Claude region present when enabled, absent when Claude is disabled. | ws-tray | todo | | Windows analog: a disabled provider has no tray-menu entry and no mini-bar. |
+| `TokenMonTests/UI/MenuBar/MenuBarStatusRendererTests.swift::MenuBarStatusRendererTests::testSnappedProviderResolvesGapClicks` | Midpoint of each inter-segment gap: exact lookup nil, snapped lookup non-nil. | ws-tray | n/a | | AppKit menu-bar-only: per-pixel click regions. A Windows tray icon cannot be hit-tested per segment; provider choice moves to the right-click menu (spec 04 §2.7, FEAT-tray-menu). |
+| `TokenMonTests/UI/MenuBar/MenuBarStatusRendererTests.swift::MenuBarStatusRendererTests::testSnappedProviderHandlesEdgePaddingButRejectsFarMisses` | first.minX−4 → first provider; last.maxX+2 → last provider; last.maxX+50 and −50 → nil. | ws-tray | n/a | | AppKit menu-bar-only: edge padding for per-pixel click regions. Not possible on a Windows tray icon (spec 04 §2.7, FEAT-tray-menu). |
+
+### ws-app (#29)
+
+| Swift test | Behavior | Workstream | Status | Rust test | Notes |
+|---|---|---|---|---|---|
+| `TokenMonTests/App/AppModelPollingTests.swift::AppModelPollingTests::testMenuOpenStateReachesEveryPoller` | Menu open state reaches every poller | ws-app | todo | |  |
+| `TokenMonTests/App/AppModelPollingTests.swift::AppModelPollingTests::testSessionSharingFollowsTheRegistry` | Session sharing follows the registry | ws-app | todo | |  |
+| `TokenMonTests/App/AppModelPollingTests.swift::AppModelPollingTests::testSignInWindowFollowsTheSession` | Sign in window follows the session | ws-app | todo | |  |
+| `TokenMonTests/Core/Utilities/ObservationLoopTests.swift::ObservationLoopTests::testHandlesTheFirstReadingAndEachChange` | [0] then [0, 1]; an unrelated property does not trigger | ws-app | todo | | Windows: explicit change bus with the `initial` flag semantics (spec 01 §8). |
+| `TokenMonTests/Core/Utilities/ObservationLoopTests.swift::ObservationLoopTests::testBurstIsHandledOnceWithTheLatestValue` | Burst is handled once with the latest value: 30 ms coalescing: 1, 2, 3 gives [3] | ws-app | todo | | Windows: change bus debounce. |
+| `TokenMonTests/Core/Utilities/ObservationLoopTests.swift::ObservationLoopTests::testCancelStopsHandling` | Cancel stops handling: no calls after cancel | ws-app | todo | | Windows: change bus subscription cancel. |
+
+## Features without Swift tests
+
+Behavior the specs require on Windows that no Swift test covers, either because
+it is Windows-specific (a platform mapping from spec 01 §8 or spec 04 §2.7) or
+because the specs call for a fix or an invariant the Swift suite does not
+check. Each still needs a Rust test. The same status rules apply; CI checks
+that `ported` rows name Rust tests that exist. Fuzz targets are tracked by the
+workstream that owns each parser (spec 02 §6, spec 03 §8) and are not listed
+here.
+
+| ID | Feature | Spec | Workstream | Status | Rust test | Notes |
+|---|---|---|---|---|---|---|
+| `FEAT-core-storage-atomic-write` | Atomic file write: temp file in the same folder, then replace (`MoveFileExW` REPLACE_EXISTING + WRITE_THROUGH); no staging file left behind on failure | 01 §1.3, §8 | ws-core-storage | todo | | |
+| `FEAT-core-storage-owner-only-acl` | Data folder and files get an owner-only DACL with no inheritance (the Windows form of 0700/0600) | 01 §8 | ws-core-storage | todo | | |
+| `FEAT-core-storage-data-dir` | Data folder is `%LOCALAPPDATA%\TokenMon\`, with the same file names and JSON formats as macOS (ref-seconds dates) | 01 §8, plan | ws-core-storage | todo | | |
+| `FEAT-core-net-set-cookie-separate` | Every `Set-Cookie` header is collected separately, and the cookie parser still accepts comma-folded values | 01 §1.1.3 | ws-core-net | todo | | |
+| `FEAT-core-net-cancel-is-skipped` | A dropped or aborted request future maps to a `Cancelled` error that the poller classifies as skipped | 01 §8 | ws-core-net | todo | | |
+| `FEAT-core-usage-tz-change` | A time-zone change (`WM_TIMECHANGE`, `WM_SETTINGCHANGE` "intl") makes the stores re-derive day keys; the local offset is never cached | 01 §8 | ws-core-usage | todo | | |
+| `FEAT-secrets-dpapi-roundtrip` | DPAPI (user scope) vault `vault.bin` round-trips every secret, and a vault from another user or machine fails to decrypt as `unavailable` | plan, 01 §8 | ws-secrets | todo | | |
+| `FEAT-secrets-large-vault` | A vault larger than 2,560 bytes (ChatGPT's chunked NextAuth token plus other cookies) is stored and read back intact (the reason Credential Manager was rejected) | plan, 01 §8 | ws-secrets | todo | | |
+| `FEAT-notify-toast` | Threshold toast: title "TokenMon Alert", same body as macOS, tag = request id, AppUserModelID `TokenMon` | 01 §5, §8 | ws-notify | todo | | |
+| `FEAT-power-resume-dedupe` | `PBT_APMRESUMEAUTOMATIC` and `PBT_APMRESUMESUSPEND` arriving together give one `systemDidWake`; `PBT_APMSUSPEND` gives `systemWillSleep`; Modern Standby is handled | 01 §8 | ws-power | todo | | |
+| `FEAT-power-network-satisfied` | "Satisfied" means IPv4 or IPv6 internet connectivity from the Network List Manager | 01 §8 | ws-power | todo | | |
+| `FEAT-shell-single-instance` | A second launch finds the named mutex `Local\TokenMon`, sends "show" to the first instance and exits | 01 §8, plan | ws-shell | todo | | |
+| `FEAT-shell-autostart` | Launch at Login writes and removes `HKCU\...\Run\TokenMon`; a `StartupApproved\Run` first byte of `0x03` reads as "disabled in Task Manager" | 01 §8 | ws-shell | todo | | |
+| `FEAT-shell-explorer-verb` | The opt-in "Show TokenMon" desktop-background verb is registered and removed under HKCU only | plan | ws-shell | todo | | |
+| `FEAT-webauth-isolated-profile` | Each provider's WebView2 sign-in uses its own user-data folder, deleted on sign-out | plan, 01 §8 | ws-webauth | todo | | |
+| `FEAT-webauth-cookie-capture-retries` | Cookie capture through `ICoreWebView2CookieManager` keeps the allowlist and retries 4 × 400 ms | 01 §1.6.5, §8 | ws-webauth | todo | | |
+| `FEAT-update-asset-selection` | The updater picks only `tokenmon-windows-*` assets on `windows-v*` tags, skips `.pdb`, and falls back to the `.msi` as the installer package; the Mac updater never selects these assets | plan, 01 §8 | ws-update | todo | | |
+| `FEAT-update-zip-safety` | Extraction sums declared sizes before extracting (cap 256 MiB, download cap 80 MiB) and rejects absolute paths, `..`, symlinks and reparse points | 01 §8 | ws-update | todo | | Replaces the zipinfo parsing test (see n/a row). |
+| `FEAT-update-exe-swap` | Staged replace: rename the running exe to `TokenMon.old-<uuid>.exe`, move the new one in, roll back on failure; `*.old-*.exe` is deleted on the next launch | 01 §8 | ws-update | todo | | |
+| `FEAT-update-relaunch` | The new exe started with `--wait-for-pid <pid>` waits for the old process to exit before continuing | 01 §8 | ws-update | todo | | |
+| `FEAT-update-motw` | An unsigned build carrying `Zone.Identifier` with `ZoneId=3` is refused | 01 §8 | ws-update | todo | | |
+| `FEAT-tray-tooltip` | Tray tooltip: one line per segment in composite order, "—" for no data, the provider name when signed out, truncated at 127 characters | 04 §2.7 | ws-tray | todo | | |
+| `FEAT-tray-menu` | Left click toggles the popup on the selected provider; right click shows "Open <provider>" per composite segment, then "Settings…" and "Quit TokenMon" | 04 §2.7 | ws-tray | todo | | Replaces per-pixel click regions (see n/a rows). |
+| `FEAT-tray-dpi-and-cache` | The tray bitmap is rendered at `SM_CXSMICON` for the current DPI, re-rendered on DPI or theme change, and `NIM_MODIFY` is called only when the cache key changes (LRU 40) | 04 §2.7 | ws-tray | todo | | |
+| `FEAT-grok-unknown-product-order` | Unknown Grok products are sorted by (display index, id), so ties are deterministic | 02 §1.2.5, §4 | ws-grok | todo | | See divergence D3. |
+| `FEAT-grok-rest-bool-not-number` | In the REST map form, JSON booleans are not read as 1/0 | 02 §1.2.7, §4 | ws-grok | todo | | See divergence D4. |
+
+## Divergences
+
+Every intentional difference between the macOS app and the Windows port. A
+change that adds a divergence must add a row here in the same commit.
+
+### Fixed in Swift too (no longer divergent)
+
+| ID | Area | What changed | Rationale |
+|---|---|---|---|
+| D1 | Grok gRPC parser (ws-grok) | `scanForField7Products` / `parseProductSubMessage` bound every varint read to the sub-message end. Spec 02 §4 item 1 asked Rust to "fix rather than copy"; upstream faulknerpearce/token_monitor#51 (commit 488be7c) fixed the Swift parser the same way, with regression tests (`testNestedKeyVarintPastMessageEndDoesNotCrash`, `testProductKeyVarintPastMessageEndDoesNotCrash`, `testProductValueVarintPastMessageEndRejectsProduct`). | Untrusted network input; the old Swift code trapped on `UInt64(end - index)`. Both apps now behave the same, and the Rust tests port the Swift ones. |
+| D2 | Grok gRPC parser (ws-grok) | The product scan stops at depth 64 (`maxProductScanDepth`). Spec 02 §4 item 2; fixed in Swift by the same upstream #51, with `testDeeplyNestedMessagesDoNotOverflowStack`. | Adversarial nesting overflowed the stack. Rust uses the same cap so results match. |
+
+### Intentional divergences
+
+| ID | Area | macOS behavior | Windows behavior | Rationale |
+|---|---|---|---|---|
+| D3 | Grok product order (ws-grok) | Unknown products with equal display index sort in dictionary order (effectively nondeterministic). | Stable sort by (display index, id). | Spec 02 §1.2.5 and §4 item 3: deterministic output, testable. Only affects ties between unknown product ids. |
+| D4 | Grok REST map parser (ws-grok) | Swift `as? Double` reads JSON `true`/`false` as 1/0. | Booleans are not numbers. | Spec 02 §1.2.7 and §4 item 4 allow it; a boolean is never a usage percent. |
+| D5 | ChatGPT account-id fallback (ws-chatgpt) | When no known claim is present, the `account_id` substring scan iterates the JWT claims in unspecified dictionary order. | Document (JSON) order. | Spec 03 §2.4 and §6 item 2: deterministic. Same result whenever only one claim matches, which is the case the Swift test covers. |
+| D6 | Numeric safety (all parsers) | Some Swift conversions trap or produce NaN on hostile input (e.g. `Int(f64)` on huge window seconds, `Double("nan")`). | Saturating conversions, NaN and infinity guarded, no panics. | Spec 02 §6 and spec 03 §8 fuzz invariants. Values that Swift handles without trapping give the same result. |
+
+### Parity quirks preserved
+
+Spec 03 §6 lists Swift behaviors that look odd. The Windows port **keeps** them
+so both apps show the same numbers; changing any of them means changing the
+Swift app as well (a `windows-parity` issue), not only the port.
+
+| ID | Area | Quirk kept | Notes |
+|---|---|---|---|
+| Q1 | ChatGPT usage (ws-chatgpt) | `primary_window: null` blocks the `five_hour` fallback (the fallback key is used only when the first key is absent); same for `secondary_window` / `weekly`. | Spec 03 §2.5, §6 item 1. Open question to the maintainer on #5 whether to fix it in both apps. |
+| Q2 | OpenCode models (ws-opencode) | `modelUsage.sessionCount`: rows with an empty session id add 1; a row with an id overwrites the count with the number of distinct ids. | Spec 03 §3.6, §6 item 3. |
+| Q3 | OpenCode monthly window (ws-opencode) | With no Go session, the monthly window anchors at `now` (monthly ≈ $0). | Spec 03 §6 item 4. |
+| Q4 | OpenCode rolling window (ws-opencode) | The rolling window has no upper time bound. | Spec 03 §6 item 5. |
+| Q5 | Claude transcripts (ws-claude) | Decoding is type-strict per declared field: a string token count drops the line. | Spec 03 §6 item 6. |
+| Q6 | Claude transcripts (ws-claude) | Consuming an unterminated but valid JSON tail forces a full re-parse next time (correct, slower). | Spec 03 §6 item 7. |
+| Q7 | Claude org id (ws-claude) | The `lastActiveOrg` cookie-name match is case-sensitive, while the allowlist is case-insensitive. | Spec 03 §6 item 8. |
+| Q8 | OpenRouter pricing (ws-openrouter) | `:free` slugs are not price-normalised and stay $0. | Spec 03 §6 item 9. |
+| Q9 | ChatGPT tests (ws-chatgpt) | `testAccountIDFromAccessToken` keeps the misspelt claim `chatggpt_account_id` to exercise the `account_id` substring fallback. | Spec 03 §6 item 10. Port the fixture as-is. |
+
+### Platform mappings
+
+macOS services replaced by a Windows equivalent with the same observable
+behavior (spec 01 §8, spec 04 §2.7, plan Decisions). The tests for these are the
+`n/a` rows above (no equivalent) or the `FEAT-` rows (new Windows behavior).
+
+| ID | macOS | Windows | Notes |
+|---|---|---|---|
+| P1 | Keychain, one generic-password vault item | DPAPI (user scope) vault file `%LOCALAPPDATA%\TokenMon\vault.bin` | Credential Manager rejected: 2,560-byte blob cap. Separate-item adoption dropped. |
+| P2 | `~/Library/Application Support/TokenMon` (0700, files 0600) | `%LOCALAPPDATA%\TokenMon\` with an owner-only DACL | Same file names and formats. |
+| P3 | `UserDefaults` | JSON settings file, same key names and types | |
+| P4 | Menu-bar status item with per-segment click regions | One tray icon, tooltip, right-click menu per segment | Per-pixel hit-testing is impossible in the notification area. |
+| P5 | `NSWorkspace` sleep/wake, `NWPathMonitor` | `WM_POWERBROADCAST`, Network List Manager | `SystemWakeGate` semantics unchanged. |
+| P6 | `UNUserNotificationCenter` | WinRT toast with an AppUserModelID | No permission prompt. |
+| P7 | `SMAppService` launch at login | HKCU `Run` key, `StartupApproved` check | |
+| P8 | `WKWebView` non-persistent data store | WebView2 with a per-provider user-data folder | |
+| P9 | `.app` zip/`.pkg` update, code signature, quarantine, `/bin/sh` relaunch | `tokenmon-windows-*` zip/`.msi` on `windows-v*` tags, Authenticode (signing deferred), Mark-of-the-Web, `--wait-for-pid` relaunch | |
+| P10 | `LegacyCacheCleanup`, `ModelMonitor` folder move, SwiftData import | Not needed | Matching tests are `n/a`. |
+| P11 | Dock show/hide (activation policy) | Not needed; single-instance guard added | |
