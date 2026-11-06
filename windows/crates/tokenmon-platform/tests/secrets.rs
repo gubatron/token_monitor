@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! Credential store and vault behaviour (spec 01 section 1.6.1 to 1.6.3),
 //! ported from `Auth/CredentialStoreTests`. Hermetic: temp dirs and a fake
 //! encryptor.
@@ -337,7 +338,7 @@ fn payload_decoder_contract() {
     );
     let big = vec![b' '; 4 * 1024 * 1024 + 1];
     assert_eq!(decode_payload(&big), Err(PayloadError::TooLarge));
-    assert!(decode_pending(b"[\"a\",\"a\",\"b\"]").unwrap().len() == 2);
+    assert_eq!(decode_pending(b"[\"a\",\"a\",\"b\"]").unwrap().len(), 2);
     assert!(decode_pending(b"{}").is_err());
 }
 
