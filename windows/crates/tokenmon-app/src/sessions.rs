@@ -4,8 +4,9 @@
 //! Cursor's session is shared with Grokbot, so Grokbot has no session of its
 //! own. OpenRouter keeps its thin API-key session.
 
+use std::collections::BTreeMap;
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, PoisonError};
 
 use tokenmon_core::{
     AuthConfig, BrowserStateCleaner, Clock, CookieAuthSession, CredentialStore,
@@ -78,6 +79,7 @@ pub struct Sessions {
     pub opencode: Arc<CookieAuthSession>,
     /// OpenRouter API key.
     pub openrouter: Arc<OpenRouterAuthSession>,
+    sign_in_errors: Mutex<BTreeMap<ProviderId, String>>,
 }
 
 impl Sessions {
@@ -115,7 +117,31 @@ impl Sessions {
             chatgpt: cookie(ProviderId::ChatGpt),
             opencode: cookie(ProviderId::OpenCode),
             openrouter: Arc::new(OpenRouterAuthSession::new(store(OPENROUTER_STORE_PREFIX))),
+            sign_in_errors: Mutex::new(BTreeMap::new()),
         }
+    }
+
+    /// Remembers why `provider`'s sign-in window could not open (`None`
+    /// clears it). Panels and Settings show it like an auth error.
+    pub fn set_sign_in_error(&self, provider: ProviderId, error: Option<String>) {
+        let mut errors = self
+            .sign_in_errors
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        match error {
+            Some(e) => errors.insert(provider.sign_in_provider(), e),
+            None => errors.remove(&provider.sign_in_provider()),
+        };
+    }
+
+    /// The last sign-in-window failure of `provider`, until it is cleared by
+    /// a successful open, a completed sign-in or a sign-out.
+    pub fn sign_in_error(&self, provider: ProviderId) -> Option<String> {
+        self.sign_in_errors
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .get(&provider.sign_in_provider())
+            .cloned()
     }
 
     /// The writable cookie session behind `provider`'s sign-in (Grokbot maps to

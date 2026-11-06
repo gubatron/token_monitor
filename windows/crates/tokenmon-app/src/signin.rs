@@ -14,6 +14,30 @@ use url::Url;
 
 use crate::sessions::{Sessions, auth_config_of, slug};
 
+/// Where to get the WebView2 runtime the sign-in window needs (https only).
+pub const WEBVIEW2_DOWNLOAD_URL: &str = "https://developer.microsoft.com/microsoft-edge/webview2/";
+
+/// What the user is told when the sign-in window could not open.
+///
+/// ```
+/// use tokenmon_app::signin::{sign_in_failure_message, WEBVIEW2_DOWNLOAD_URL};
+/// use tokenmon_platform::webauth::WebAuthError;
+/// let m = sign_in_failure_message(&WebAuthError::BrowserUnavailable("x".into()));
+/// assert!(m.contains(WEBVIEW2_DOWNLOAD_URL));
+/// ```
+pub fn sign_in_failure_message(error: &WebAuthError) -> String {
+    match error {
+        WebAuthError::BrowserUnavailable(_) => format!(
+            "Sign-in could not open: the Microsoft Edge WebView2 Runtime is missing or failed \
+             to start. Install it from {WEBVIEW2_DOWNLOAD_URL} and try again."
+        ),
+        WebAuthError::Unsupported => "Sign-in is only available on Windows.".to_owned(),
+        WebAuthError::InvalidConfig(detail) => {
+            format!("Sign-in could not open: invalid sign-in configuration ({detail}).")
+        }
+    }
+}
+
 /// Called on the UI side after a sign-in finished (refresh pollers, update
 /// panels). Receives the provider whose window was opened.
 pub type SignInCompleted = Arc<dyn Fn(ProviderId) + Send + Sync>;
@@ -208,12 +232,24 @@ impl SignInService {
             session,
             on_completed: Arc::clone(&self.on_completed),
         });
-        self.host.open(config, delegate)
+        match self.host.open(config, delegate) {
+            Ok(()) => {
+                self.sessions.set_sign_in_error(provider, None);
+                Ok(())
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, %provider, "sign-in could not open");
+                self.sessions
+                    .set_sign_in_error(provider, Some(sign_in_failure_message(&e)));
+                Err(e)
+            }
+        }
     }
 
     /// Signs `provider` out: the session forgets its credentials (firing the
     /// sign-out event) and the browser profile is cleared.
     pub fn sign_out(&self, provider: ProviderId) {
+        self.sessions.set_sign_in_error(provider, None);
         if let Some(session) = self.sessions.cookie_session(provider) {
             session.sign_out();
         } else if provider == ProviderId::OpenRouter {
