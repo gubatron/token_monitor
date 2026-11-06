@@ -36,7 +36,15 @@ fuzz_dir=fuzz
 mkdir -p "$out/rows" "$out/logs" "$out/crashes"
 
 if [ ${#targets[@]} -eq 0 ]; then
-  mapfile -t targets < <(cargo fuzz list --fuzz-dir "$fuzz_dir")
+  # A failing `cargo fuzz list` (e.g. a broken manifest) must not read as
+  # "no targets": record it as a build failure.
+  if ! listing=$(cargo fuzz list --fuzz-dir "$fuzz_dir" 2>"$out/logs/list.log"); then
+    cat "$out/logs/list.log"
+    cp "$out/logs/list.log" "$out/build-failed.log"
+    exit 1
+  fi
+  mapfile -t targets <<<"$listing"
+  [ -n "${targets[0]:-}" ] || targets=()
 fi
 if [ ${#targets[@]} -eq 0 ]; then
   echo "No fuzz targets."
