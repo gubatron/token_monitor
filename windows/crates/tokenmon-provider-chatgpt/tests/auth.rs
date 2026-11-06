@@ -4,6 +4,12 @@
 //! The cookie capture pipeline (`WebKitCookieCapture.select`, spec 01 1.6.5) is
 //! owned by ws-webauth; `select` below is a faithful test-local model of it so
 //! the real ChatGPT policy (hosts, allowlist, preferred cookie) is exercised.
+#![allow(
+    clippy::unwrap_used,
+    clippy::unused_async,
+    clippy::unused_async_trait_impl,
+    clippy::option_option
+)]
 
 use tokenmon_core::net::Domain;
 use tokenmon_provider_chatgpt::{

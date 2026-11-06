@@ -1,4 +1,10 @@
 //! The live transport against wiremock: headers, paths and `Set-Cookie` folding.
+#![allow(
+    clippy::unwrap_used,
+    clippy::unused_async,
+    clippy::unused_async_trait_impl,
+    clippy::option_option
+)]
 
 mod common;
 

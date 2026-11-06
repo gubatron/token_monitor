@@ -1,4 +1,10 @@
 //! Shared fixtures: JWT builder, scripted transport, fake rolling-cookie session.
+#![allow(
+    clippy::unwrap_used,
+    clippy::unused_async,
+    clippy::unused_async_trait_impl,
+    clippy::option_option
+)]
 #![allow(dead_code)]
 
 use std::sync::atomic::{AtomicUsize, Ordering};

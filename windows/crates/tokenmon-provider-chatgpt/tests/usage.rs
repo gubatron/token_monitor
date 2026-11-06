@@ -1,5 +1,11 @@
 //! Port of `ChatGPTUsageClientTests.swift` (parse, session token, JWT claims) and
 //! the window-label test from `ChatGPTAccessTokenCacheTests.swift`.
+#![allow(
+    clippy::unwrap_used,
+    clippy::unused_async,
+    clippy::unused_async_trait_impl,
+    clippy::option_option
+)]
 
 mod common;
 
