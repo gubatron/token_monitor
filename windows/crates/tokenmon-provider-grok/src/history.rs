@@ -9,13 +9,13 @@
 //! on exit); [`GrokHistoryStore::is_dirty`] says whether a write is pending.
 
 use std::fs;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use tokenmon_core::Clock;
+use tokenmon_core::storage::{PlatformPermissions, write_atomic};
 
 use crate::calendar::{DayCalendar, LocalCalendar, seconds_between};
 use crate::models::WeeklyUsageSnapshot;
@@ -50,11 +50,9 @@ pub trait HistoryBacking: Send + Sync {
     fn write(&self, text: &str) -> bool;
 }
 
-/// File-backed [`HistoryBacking`]: atomic replace (temp file, then rename),
-/// owner-only permissions on Unix.
-///
-/// A private stand-in for the shared core `FileBackedStringStore` until that
-/// lands.
+/// File-backed [`HistoryBacking`] over core's [`write_atomic`] (owner-only
+/// staging file, then rename). Reads keep Missing and Unreadable distinct,
+/// which the keyed `TextStore` cannot express.
 #[derive(Debug, Clone)]
 pub struct FileBacking {
     path: PathBuf,
@@ -86,24 +84,15 @@ impl HistoryBacking for FileBacking {
     }
 
     fn write(&self, text: &str) -> bool {
-        write_atomic(&self.path, text.as_bytes()).is_ok()
+        write_file(&self.path, text.as_bytes()).is_ok()
     }
 }
 
-fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
-    let dir = path.parent().unwrap_or_else(|| Path::new("."));
-    fs::create_dir_all(dir)?;
-    let tmp = path.with_extension("dat.tmp");
-    let mut file = fs::File::create(&tmp)?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        file.set_permissions(fs::Permissions::from_mode(0o600))?;
+fn write_file(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    if let Some(dir) = path.parent() {
+        fs::create_dir_all(dir)?;
     }
-    file.write_all(bytes)?;
-    file.sync_all()?;
-    drop(file);
-    fs::rename(&tmp, path)
+    write_atomic(path, bytes, &PlatformPermissions)
 }
 
 #[derive(Serialize, Deserialize)]

@@ -23,4 +23,5 @@ pub mod grpc;
 pub mod history;
 pub mod models;
 pub mod poller;
+pub mod provider_poller;
 pub mod rest;
