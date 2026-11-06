@@ -31,7 +31,8 @@ permissions:
 # (grouped by commit, never cancelled): each commit gets a lint and test
 # verdict. Only the expensive jobs (coverage, fuzz smoke, release build) are
 # superseded by a newer push to the same branch, through job-level
-# concurrency below; the Summary job reports those as "superseded", not as
+# concurrency below (a manual workflow_dispatch run is never superseded, so
+# it always gives a full verdict); the Summary job reports those as "superseded", not as
 # failures. Superseded pull-request runs are cancelled outright.
 concurrency:
   group: windows-ci-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
@@ -258,7 +259,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
     concurrency:
-      group: windows-ci-coverage-${{ matrix.os }}-${{ github.ref }}
+      group: windows-ci-coverage-${{ matrix.os }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.ref }}
       cancel-in-progress: true
     permissions:
       contents: read
@@ -369,7 +370,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     concurrency:
-      group: windows-ci-fuzz-smoke-${{ github.ref }}
+      group: windows-ci-fuzz-smoke-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.ref }}
       cancel-in-progress: true
     env:
       # Fuzzing needs nightly (sanitizers); pin a dated one and bump it on
@@ -456,7 +457,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 40
     concurrency:
-      group: windows-ci-windows-build-${{ github.ref }}
+      group: windows-ci-windows-build-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.ref }}
       cancel-in-progress: true
     defaults:
       run:
