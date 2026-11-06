@@ -10,6 +10,7 @@
 pub mod alerts;
 pub mod app;
 pub mod model;
+pub mod panel;
 pub mod poller;
 pub mod providers;
 pub mod registry;
@@ -18,3 +19,6 @@ pub mod signin;
 pub mod smoke;
 pub mod testing;
 pub mod tray;
+
+#[cfg(windows)]
+pub mod shell;
