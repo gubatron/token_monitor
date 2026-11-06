@@ -72,6 +72,8 @@ pub struct ProviderDeps<'a> {
     pub version: Option<&'a str>,
     /// The user's home directory (Claude Code transcripts).
     pub home: Option<PathBuf>,
+    /// Where OpenCode's local database is looked up.
+    pub opencode_env: DataDirEnv,
 }
 
 /// Prices zero-cost OpenRouter models from the OpenCode Zen catalogue.
@@ -293,7 +295,7 @@ pub fn build_registry(deps: &ProviderDeps<'_>) -> Result<ProviderRegistry, Build
         auth: sessions.opencode.clone(),
         clock: Arc::clone(clock),
         fetch_console: console_fetch_fn(Arc::new(ConsoleClient::new(console))),
-        load_scan: live_scan_source(DataDirEnv::from_process()),
+        load_scan: live_scan_source(deps.opencode_env.clone()),
     });
 
     let interval_for = |p: ProviderId| {

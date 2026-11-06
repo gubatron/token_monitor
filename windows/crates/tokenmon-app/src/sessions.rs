@@ -131,6 +131,21 @@ impl Sessions {
         }
     }
 
+    /// Whether `provider` has a usable session (signed in and not asked to
+    /// sign in again).
+    pub fn signed_in(&self, provider: ProviderId) -> bool {
+        use tokenmon_core::AuthSession;
+        let state = match provider.sign_in_provider() {
+            ProviderId::Grok => self.grok.state(),
+            ProviderId::Cursor => self.cursor.state(),
+            ProviderId::Claude => self.claude.state(),
+            ProviderId::ChatGpt => self.chatgpt.state(),
+            ProviderId::OpenCode => self.opencode.state(),
+            _ => self.openrouter.state(),
+        };
+        state.is_signed_in && !state.needs_sign_in
+    }
+
     /// Identity of the session `provider` authenticates with.
     pub fn key(&self, provider: ProviderId) -> SessionKey {
         match provider.sign_in_provider() {
