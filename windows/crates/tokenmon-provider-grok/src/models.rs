@@ -164,7 +164,10 @@ impl ProductCatalog {
     }
 
     /// Products for the panel bar and category rows (any non-zero slice).
-    pub fn panel_products(products: &[ProductUsage], visible: &HashSet<String>) -> Vec<ProductUsage> {
+    pub fn panel_products(
+        products: &[ProductUsage],
+        visible: &HashSet<String>,
+    ) -> Vec<ProductUsage> {
         Self::filtered(products, visible, 0.0)
     }
 

@@ -1,18 +1,20 @@
 //! gRPC-web parser tests: the spec 02 section 5.8 hex fixtures, the product
 //! enum map, the four upstream #51 regression payloads, framing, trailers and
 //! status validation.
+#![allow(
+    clippy::unwrap_used,
+    clippy::assert_is_empty,
+    clippy::needless_pass_by_value
+)]
 
 mod common;
 
 use chrono::{TimeZone, Utc};
-use common::{
-    FIXTURE_A_HEX, FIXTURE_B_HEX, USED_PERCENT_64, hex, synthetic_frame, utc, varint,
-};
+use common::{FIXTURE_A_HEX, FIXTURE_B_HEX, USED_PERCENT_64, hex, synthetic_frame, utc, varint};
 use tokenmon_core::{ProviderError, UsageError};
 use tokenmon_provider_grok::grpc::{
-    data_frames, looks_like_protobuf, parse_usage, percent_decode, product_for_enum,
-    read_varint, scan_protobuf, trailer_fields, validate_headers, validate_status,
-    validate_trailers,
+    data_frames, looks_like_protobuf, parse_usage, percent_decode, product_for_enum, read_varint,
+    scan_protobuf, trailer_fields, validate_headers, validate_status, validate_trailers,
 };
 
 fn now() -> chrono::DateTime<Utc> {
@@ -246,7 +248,12 @@ fn test_product_scan_depth_cap_boundary() {
         data
     };
     assert_eq!(parse_usage(&nested(10), now()).unwrap().products.len(), 1);
-    assert!(parse_usage(&nested(200), now()).unwrap().products.is_empty());
+    assert!(
+        parse_usage(&nested(200), now())
+            .unwrap()
+            .products
+            .is_empty()
+    );
 }
 
 /// Used percent is the `[1,1]` float; a top-level `[1]` float wins over a
@@ -374,7 +381,10 @@ fn test_validate_status_rules() {
     assert!(validate_status(Some("99999999999999999999"), None).is_ok());
     assert!(unauthorized(validate_status(Some("16"), None)));
     assert!(unauthorized(validate_status(Some(" 16 "), None)));
-    assert!(unauthorized(validate_status(Some("7"), Some("User UNAUTHENTICATED"))));
+    assert!(unauthorized(validate_status(
+        Some("7"),
+        Some("User UNAUTHENTICATED")
+    )));
     let err = validate_status(Some("13"), Some("secret body")).unwrap_err();
     assert_eq!(err.to_string(), "Usage request failed (HTTP 13).");
     assert!(!err.to_string().contains("secret"));
@@ -383,8 +393,14 @@ fn test_validate_status_rules() {
 /// Header-borne statuses percent-decode the message, falling back to raw.
 #[test]
 fn test_validate_headers_decodes_message() {
-    assert!(unauthorized(validate_headers(Some("2"), Some("%75nauthenticated"))));
-    assert!(unauthorized(validate_headers(Some("2"), Some("unauthenticated%zz"))));
+    assert!(unauthorized(validate_headers(
+        Some("2"),
+        Some("%75nauthenticated")
+    )));
+    assert!(unauthorized(validate_headers(
+        Some("2"),
+        Some("unauthenticated%zz")
+    )));
     assert!(validate_headers(None, None).is_ok());
 }
 
@@ -409,7 +425,14 @@ fn test_read_varint_bounds() {
     let mut i = 0;
     assert_eq!(read_varint(&[0xFF; 12], &mut i, 12), None);
     let mut i = 0;
-    assert_eq!(read_varint(&[0xFF; 9].iter().chain(&[0x01]).copied().collect::<Vec<_>>(), &mut i, 10), Some(u64::MAX));
+    assert_eq!(
+        read_varint(
+            &[0xFF; 9].iter().chain(&[0x01]).copied().collect::<Vec<_>>(),
+            &mut i,
+            10
+        ),
+        Some(u64::MAX)
+    );
     let mut i = 5;
     assert_eq!(read_varint(&[1, 2, 3], &mut i, 99), None);
 }

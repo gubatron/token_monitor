@@ -129,14 +129,20 @@ impl HttpTransport for ReqwestTransport {
                 HttpMethod::Get => reqwest::Method::GET,
                 HttpMethod::Post => reqwest::Method::POST,
             };
-            let mut builder = self.client.request(method, &request.url).timeout(request.timeout);
+            let mut builder = self
+                .client
+                .request(method, &request.url)
+                .timeout(request.timeout);
             for (name, value) in &request.headers {
                 builder = builder.header(name, value);
             }
             if !request.body.is_empty() {
                 builder = builder.body(request.body.clone());
             }
-            let mut response = builder.send().await.map_err(|e| e.without_url().to_string())?;
+            let mut response = builder
+                .send()
+                .await
+                .map_err(|e| e.without_url().to_string())?;
             let status = response.status().as_u16();
             let headers = response
                 .headers()
@@ -144,7 +150,11 @@ impl HttpTransport for ReqwestTransport {
                 .filter_map(|(k, v)| Some((k.as_str().to_owned(), v.to_str().ok()?.to_owned())))
                 .collect();
             let mut body = Vec::new();
-            while let Some(chunk) = response.chunk().await.map_err(|e| e.without_url().to_string())? {
+            while let Some(chunk) = response
+                .chunk()
+                .await
+                .map_err(|e| e.without_url().to_string())?
+            {
                 if body.len().saturating_add(chunk.len()) > MAX_RESPONSE_BYTES {
                     return Err("response too large".to_owned());
                 }
@@ -265,7 +275,9 @@ impl GrokUsageClient {
             .iter()
             .filter(|c| !c.is_empty())
             .map(|c| ("Cookie".to_owned(), c.clone()));
-        let extra = extra.iter().map(|(k, v)| ((*k).to_owned(), (*v).to_owned()));
+        let extra = extra
+            .iter()
+            .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()));
         let tail = [
             ("Origin", ORIGIN),
             ("Referer", REFERER),
@@ -342,7 +354,11 @@ impl GrokUsageClient {
         Ok(self.snapshot_from(parsed, now))
     }
 
-    fn snapshot_from(&self, parsed: Parsed, now: chrono::DateTime<chrono::Utc>) -> WeeklyUsageSnapshot {
+    fn snapshot_from(
+        &self,
+        parsed: Parsed,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> WeeklyUsageSnapshot {
         let used = parsed.used_percent;
         let products = if parsed.products.is_empty() {
             synthesize_products(used)

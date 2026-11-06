@@ -1,4 +1,9 @@
 //! REST JSON parser, snapshot model, product catalog and auth-policy tests.
+#![allow(
+    clippy::unwrap_used,
+    clippy::assert_is_empty,
+    clippy::needless_pass_by_value
+)]
 
 mod common;
 
@@ -7,8 +12,8 @@ use std::collections::HashSet;
 use common::utc;
 use serde_json::json;
 use tokenmon_provider_grok::auth::{
-    CookieRecord, auth_config, domain_matches, is_auth_host, is_grok_domain, is_preferred_session_cookie,
-    is_return_page, select_session_cookies,
+    CookieRecord, auth_config, domain_matches, is_auth_host, is_grok_domain,
+    is_preferred_session_cookie, is_return_page, select_session_cookies,
 };
 use tokenmon_provider_grok::models::{
     ProductCatalog, ProductColor, ProductUsage, WeeklyUsageSnapshot, clamp_percent, fill_fraction,
@@ -55,9 +60,11 @@ fn test_parse_fixture_json() {
 /// `byProduct` map form yields one product per key.
 #[test]
 fn test_by_product_map_parse() {
-    let s = parse(&json!({"usedPercent": 35, "byProduct": {"build": 25, "api": 9, "chat": 1}})).unwrap();
+    let s = parse(&json!({"usedPercent": 35, "byProduct": {"build": 25, "api": 9, "chat": 1}}))
+        .unwrap();
     assert_eq!(s.products.len(), 3);
-    let nested = parse(&json!({"usedPercent": 35, "productUsage": {"chat": {"usagePercent": 5}}})).unwrap();
+    let nested =
+        parse(&json!({"usedPercent": 35, "productUsage": {"chat": {"usagePercent": 5}}})).unwrap();
     assert_eq!(ids(&nested.products), ["chat"]);
 }
 
@@ -97,7 +104,10 @@ fn test_out_of_range_usage_is_rejected() {
 /// Products with only `value`/`percent` keys do not make usage.
 #[test]
 fn test_products_without_usage_keys_are_ignored() {
-    assert!(parse(&json!({"products": [{"id": "chat", "value": 20}, {"id": "api", "percent": 5}]})).is_none());
+    assert!(
+        parse(&json!({"products": [{"id": "chat", "value": 20}, {"id": "api", "percent": 5}]}))
+            .is_none()
+    );
 }
 
 /// Without a used% key, the product sum is the used% and remaining derives.
@@ -115,7 +125,12 @@ fn test_synthesized_products_credits_and_email() {
     assert_eq!(ids(&s.products), ["other"]);
     assert_eq!(s.extra_credits_balance.unwrap().to_string(), "4.1");
     assert_eq!(s.account_email.as_deref(), Some("a@b.co"));
-    let given = parse_json(b"{\"usedPercent\":1,\"email\":\"x@y.zz\"}", Some("me@e.co"), utc(2026, 1, 1, 0, 0)).unwrap();
+    let given = parse_json(
+        b"{\"usedPercent\":1,\"email\":\"x@y.zz\"}",
+        Some("me@e.co"),
+        utc(2026, 1, 1, 0, 0),
+    )
+    .unwrap();
     assert_eq!(given.account_email.as_deref(), Some("me@e.co"));
 }
 
@@ -141,7 +156,10 @@ fn test_remaining_defaults_and_clamping() {
     assert_eq!(WeeklyUsageSnapshot::new(now, 40.0).remaining_percent, 60.0);
     let s = WeeklyUsageSnapshot::new(now, 140.0).with_remaining(-20.0);
     assert_eq!((s.used_percent, s.remaining_percent), (100.0, 0.0));
-    assert_eq!(ProductUsage::new("chat", "Chat", 140.0).percent_of_pool, 100.0);
+    assert_eq!(
+        ProductUsage::new("chat", "Chat", 140.0).percent_of_pool,
+        100.0
+    );
     assert_eq!(clamp_percent(37.6), 37.6);
 }
 
@@ -150,8 +168,14 @@ fn test_remaining_defaults_and_clamping() {
 fn test_product_color_mapping() {
     assert_eq!(ProductColor::from_product_id("build"), ProductColor::Build);
     assert_eq!(ProductColor::from_product_id("API"), ProductColor::Api);
-    assert_eq!(ProductColor::from_product_id("imagine"), ProductColor::Imagine);
-    assert_eq!(ProductColor::from_product_id("product-9"), ProductColor::Other);
+    assert_eq!(
+        ProductColor::from_product_id("imagine"),
+        ProductColor::Imagine
+    );
+    assert_eq!(
+        ProductColor::from_product_id("product-9"),
+        ProductColor::Other
+    );
 }
 
 /// Daily cap fill fractions.
@@ -168,10 +192,23 @@ fn test_daily_cap_fill_fraction() {
 fn test_filtered_keeps_visible_above_threshold() {
     let all = visible(&ProductCatalog::KNOWN_IDS);
     let products = [p("chat", 50.0), p("build", 30.0), p("api", 2.0)];
-    assert_eq!(ids(&ProductCatalog::filtered(&products, &all, 5.0)), ["chat", "build"]);
-    assert_eq!(ids(&ProductCatalog::filtered(&products, &visible(&["chat"]), 0.0)), ["chat"]);
+    assert_eq!(
+        ids(&ProductCatalog::filtered(&products, &all, 5.0)),
+        ["chat", "build"]
+    );
+    assert_eq!(
+        ids(&ProductCatalog::filtered(
+            &products,
+            &visible(&["chat"]),
+            0.0
+        )),
+        ["chat"]
+    );
     let shuffled = [p("other", 5.0), p("chat", 5.0), p("build", 5.0)];
-    assert_eq!(ids(&ProductCatalog::filtered(&shuffled, &all, 0.0)), ["chat", "build", "other"]);
+    assert_eq!(
+        ids(&ProductCatalog::filtered(&shuffled, &all, 0.0)),
+        ["chat", "build", "other"]
+    );
     assert!(ProductCatalog::filtered(&products, &all, 99.0).is_empty());
 }
 
@@ -181,12 +218,24 @@ fn test_panel_products() {
     let all = visible(&ProductCatalog::KNOWN_IDS);
     let synthesized = synthesize_products(64.0);
     let panel = ProductCatalog::panel_products(&synthesized, &all);
-    assert_eq!((panel[0].id.as_str(), panel[0].percent_of_pool), ("other", 64.0));
+    assert_eq!(
+        (panel[0].id.as_str(), panel[0].percent_of_pool),
+        ("other", 64.0)
+    );
     let zeros = [p("chat", 0.0), p("build", 40.0)];
-    assert_eq!(ids(&ProductCatalog::panel_products(&zeros, &all)), ["build"]);
-    assert_eq!(ids(&ProductCatalog::panel_products(&zeros, &visible(&["chat"]))), Vec::<&str>::new());
+    assert_eq!(
+        ids(&ProductCatalog::panel_products(&zeros, &all)),
+        ["build"]
+    );
+    assert_eq!(
+        ids(&ProductCatalog::panel_products(&zeros, &visible(&["chat"]))),
+        Vec::<&str>::new()
+    );
     let both = [p("chat", 10.0), p("build", 40.0)];
-    assert_eq!(ids(&ProductCatalog::panel_products(&both, &visible(&["chat"]))), ["chat"]);
+    assert_eq!(
+        ids(&ProductCatalog::panel_products(&both, &visible(&["chat"]))),
+        ["chat"]
+    );
 }
 
 /// Category rows always include the four categories, with 0% placeholders.
@@ -206,7 +255,10 @@ fn test_category_products() {
 #[test]
 fn test_normalize_visible_ids() {
     let stored = ["CHAT".to_owned(), "bogus".to_owned()];
-    assert_eq!(ProductCatalog::normalize_visible_ids(&stored), visible(&["chat"]));
+    assert_eq!(
+        ProductCatalog::normalize_visible_ids(&stored),
+        visible(&["chat"])
+    );
     assert_eq!(
         ProductCatalog::normalize_visible_ids(&["bogus".to_owned()]).len(),
         6
@@ -218,7 +270,10 @@ fn test_normalize_visible_ids() {
 #[test]
 fn test_display_names() {
     assert_eq!(ProductCatalog::display_name("grok build"), "Grok Build");
-    assert_eq!(ProductCatalog::display_name("some new thing"), "Some New Thing");
+    assert_eq!(
+        ProductCatalog::display_name("some new thing"),
+        "Some New Thing"
+    );
     assert_eq!(ProductCatalog::display_name("product-9"), "Product-9");
     assert_eq!(ProductCatalog::short_name("build"), "Build");
     assert_eq!(ProductCatalog::short_name("API"), "API");
@@ -280,7 +335,10 @@ fn test_grok_policy_drops_x_session_cookies() {
 /// A jar without `sso` / `sso-rw` captures nothing.
 #[test]
 fn test_grok_policy_without_session_cookie_captures_nothing() {
-    let jar = [cookie("x-session-hint", "grok.com"), cookie("_ga", "grok.com")];
+    let jar = [
+        cookie("x-session-hint", "grok.com"),
+        cookie("_ga", "grok.com"),
+    ];
     assert!(select_session_cookies(&jar).is_none());
     let rw_only = [cookie("SSO-RW", "grok.com")];
     assert!(select_session_cookies(&rw_only).is_some());
