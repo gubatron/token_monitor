@@ -235,3 +235,24 @@ fn test_models_card_truncation_and_collapse() {
     let c = ModelsCardVm::new("T", false, false, rows[..2].to_vec(), false);
     assert!(c.expanded && c.toggle_label.is_none() && c.rows.len() == 2);
 }
+
+/// Issue #61: Grok's chart range is abbreviated on both ends (`Nov 3 – Nov 9`)
+/// and a day at or below 0.05% of the weekly pool draws no stem.
+#[test]
+fn test_grok_chart_range_label_and_threshold() {
+    let mut input = daily(week([0.03, 0.05, 0.06, 5.0, 0.0, 0.0, 0.0]));
+    input.footer_kind = FooterKind::GrokWeek {
+        show_estimate_note: false,
+    };
+    input.fill_threshold = 0.0;
+    let vm = build_daily_budget(&input, &ctx()).unwrap();
+    assert_eq!(vm.range_label, "Jul 9 \u{2013} Jul 15");
+    assert_eq!(vm.bars[0].fill_height, 0.0);
+    assert_eq!(vm.bars[1].fill_height, 0.0);
+    assert!(vm.bars[2].fill_height > 0.0);
+    assert!(vm.bars[3].fill_height > 0.0);
+    assert_eq!(
+        grok_range_label(day(2026, 11, 3), day(2026, 11, 9)),
+        "Nov 3 \u{2013} Nov 9"
+    );
+}

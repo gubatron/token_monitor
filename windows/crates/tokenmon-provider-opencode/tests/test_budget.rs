@@ -301,7 +301,9 @@ fn test_open_code_daily_tokens_sum_rows_cache_and_cost() {
     let names: Vec<&str> = usage.models.iter().map(|m| m.name.as_str()).collect();
     assert_eq!(
         names,
-        [tokenmon_provider_opencode::model_name::display_name("minimax-m3")]
+        [tokenmon_provider_opencode::model_name::display_name(
+            "minimax-m3"
+        )]
     );
 }
 
@@ -324,7 +326,11 @@ fn snapshot_of(kinds: &[WindowKind]) -> OpenCodeSnapshot {
 /// `testOpenCodeMixedPools`: three stacked windows read `Usage Pool Mixed`.
 #[test]
 fn test_open_code_mixed_pools() {
-    let s = snapshot_of(&[WindowKind::Rolling5h, WindowKind::Weekly, WindowKind::Monthly]);
+    let s = snapshot_of(&[
+        WindowKind::Rolling5h,
+        WindowKind::Weekly,
+        WindowKind::Monthly,
+    ]);
     assert_eq!(s.usage_pool(), UsagePool::Mixed);
     assert_eq!(s.usage_pool().section_title(), "Usage Pool Mixed");
     assert_eq!(snapshot_of(&[]).usage_pool(), UsagePool::Mixed);
@@ -333,7 +339,16 @@ fn test_open_code_mixed_pools() {
 /// `testOpenCodeSingleWindowKeepsItsCadence`.
 #[test]
 fn test_open_code_single_window_keeps_its_cadence() {
-    assert_eq!(snapshot_of(&[WindowKind::Monthly]).usage_pool(), UsagePool::Monthly);
-    assert_eq!(snapshot_of(&[WindowKind::Weekly]).usage_pool(), UsagePool::Weekly);
-    assert_eq!(snapshot_of(&[WindowKind::Rolling5h]).usage_pool(), UsagePool::Hourly);
+    assert_eq!(
+        snapshot_of(&[WindowKind::Monthly]).usage_pool(),
+        UsagePool::Monthly
+    );
+    assert_eq!(
+        snapshot_of(&[WindowKind::Weekly]).usage_pool(),
+        UsagePool::Weekly
+    );
+    assert_eq!(
+        snapshot_of(&[WindowKind::Rolling5h]).usage_pool(),
+        UsagePool::Hourly
+    );
 }
