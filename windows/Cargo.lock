@@ -1949,6 +1949,7 @@ dependencies = [
 name = "tokenmon-ui"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "tiny-skia",
  "tokenmon-core",
 ]
