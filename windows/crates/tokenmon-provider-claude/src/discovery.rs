@@ -3,7 +3,9 @@
 use std::path::{Path, PathBuf};
 
 use crate::cache::ClaudeCodeFileCache;
-use crate::tokens::{DailyTokens, DayCalendar};
+use tokenmon_core::usage::Calendar;
+
+use crate::tokens::DailyTokens;
 
 /// The slice of the process environment discovery needs.
 ///
@@ -90,7 +92,7 @@ pub fn projects_directories(env: &ClaudeEnvironment) -> Vec<PathBuf> {
 /// (Claude Code is not installed, so the panel hides its section).
 pub fn scan_daily_tokens(
     directories: &[PathBuf],
-    calendars: &[DayCalendar],
+    calendars: &[Calendar<'_>],
     cache: &ClaudeCodeFileCache,
 ) -> Option<Vec<DailyTokens>> {
     let existing: Vec<&PathBuf> = directories.iter().filter(|d| d.is_dir()).collect();
@@ -100,5 +102,5 @@ pub fn scan_daily_tokens(
     for dir in existing {
         cache.update(dir);
     }
-    Some(calendars.iter().map(|c| cache.daily_tokens(*c)).collect())
+    Some(calendars.iter().map(|c| cache.daily_tokens(c)).collect())
 }

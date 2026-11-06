@@ -4,6 +4,7 @@
 #![allow(clippy::unwrap_used, clippy::assert_is_empty)]
 
 use proptest::prelude::*;
+use tokenmon_core::usage::DayKey;
 use tokenmon_provider_claude::ledger::{decode_ledger, encode_ledger};
 use tokenmon_provider_claude::{
     organization_id_from_cookie_header, parse_complete_lines, parse_jsonl, parse_usage_body,
@@ -80,8 +81,8 @@ fn test_regression_summing_saturated_counts_does_not_overflow() {
     std::fs::write(dir.path().join("a.jsonl"), format!("{one}\n{one}\n")).unwrap();
     let cache = tokenmon_provider_claude::ClaudeCodeFileCache::new();
     cache.update(dir.path());
-    let days = cache.daily_tokens(tokenmon_provider_claude::DayCalendar::Utc);
-    let t = days["2026-10-10"]["unknown"];
+    let days = cache.daily_tokens(&tokenmon_core::usage::Calendar::utc());
+    let t = days[&DayKey::from_raw("2026-10-10")]["unknown"];
     assert_eq!(t.input_tokens, i64::MAX);
     assert_eq!(t.total_tokens(), i64::MAX);
 }

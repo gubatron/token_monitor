@@ -32,7 +32,7 @@ pub use ledger::ClaudeCodeUsageLedger;
 pub use line::{Entry, parse_complete_lines, parse_jsonl, parse_line, usage_line_ranges};
 pub use pricing::{ClaudeModelRates, base_model_id, cost, display_name, rates};
 pub use summary::{ClaudeCodeUsageSummary, ModelUsageRow, UsageTotals};
-pub use tokens::{DailyTokens, DayCalendar, DayKey, ModelTokens};
+pub use tokens::{DailyTokens, DayKey, ModelTokens};
 pub use usage::{
     ClaudeSnapshot, ClaudeUsageResponse, ClaudeUsageWindow, organization_id_from_cookie_header,
     parse_usage_body, project_weekly_reset,

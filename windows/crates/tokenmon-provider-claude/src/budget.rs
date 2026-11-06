@@ -92,6 +92,6 @@ pub fn attach_tokens(
         return days;
     }
     attaching_tokens(days, calendar, |key: &DayKey| {
-        local_daily_tokens.get(key.as_str()).map(daily_token_usage)
+        local_daily_tokens.get(key).map(daily_token_usage)
     })
 }

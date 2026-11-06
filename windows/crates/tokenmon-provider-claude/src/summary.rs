@@ -4,9 +4,10 @@ use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
 use chrono::{DateTime, Utc};
+use tokenmon_core::usage::{Calendar, DayKey};
 
 use crate::pricing::{cost, display_name};
-use crate::tokens::{DailyTokens, DayCalendar, ModelTokens};
+use crate::tokens::{DailyTokens, ModelTokens};
 
 /// Tokens and API-equivalent spend over some period.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
@@ -154,10 +155,14 @@ impl ClaudeCodeUsageSummary {
     /// Builds the summary from the ledger's UTC `days`. The month turns over
     /// at 00:00 UTC.
     pub fn make(days: &DailyTokens, now: DateTime<Utc>) -> Self {
-        let month_prefix: String = DayCalendar::Utc.day_key(now).chars().take(7).collect();
+        let month_prefix: String = DayKey::for_instant(now, &Calendar::utc())
+            .as_str()
+            .chars()
+            .take(7)
+            .collect();
         let month_models = by_model(
             days.iter()
-                .filter(|(k, _)| k.starts_with(&month_prefix))
+                .filter(|(k, _)| k.as_str().starts_with(&month_prefix))
                 .map(|(_, v)| v),
         );
         let all = by_model(days.values());

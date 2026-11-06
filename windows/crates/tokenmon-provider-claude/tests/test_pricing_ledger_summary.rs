@@ -4,6 +4,7 @@
 use std::collections::BTreeMap;
 
 use chrono::{TimeZone, Utc};
+use tokenmon_core::usage::DayKey;
 use tokenmon_provider_claude::ledger::{LEDGER_FILE_NAME, decode_ledger, encode_ledger};
 use tokenmon_provider_claude::pricing::priced_model_ids;
 use tokenmon_provider_claude::{
@@ -18,7 +19,7 @@ fn day(entries: &[(&str, &[(&str, ModelTokens)])]) -> DailyTokens {
         .iter()
         .map(|(d, models)| {
             (
-                (*d).to_owned(),
+                DayKey::from_raw(*d),
                 models
                     .iter()
                     .map(|(m, t)| ((*m).to_owned(), *t))
@@ -132,10 +133,22 @@ fn test_merge_keeps_the_larger_counts_and_days_no_longer_scanned() {
             ("claude-sonnet-5", tok(5, 0)),
         ],
     )]));
-    assert_eq!(merged["2026-09-01"]["claude-opus-5-5"].input_tokens, 50);
-    assert_eq!(merged["2026-10-01"]["claude-opus-5-5"].input_tokens, 30);
-    assert_eq!(merged["2026-10-01"]["claude-opus-5-5"].output_tokens, 90);
-    assert_eq!(merged["2026-10-01"]["claude-sonnet-5"].input_tokens, 5);
+    assert_eq!(
+        merged[&DayKey::from_raw("2026-09-01")]["claude-opus-5-5"].input_tokens,
+        50
+    );
+    assert_eq!(
+        merged[&DayKey::from_raw("2026-10-01")]["claude-opus-5-5"].input_tokens,
+        30
+    );
+    assert_eq!(
+        merged[&DayKey::from_raw("2026-10-01")]["claude-opus-5-5"].output_tokens,
+        90
+    );
+    assert_eq!(
+        merged[&DayKey::from_raw("2026-10-01")]["claude-sonnet-5"].input_tokens,
+        5
+    );
 }
 
 /// A new ledger on the same directory still has days whose transcripts are gone.
@@ -146,7 +159,10 @@ fn test_ledger_keeps_days_after_their_transcripts_are_deleted() {
         .merge(&day(&[("2026-09-01", &[("claude-opus-5-5", tok(1, 1))])]));
     let b = ClaudeCodeUsageLedger::new(dir.path())
         .merge(&day(&[("2026-10-01", &[("claude-opus-5-5", tok(2, 2))])]));
-    assert!(b.contains_key("2026-09-01") && b.contains_key("2026-10-01"));
+    assert!(
+        b.contains_key(&DayKey::from_raw("2026-09-01"))
+            && b.contains_key(&DayKey::from_raw("2026-10-01"))
+    );
 }
 
 /// A version 1 file is discarded.
@@ -160,7 +176,10 @@ fn test_ledger_discards_an_earlier_format() {
     .unwrap();
     let merged = ClaudeCodeUsageLedger::new(dir.path())
         .merge(&day(&[("2026-10-02", &[("claude-opus-5-5", tok(1, 1))])]));
-    assert!(!merged.contains_key("2026-10-01") && merged.contains_key("2026-10-02"));
+    assert!(
+        !merged.contains_key(&DayKey::from_raw("2026-10-01"))
+            && merged.contains_key(&DayKey::from_raw("2026-10-02"))
+    );
 }
 
 /// An unreadable file starts the ledger empty.
