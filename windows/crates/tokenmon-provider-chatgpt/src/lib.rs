@@ -25,6 +25,6 @@ pub use client::{
     BASE_URL, ChatGptTransport, ChatGptUsageClient, Fetch, HttpTransport, RawReply,
     parse_session_token,
 };
-pub use poller::{ChatGptPoller, FetchFn, RefreshOutcome};
+pub use poller::{ChatGptPoller, ChatGptPollerConfig, FetchFn};
 pub use token_cache::{AccessTokenCache, valid_until};
 pub use usage::{ChatGptSnapshot, UsageResponse, UsageWindow, parse_usage};
