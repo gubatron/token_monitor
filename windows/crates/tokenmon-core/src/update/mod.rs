@@ -29,7 +29,7 @@ pub use feed::{
     AssetKind, AvailableRelease, MAX_FEED_BYTES, ReleaseAsset, ReleaseFeedFetcher, ReleaseSource,
     newer_release, sha256_from_digest,
 };
-pub use trust::{is_repository_release_download, is_trusted_download};
+pub use trust::{is_repository_release_download, is_repository_release_page, is_trusted_download};
 pub use version::AppVersion;
 
 /// How often the background check runs, in seconds (6 hours).

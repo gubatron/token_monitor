@@ -111,6 +111,43 @@ pub fn is_repository_release_download(url: &str, owner: &str, repository: &str) 
     }
 }
 
+/// True for `https://github.com/<owner>/<repo>/releases[/...]`: a release web
+/// page of the configured repository, safe to hand to the system URL opener.
+///
+/// Same raw-string rules as [`is_repository_release_download`] (no query,
+/// fragment, credentials, odd port, backslash or dot segment); owner and repo
+/// compare case-insensitively and `releases` is case-sensitive.
+///
+/// # Examples
+///
+/// ```
+/// use tokenmon_core::update::is_repository_release_page;
+///
+/// assert!(is_repository_release_page(
+///     "https://github.com/gubatron/token_monitor/releases/tag/windows-v1.0.0",
+///     "gubatron",
+///     "token_monitor",
+/// ));
+/// assert!(!is_repository_release_page("file:///C:/x", "gubatron", "token_monitor"));
+/// assert!(!is_repository_release_page("https://github.com/evil/x/releases", "gubatron", "token_monitor"));
+/// ```
+pub fn is_repository_release_page(url: &str, owner: &str, repository: &str) -> bool {
+    let Some(raw) = parse_plain_https(url) else {
+        return false;
+    };
+    if raw.has_query_or_fragment || !raw.host.eq_ignore_ascii_case("github.com") {
+        return false;
+    }
+    match raw.segments.as_slice() {
+        [o, r, "releases", rest @ ..] => {
+            o.eq_ignore_ascii_case(owner)
+                && r.eq_ignore_ascii_case(repository)
+                && rest.iter().all(|s| !s.is_empty())
+        }
+        _ => false,
+    }
+}
+
 /// True for this repository's release downloads and the GitHub CDN hosts those
 /// downloads redirect to (query strings are allowed on the CDN, as signed
 /// URLs need them).

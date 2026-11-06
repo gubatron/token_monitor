@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use serde_json::Value;
 
 use super::error::UpdateError;
-use super::trust::is_repository_release_download;
+use super::trust::{is_repository_release_download, is_repository_release_page};
 use super::version::AppVersion;
 use crate::provider::BoxFuture;
 
@@ -268,7 +268,10 @@ fn evaluate(
     Ok(Some(AvailableRelease {
         version,
         tag: tag.to_owned(),
+        // Only a release page of the configured repository may reach the URL
+        // opener; anything else in the feed is replaced by the fallback.
         page_url: first_string(root, &["html_url"])
+            .filter(|u| is_repository_release_page(u, &source.owner, &source.repository))
             .map_or_else(|| source.releases_page_url(), str::to_owned),
         archive: preferred_asset(&assets, "zip", source),
         installer: preferred_asset(&assets, "msi", source),

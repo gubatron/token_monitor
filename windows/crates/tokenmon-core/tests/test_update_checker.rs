@@ -343,3 +343,30 @@ async fn test_manual_restart_message() {
         Some("TokenMon 1.6.0 is installed. Quit and reopen TokenMon to finish.")
     );
 }
+
+const FALLBACK_PAGE: &str = "https://github.com/gubatron/token_monitor/releases/latest";
+
+/// #40: a hostile `html_url` never reaches the opener, only the fallback page.
+#[tokio::test]
+async fn test_hostile_html_url_never_reaches_the_opener() {
+    for bad in [
+        "file:///C:/Windows/System32/calc.exe",
+        "ms-msdt:/id PCWDiagnostic",
+        "http://github.com/gubatron/token_monitor/releases/tag/x",
+        "https://evil.example/gubatron/token_monitor/releases/tag/x",
+        "https://github.com.evil.example/gubatron/token_monitor/releases",
+        "https://github.com/evil/token_monitor/releases/tag/x",
+        "https://github.com/gubatron/token_monitor/issues/1",
+        "https://github.com/gubatron/token_monitor/releases/../../../evil/x",
+        "https://github.com/gubatron/token_monitor/releases/tag/x?next=//evil",
+    ] {
+        let body = format!(r#"{{"tag_name":"windows-v1.6.0","html_url":"{bad}","assets":[]}}"#);
+        let feed = Feed::ok(&body);
+        let (c, opener, _) = make(&feed, Some("1.5.0"), true);
+        c.check_now().await;
+        let inst = FakeInstaller::new(true, Ok(InstallOutcome::Relaunching));
+        c.install_available_update(&inst).await;
+        let opened = opener.0.lock().unwrap().clone();
+        assert_eq!(opened, vec![FALLBACK_PAGE.to_owned()], "{bad}");
+    }
+}
