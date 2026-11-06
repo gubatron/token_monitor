@@ -18,7 +18,10 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 chrono = { workspace = true }
 tracing = { workspace = true }
+tokio = { workspace = true, features = ["rt"] }
 
 [dev-dependencies]
 tempfile = { workspace = true }
 proptest = { workspace = true }
+tokio = { workspace = true, features = ["rt", "macros", "time"] }
+wiremock = { workspace = true }

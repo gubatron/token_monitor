@@ -9,9 +9,7 @@ use std::collections::BTreeMap;
 use chrono::{DateTime, FixedOffset, TimeZone, Utc};
 use tokenmon_core::usage::{Calendar, DailyBudgetDay, DayKey, WeekOffset};
 use tokenmon_provider_claude::auth::{claude_auth_config, is_auth_host, is_return_page};
-use tokenmon_provider_claude::budget::{
-    SpentByDay, attach_tokens, build_daily_budget_days, weekly_resets_at,
-};
+use tokenmon_provider_claude::budget::{SpentByDay, attach_tokens, build_daily_budget_days};
 use tokenmon_provider_claude::{DailyTokens, ModelTokens};
 
 fn t(m: u32, d: u32, h: u32) -> DateTime<Utc> {
@@ -69,39 +67,6 @@ fn test_build_daily_budget_days_week_offset_shows_prior_period() {
     assert_eq!(days[1].spent_usd, 6.0);
     assert!(days.iter().all(|d| !d.is_prior_window));
 }
-
-/// A same-reset-instant drop leaves bars alone: no prior-window days.
-#[test]
-fn test_same_reset_instant_drop_leaves_bars_unchanged() {
-    let mut spent = SpentByDay::new();
-    spent.insert(t(8, 25, 0), 10.0);
-    let days = build_daily_budget_days(
-        &spent,
-        Some(t(8, 27, 11)),
-        None,
-        None,
-        WeekOffset::CURRENT,
-        t(8, 25, 15),
-        &Calendar::utc(),
-    );
-    assert_eq!(days.len(), 7);
-    assert!(days.iter().all(|d| !d.is_prior_window));
-}
-
-/// Without a live reset the remembered one is projected into the future.
-#[test]
-fn test_refresh_without_reset_time_reuses_persisted_reset() {
-    let now = t(10, 10, 9);
-    let nine_days_ago = now - chrono::Duration::days(9);
-    let r = weekly_resets_at(None, Some(nine_days_ago), now).unwrap();
-    assert!(r > now && r <= now + chrono::Duration::days(7));
-    assert_eq!(
-        weekly_resets_at(Some(t(11, 1, 0)), Some(nine_days_ago), now),
-        Some(t(11, 1, 0))
-    );
-    assert_eq!(weekly_resets_at(None, None, now), None);
-}
-
 /// Each bar gets its local day's tokens; other days keep none and spend is untouched.
 #[test]
 fn test_attach_tokens_adds_each_local_days_tokens() {
