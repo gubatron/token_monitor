@@ -10,6 +10,7 @@ cargo-fuzz = true
 [dependencies]
 tokenmon-provider-openrouter = { path = "../crates/tokenmon-provider-openrouter" }
 libfuzzer-sys = "0.4"
+tokenmon-provider-grok = { path = "../crates/tokenmon-provider-grok" }
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
 reqwest = { version = "0.13", default-features = false }
 tokenmon-platform = { path = "../crates/tokenmon-platform" }
@@ -200,6 +201,48 @@ bench = false
 [[bin]]
 name = "tokenmon_provider_grokbot_parse_usage_status"
 path = "fuzz_targets/tokenmon_provider_grokbot_parse_usage_status.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "grok_grpc_frames"
+path = "fuzz_targets/grok_grpc_frames.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "grok_grpc_protobuf"
+path = "fuzz_targets/grok_grpc_protobuf.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "grok_rest_json"
+path = "fuzz_targets/grok_rest_json.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "grok_history_decode"
+path = "fuzz_targets/grok_history_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "grok_csv_escape"
+path = "fuzz_targets/grok_csv_escape.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "grok_week_bounds"
+path = "fuzz_targets/grok_week_bounds.rs"
 test = false
 doc = false
 bench = false
