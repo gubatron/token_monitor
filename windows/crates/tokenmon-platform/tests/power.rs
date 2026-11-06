@@ -1,11 +1,11 @@
 //! Sleep/wake gate, event decoding and the connectivity mapping (ws-power).
 
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use tokenmon_core::polling::testing::ManualScheduler;
 use tokenmon_core::polling::{PollOutcome, PollingLoop};
-use tokenmon_platform::power::event::network_flags_satisfied;
+use tokenmon_platform::power::event::{RESUME_DEDUPE_WINDOW, network_flags_satisfied};
 use tokenmon_platform::power::{
     FakeEventSource, GateAction, GateCallbacks, GateMachine, NetworkLevel, PowerEvent,
     ResumeDeduper, SystemEventSource, SystemWakeGate, decode_power_broadcast,
@@ -222,14 +222,52 @@ fn test_power_broadcast_decoding() {
 /// FEAT-power-resume-dedupe: the resume pair yields one wake; suspend yields a sleep.
 #[test]
 fn test_resume_pair_gives_one_wake_per_sleep() {
+    let t0 = Instant::now();
+    let ms = Duration::from_millis;
     let mut d = ResumeDeduper::default();
-    assert_eq!(d.accept(0x04), Some(PowerEvent::WillSleep));
+    assert_eq!(d.accept_at(0x04, t0), Some(PowerEvent::WillSleep));
+    assert_eq!(d.accept_at(0x12, t0 + ms(10)), Some(PowerEvent::DidWake));
+    assert_eq!(d.accept_at(0x07, t0 + ms(30)), None);
+    assert_eq!(d.accept_at(0x12, t0 + ms(40)), None);
+    assert_eq!(d.accept_at(0x04, t0 + ms(50)), Some(PowerEvent::WillSleep));
+    // A suspend clears the window: a prompt resume still wakes.
+    assert_eq!(d.accept_at(0x07, t0 + ms(60)), Some(PowerEvent::DidWake));
+    assert_eq!(d.accept_at(0x12, t0 + ms(70)), None);
+}
+
+/// Regression (#67): consecutive Modern Standby resumes with no suspend
+/// message between them each wake; only the pair within the window collapses.
+#[test]
+fn test_consecutive_modern_standby_resumes_each_wake() {
+    let t0 = Instant::now();
+    let mut d = ResumeDeduper::default();
+    for minute in 0..3 {
+        let at = t0 + Duration::from_secs(600 * minute);
+        assert_eq!(d.accept_at(0x12, at), Some(PowerEvent::DidWake), "{minute}");
+        assert_eq!(d.accept_at(0x07, at + Duration::from_millis(15)), None);
+    }
+}
+
+/// The window boundary: a repeat just inside is dropped, just outside wakes.
+#[test]
+fn test_resume_dedupe_window_boundary() {
+    let t0 = Instant::now();
+    let mut d = ResumeDeduper::default();
+    assert_eq!(d.accept_at(0x12, t0), Some(PowerEvent::DidWake));
+    let inside = t0 + Duration::from_millis(4999);
+    assert_eq!(d.accept_at(0x12, inside), None);
+    assert_eq!(
+        d.accept_at(0x12, t0 + RESUME_DEDUPE_WINDOW),
+        Some(PowerEvent::DidWake)
+    );
+}
+
+/// Unknown codes never change the state.
+#[test]
+fn test_resume_deduper_ignores_unknown_codes() {
+    let mut d = ResumeDeduper::default();
+    assert_eq!(d.accept(0x0A), None);
     assert_eq!(d.accept(0x12), Some(PowerEvent::DidWake));
-    assert_eq!(d.accept(0x07), None);
-    assert_eq!(d.accept(0x12), None);
-    assert_eq!(d.accept(0x04), Some(PowerEvent::WillSleep));
-    assert_eq!(d.accept(0x07), Some(PowerEvent::DidWake));
-    assert_eq!(d.accept(0x12), None);
 }
 
 /// Modern Standby: a resume with no suspend message still wakes once.

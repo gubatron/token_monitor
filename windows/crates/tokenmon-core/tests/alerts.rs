@@ -217,8 +217,8 @@ struct FlakySink {
 }
 
 impl tokenmon_core::alerts::Notifier for FlakySink {
-    fn deliver(&self, _alert: &ThresholdAlert) {
-        self.try_deliver(_alert);
+    fn deliver(&self, alert: &ThresholdAlert) {
+        self.try_deliver(alert);
     }
     fn try_deliver(&self, _alert: &ThresholdAlert) -> bool {
         self.attempts

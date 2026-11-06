@@ -12,7 +12,8 @@
 //! * [`event`]: [`PowerEvent`], the `WM_POWERBROADCAST` decoder and the
 //!   [`ResumeDeduper`] that turns the several resume messages into one wake.
 //! * [`source`]: [`SystemEventSource`] and the [`FakeEventSource`] used by tests.
-//! * `windows` (cfg(windows)): the message-only window and the connectivity-hint
+//! * `windows` (cfg(windows)): the hidden top-level window (message-only windows get no
+//!   broadcasts), the suspend/resume registration and the connectivity-hint
 //!   subscription that feed a [`SystemEventSink`].
 
 pub mod event;

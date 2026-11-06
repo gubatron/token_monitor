@@ -1,5 +1,11 @@
-//! Windows event source: a hidden message-only window for `WM_POWERBROADCAST`
+//! Windows event source: a hidden top-level window plus a
+//! `RegisterSuspendResumeNotification` registration for `WM_POWERBROADCAST`,
 //! and a `NotifyNetworkConnectivityHintChange` subscription.
+//!
+//! A message-only window (`HWND_MESSAGE` parent) does not receive broadcast
+//! messages, and `WM_POWERBROADCAST` is one, so the window is an ordinary
+//! never-shown top-level window. The explicit registration additionally
+//! guarantees suspend/resume delivery on Modern Standby machines.
 //!
 //! The decoding and the gate logic are portable (see [`super::event`] and
 //! [`super::machine`]); this file only moves OS messages into a
@@ -16,11 +22,14 @@ use windows_sys::Win32::NetworkManagement::IpHelper::{
 };
 use windows_sys::Win32::Networking::WinSock::NL_NETWORK_CONNECTIVITY_HINT;
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows_sys::Win32::System::Power::{
+    RegisterSuspendResumeNotification, UnregisterSuspendResumeNotification,
+};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GWLP_USERDATA, GetMessageW,
-    GetWindowLongPtrW, HWND_MESSAGE, MSG, PostMessageW, PostQuitMessage, RegisterClassW,
-    SetWindowLongPtrW, TranslateMessage, UnregisterClassW, WM_CLOSE, WM_DESTROY, WM_POWERBROADCAST,
-    WNDCLASSW,
+    CreateWindowExW, DEVICE_NOTIFY_WINDOW_HANDLE, DefWindowProcW, DestroyWindow, DispatchMessageW,
+    GWLP_USERDATA, GetMessageW, GetWindowLongPtrW, MSG, PostMessageW, PostQuitMessage,
+    RegisterClassW, SetWindowLongPtrW, TranslateMessage, UnregisterClassW, WM_CLOSE, WM_DESTROY,
+    WM_POWERBROADCAST, WNDCLASSW,
 };
 
 use super::event::{NetworkLevel, PowerEvent, ResumeDeduper};
@@ -162,7 +171,8 @@ fn run_message_loop(sink: Arc<dyn SystemEventSink>, published: &AtomicIsize) {
     if unsafe { RegisterClassW(&raw const wc) } == 0 {
         return;
     }
-    // SAFETY: valid class, HWND_MESSAGE parent makes a message-only window.
+    // SAFETY: valid class; a null parent makes a top-level window that is
+    // never shown (no WS_VISIBLE) but receives broadcast messages.
     let hwnd = unsafe {
         CreateWindowExW(
             0,
@@ -173,7 +183,7 @@ fn run_message_loop(sink: Arc<dyn SystemEventSink>, published: &AtomicIsize) {
             0,
             0,
             0,
-            HWND_MESSAGE,
+            std::ptr::null_mut(),
             std::ptr::null_mut(),
             instance,
             std::ptr::null(),
@@ -192,9 +202,17 @@ fn run_message_loop(sink: Arc<dyn SystemEventSink>, published: &AtomicIsize) {
     unsafe { SetWindowLongPtrW(hwnd, GWLP_USERDATA, ctx as isize) };
     published.store(hwnd as isize, Ordering::Release);
 
+    // SAFETY: `hwnd` is a live window of this thread; the registration is
+    // released below before the window is destroyed.
+    let suspend_resume =
+        unsafe { RegisterSuspendResumeNotification(hwnd as HANDLE, DEVICE_NOTIFY_WINDOW_HANDLE) };
     let (handle, leaked) = subscribe_network(sink);
     pump_messages();
     unsubscribe_network(handle, leaked);
+    if suspend_resume != 0 {
+        // SAFETY: the handle came from the successful registration above.
+        unsafe { UnregisterSuspendResumeNotification(suspend_resume) };
+    }
 
     published.store(0, Ordering::Release);
     // SAFETY: the window is destroyed, so nothing can read `ctx` any more.
