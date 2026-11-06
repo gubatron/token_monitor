@@ -56,9 +56,22 @@ request, `master` included (`.github/workflows/windows-parity.yml`):
 
 - **Drift guard.** A change that touches the macOS app (`TokenMon/`,
   `TokenMonTests/`, `Tests/`, `Scripts/`, `TokenMon.xcodeproj/`, `project.yml`
-  or `Makefile`) must also touch `windows/`, or reference an **open** issue labeled
-  `windows-parity` (for example `Refs #123` in the pull request description, or
-  in the commit message for a direct push). Otherwise the check fails.
+  or `Makefile`) must carry its Windows parity:
+  - When you change the body of a Swift test whose `PARITY.md` row is
+    `ported` (a new expected value, say), update that row or the Rust test it
+    names in the same change, after checking the Rust test still matches.
+    Comments and formatting don't count as a change.
+  - Any other macOS change (app code, resources, build files, test helpers)
+    needs a change under `windows/crates/` or to `windows/docs/PARITY.md`. A
+    `windows/` README or docs edit is not enough. When Windows needs nothing
+    (a macOS-only tweak), add a `Windows-Parity: <reason>` line to the pull
+    request description or commit message instead.
+  - Either rule is also met by referencing an **open** issue labeled
+    `windows-parity` (for example `Refs #123` in the pull request description,
+    or in the commit message for a direct push).
+
+  Otherwise the check fails, and its job summary lists the exact tests and
+  paths.
 - **Parity ledger.** `windows/docs/PARITY.md` has one row per Swift test (every
   XCTest method and every `make test-core` check) giving its status (`todo`,
   `ported` or `n/a` with a reason) and the Rust test that covers it. Adding,
