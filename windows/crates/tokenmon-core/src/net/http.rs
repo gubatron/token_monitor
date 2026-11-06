@@ -91,7 +91,7 @@ pub fn ensure_room(held: usize, incoming: usize, limit: usize) -> Result<(), Res
 }
 
 /// A completed HTTP exchange whose status was acceptable to the caller.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct HttpResponse {
     /// Final status (after redirects).
     pub status: StatusCode,
@@ -99,6 +99,19 @@ pub struct HttpResponse {
     pub headers: HeaderMap,
     /// Full body.
     pub body: Vec<u8>,
+}
+
+impl std::fmt::Debug for HttpResponse {
+    /// Header values (`Set-Cookie`, `Authorization`) and the body can carry
+    /// credentials: only header names and the body size are printed.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let names: Vec<&str> = self.headers.keys().map(HeaderName::as_str).collect();
+        f.debug_struct("HttpResponse")
+            .field("status", &self.status)
+            .field("header_names", &names)
+            .field("body_len", &self.body.len())
+            .finish()
+    }
 }
 
 impl HttpResponse {
