@@ -9,6 +9,20 @@ targets = ["x86_64-pc-windows-msvc", "x86_64-unknown-linux-gnu", "aarch64-apple-
 version = 2
 yanked = "deny"
 
+# Only "unmaintained" notices from Slint's transitive tree are ignored, each
+# one narrowly by advisory ID. Vulnerability advisories are never ignored
+# here. Re-check on every Slint bump: drop an entry as soon as Slint (1.18.1
+# is the latest release at the time of writing) stops pulling the crate.
+# `cargo tree -i <crate> --target all` shows the path.
+ignore = [
+    { id = "RUSTSEC-2024-0436", reason = "paste (proc-macro, compile time only) via slint -> image -> exr -> pulp; used by the Slint compiler, never linked into the app or reachable at run time." },
+    { id = "RUSTSEC-2026-0441", reason = "pin-utils via spin_on in slint-build, slint-macros and the skia renderer; archived but a tiny pin! helper with no known flaw; Slint owns the swap." },
+    { id = "RUSTSEC-2026-0192", reason = "ttf-parser via winit -> sctk-adwaita (Wayland client-side decorations); Linux-only, absent from the Windows binary; no known vulnerability." },
+    { id = "RUSTSEC-2026-0371", reason = "zbus_names via zbus in i-slint-backend-winit (Linux desktop portals); Linux-only, absent from the Windows binary." },
+    { id = "RUSTSEC-2026-0370", reason = "zvariant via zbus in i-slint-backend-winit (Linux desktop portals); Linux-only, absent from the Windows binary." },
+    { id = "RUSTSEC-2026-0372", reason = "zvariant_derive via zbus in i-slint-backend-winit (Linux desktop portals); Linux-only proc-macro, absent from the Windows binary." },
+]
+
 [licenses]
 version = 2
 confidence-threshold = 0.9

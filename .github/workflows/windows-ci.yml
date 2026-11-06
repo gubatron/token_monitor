@@ -136,6 +136,13 @@ jobs:
           cargo clippy $LOCKED --workspace --all-targets --message-format short -- -D warnings \
             2>&1 | tee "$RUNNER_TEMP/clippy.log"
 
+      - name: Fuzz crate still compiles on stable
+        # The fuzz crate is outside the workspace, so nothing else type-checks
+        # it before the 60 s nightly smoke job. libfuzzer-sys compiles on
+        # stable for `check`, which catches stale paths and missing deps cheaply.
+        if: hashFiles('windows/fuzz/Cargo.toml') != ''
+        run: cargo check --manifest-path fuzz/Cargo.toml --bins
+
       - name: cargo deny (advisories, bans, licenses, sources)
         id: deny
         if: needs.detect.outputs.deny == 'true'
