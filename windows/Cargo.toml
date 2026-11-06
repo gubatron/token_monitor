@@ -1,0 +1,88 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/tokenmon-core",
+    "crates/tokenmon-provider-grok",
+    "crates/tokenmon-provider-cursor",
+    "crates/tokenmon-provider-grokbot",
+    "crates/tokenmon-provider-claude",
+    "crates/tokenmon-provider-chatgpt",
+    "crates/tokenmon-provider-opencode",
+    "crates/tokenmon-provider-openrouter",
+    "crates/tokenmon-platform",
+    "crates/tokenmon-ui",
+    "crates/tokenmon-app",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.99"
+license = "MIT"
+repository = "https://github.com/gubatron/token_monitor"
+publish = false
+
+# Shared dependency versions. Member crates reference these with
+# `dep = { workspace = true }` and never pin a version of their own.
+[workspace.dependencies]
+# Internal crates
+tokenmon-core = { path = "crates/tokenmon-core" }
+tokenmon-provider-grok = { path = "crates/tokenmon-provider-grok" }
+tokenmon-provider-cursor = { path = "crates/tokenmon-provider-cursor" }
+tokenmon-provider-grokbot = { path = "crates/tokenmon-provider-grokbot" }
+tokenmon-provider-claude = { path = "crates/tokenmon-provider-claude" }
+tokenmon-provider-chatgpt = { path = "crates/tokenmon-provider-chatgpt" }
+tokenmon-provider-opencode = { path = "crates/tokenmon-provider-opencode" }
+tokenmon-provider-openrouter = { path = "crates/tokenmon-provider-openrouter" }
+tokenmon-platform = { path = "crates/tokenmon-platform" }
+tokenmon-ui = { path = "crates/tokenmon-ui" }
+
+# Runtime (feature sets are minimal; crates add what they need)
+tokio = { version = "1.54", default-features = false }
+futures = { version = "0.3", default-features = false, features = ["std", "alloc"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "json", "gzip"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0"
+chrono = { version = "0.4", default-features = false, features = ["std", "clock", "serde"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+url = "2.5"
+rusqlite = { version = "0.41", features = ["bundled"] }
+slint = { version = "1.18", default-features = false }
+
+# Dev
+wiremock = "0.6"
+tempfile = "3.27"
+proptest = "1.12"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+missing_docs = "warn"
+unused_must_use = "deny"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+# Pedantic lints that are noise for this code base.
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+cast_possible_truncation = "allow"
+cast_precision_loss = "allow"
+cast_sign_loss = "allow"
+similar_names = "allow"
+doc_markdown = "allow"
+return_self_not_must_use = "allow"
+too_many_lines = "allow"
+unwrap_used = "warn"
+dbg_macro = "deny"
+todo = "warn"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"
