@@ -9,6 +9,7 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
+tokenmon-core = { path = "../crates/tokenmon-core" }
 tokenmon-platform = { path = "../crates/tokenmon-platform" }
 tokenmon-core = { path = "../crates/tokenmon-core" }
 chrono = { version = "0.4", default-features = false, features = ["std"] }
@@ -40,6 +41,13 @@ bench = false
 [[bin]]
 name = "tokenmon_core_threshold_notifier"
 path = "fuzz_targets/tokenmon_core_threshold_notifier.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "tokenmon_core_overview_history"
+path = "fuzz_targets/tokenmon_core_overview_history.rs"
 test = false
 doc = false
 bench = false
