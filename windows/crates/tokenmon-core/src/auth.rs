@@ -96,10 +96,20 @@ pub trait CredentialStore: Send + Sync {
 /// store.remove(CredentialKey::Session);
 /// assert_eq!(store.get(CredentialKey::Session), None);
 /// ```
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct InMemoryCredentialStore {
     values: Mutex<HashMap<CredentialKey, String>>,
     fail_writes: AtomicBool,
+}
+
+impl std::fmt::Debug for InMemoryCredentialStore {
+    /// Stored values are credentials: never printed.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("InMemoryCredentialStore")
+            .field("values", &"<redacted>")
+            .field("fail_writes", &self.fail_writes)
+            .finish()
+    }
 }
 
 impl InMemoryCredentialStore {

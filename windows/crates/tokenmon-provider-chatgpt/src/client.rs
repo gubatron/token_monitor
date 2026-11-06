@@ -22,7 +22,7 @@ const CTX: ProviderErrorContext = ProviderErrorContext::ChatGpt;
 
 /// One usage refresh: the parsed payload plus every `Set-Cookie` returned
 /// (NextAuth renews the session cookie on `/api/auth/session`).
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct Fetch {
     /// Parsed usage.
     pub response: UsageResponse,
@@ -32,13 +32,35 @@ pub struct Fetch {
     pub set_cookie_headers: Vec<String>,
 }
 
+impl std::fmt::Debug for Fetch {
+    /// `Set-Cookie` values are credentials: only their count is printed.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Fetch")
+            .field("response", &self.response)
+            .field("fetched_at", &self.fetched_at)
+            .field("set_cookie_headers", &self.set_cookie_headers.len())
+            .finish()
+    }
+}
+
 /// A body and the `Set-Cookie` values that came with it.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Clone, Default, PartialEq, Eq)]
 pub struct RawReply {
     /// Response body.
     pub body: Vec<u8>,
     /// Each `Set-Cookie` value.
     pub set_cookies: Vec<String>,
+}
+
+impl std::fmt::Debug for RawReply {
+    /// The body can carry tokens and `Set-Cookie` values are credentials:
+    /// only sizes are printed.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RawReply")
+            .field("body_len", &self.body.len())
+            .field("set_cookies", &self.set_cookies.len())
+            .finish()
+    }
 }
 
 /// Network seam (Swift `Transport`): the two requests, so tests inject fakes.

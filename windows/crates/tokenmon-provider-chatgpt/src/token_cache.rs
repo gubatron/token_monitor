@@ -40,11 +40,21 @@ pub fn valid_until(access_token: &str, now: DateTime<Utc>) -> DateTime<Utc> {
     from_epoch_secs(by_expiry).unwrap_or(DateTime::<Utc>::MIN_UTC)
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 struct Entry {
     key: String,
     token: String,
     valid_until: DateTime<Utc>,
+}
+
+impl std::fmt::Debug for Entry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Entry")
+            .field("key", &"<redacted>")
+            .field("token", &"<redacted>")
+            .field("valid_until", &self.valid_until)
+            .finish()
+    }
 }
 
 /// Single-entry cache keyed by the session generation (stable while the cookie

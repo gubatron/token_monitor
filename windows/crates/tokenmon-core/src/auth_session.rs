@@ -17,12 +17,22 @@ use crate::clock::Clock;
 use crate::net::split_folded_set_cookie;
 
 /// What a finished sign-in capture hands the session (`CaptureResult`).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct CapturedSession {
     /// The `Cookie` header to store.
     pub cookie_header: String,
     /// Account email found during capture, if any.
     pub email: Option<String>,
+}
+
+impl std::fmt::Debug for CapturedSession {
+    /// The cookie header is a credential: never printed.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CapturedSession")
+            .field("cookie_header", &"<redacted>")
+            .field("email", &self.email.as_ref().map(|_| "<present>"))
+            .finish()
+    }
 }
 
 /// Clears browser-side state (WebView2 profile, shared cookie jar) on sign-out
@@ -139,7 +149,7 @@ impl AuthConfig {
 }
 
 /// One parsed `Set-Cookie`: name, value and whether it is still alive.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct RefreshedCookie {
     /// Cookie name as sent.
     pub name: String,
@@ -147,6 +157,17 @@ pub struct RefreshedCookie {
     pub value: String,
     /// Non-empty value and not expired (`Max-Age=0` or past `Expires` is dead).
     pub live: bool,
+}
+
+impl std::fmt::Debug for RefreshedCookie {
+    /// The value is a credential: never printed.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RefreshedCookie")
+            .field("name", &self.name)
+            .field("value", &"<redacted>")
+            .field("live", &self.live)
+            .finish()
+    }
 }
 
 /// Parses every cookie in `set_cookie_headers` (comma-folded values included).
