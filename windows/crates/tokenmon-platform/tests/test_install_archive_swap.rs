@@ -9,7 +9,7 @@ use common::{fake_pe, make_zip, make_zip_with_symlink};
 use tokenmon_core::update::InstallError;
 use tokenmon_platform::install::archive::{extract_zip, locate_exe};
 use tokenmon_platform::install::swap::{
-    aside_path, can_replace_running_exe, cleanup_leftovers, commit_swap, stage_next_to,
+    can_replace_running_exe, cleanup_leftovers, commit_swap, stage_next_to,
 };
 
 fn archive_msg(e: InstallError) -> String {
@@ -115,9 +115,23 @@ fn test_stage_swap_and_cleanup() {
     let aside = commit_swap(staged, &running).unwrap();
     assert_eq!(fs::read(&running).unwrap(), b"new");
     assert_eq!(fs::read(&aside).unwrap(), b"old");
-    assert_eq!(aside, aside_path(&running));
+    assert!(
+        aside
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .starts_with("TokenMon.old-")
+    );
+    fs::write(dir.path().join(".TokenMon-update-abc.exe"), b"half").unwrap();
+    fs::write(dir.path().join("other.exe"), b"keep").unwrap();
     cleanup_leftovers(&running);
     assert!(!aside.exists());
+    assert!(!dir.path().join(".TokenMon-update-abc.exe").exists());
+    assert!(
+        dir.path().join("other.exe").exists(),
+        "unrelated files stay"
+    );
+    assert_eq!(fs::read(&running).unwrap(), b"new");
 }
 
 /// A failed commit restores the original and leaves no siblings.
@@ -132,7 +146,11 @@ fn test_failed_commit_restores_original() {
     fs::remove_file(staged.path()).unwrap(); // sabotage the rename
     assert!(commit_swap(staged, &running).is_err());
     assert_eq!(fs::read(&running).unwrap(), b"old");
-    assert!(!aside_path(&running).exists());
+    assert_eq!(
+        fs::read_dir(dir.path()).unwrap().count(),
+        2,
+        "only exe and new.exe remain"
+    );
 }
 
 /// Dropping a staged exe removes it.
@@ -161,4 +179,15 @@ fn test_can_replace_checks_the_given_path() {
     let not_exe = dir.path().join("TokenMon.bin");
     fs::write(&not_exe, b"x").unwrap();
     assert!(!can_replace_running_exe(&not_exe));
+}
+
+/// `Zone.Identifier` text with ZoneId 3 or 4 marks an Internet download.
+#[test]
+fn test_zone_identifier_parsing() {
+    use tokenmon_platform::install::verify::zone_id_marks_internet as z;
+    assert!(z("[ZoneTransfer]\r\nZoneId=3\r\nHostUrl=about:internet"));
+    assert!(z("ZoneId=4"));
+    assert!(!z("[ZoneTransfer]\r\nZoneId=0"));
+    assert!(!z("[ZoneTransfer]\r\nZoneId=x"));
+    assert!(!z(""));
 }

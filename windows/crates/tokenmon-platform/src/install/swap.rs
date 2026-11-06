@@ -73,19 +73,31 @@ pub fn stage_next_to(new_exe: &Path, running: &Path) -> Result<StagedExe, Instal
     Ok(StagedExe { path: staged })
 }
 
-/// Path the replaced exe is renamed to (`TokenMon.exe.old`).
-pub fn aside_path(running: &Path) -> PathBuf {
-    let mut name = running
-        .file_name()
-        .map(std::ffi::OsString::from)
+/// Prefix of the name the replaced exe is renamed to: `TokenMon.old-`.
+fn aside_prefix(running: &Path) -> String {
+    let stem = running
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
         .unwrap_or_default();
-    name.push(".old");
-    running.with_file_name(name)
+    format!("{stem}.old-")
+}
+
+/// A name that is unique per call (process id plus a nanosecond stamp).
+fn unique_suffix() -> String {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_nanos());
+    format!("{:x}{:x}", std::process::id(), nanos)
+}
+
+/// Path the replaced exe is renamed to (`TokenMon.old-<unique>.exe`).
+fn aside_path(running: &Path) -> PathBuf {
+    running.with_file_name(format!("{}{}.exe", aside_prefix(running), unique_suffix()))
 }
 
 /// Renames `running` aside and moves `staged` into its place.
 ///
-/// Returns the aside path (delete it with [`cleanup_leftovers`] on the next
+/// Returns the aside path (deleted by [`cleanup_leftovers`] on the next
 /// launch; it may still be locked by the running process now).
 ///
 /// # Errors
@@ -93,9 +105,6 @@ pub fn aside_path(running: &Path) -> PathBuf {
 /// [`InstallError::Install`]; in every error case `running` is back in place.
 pub fn commit_swap(staged: StagedExe, running: &Path) -> Result<PathBuf, InstallError> {
     let aside = aside_path(running);
-    if aside.exists() {
-        fs::remove_file(&aside).map_err(install_err)?;
-    }
     fs::rename(running, &aside).map_err(install_err)?;
     if let Err(e) = staged.path.persist(running) {
         // Best effort: put the original back so the app still launches.
@@ -105,22 +114,21 @@ pub fn commit_swap(staged: StagedExe, running: &Path) -> Result<PathBuf, Install
     Ok(aside)
 }
 
-/// Removes leftovers of earlier updates beside `running`: the renamed-aside
-/// exe and abandoned staged copies. Call once at startup; failures are ignored.
+/// Removes leftovers of earlier updates beside `running`: renamed-aside exes
+/// (`*.old-*.exe`) and abandoned staged copies. Call once at startup; failures
+/// (for example a file still locked) are ignored and retried next launch.
 pub fn cleanup_leftovers(running: &Path) {
-    let _ = fs::remove_file(aside_path(running));
     let Some(parent) = running.parent() else {
         return;
     };
     let Ok(entries) = fs::read_dir(parent) else {
         return;
     };
+    let prefix = aside_prefix(running);
     for entry in entries.flatten() {
-        if entry
-            .file_name()
-            .to_string_lossy()
-            .starts_with(".TokenMon-update-")
-        {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let stale_aside = name.starts_with(&prefix) && name.to_ascii_lowercase().ends_with(".exe");
+        if stale_aside || name.starts_with(".TokenMon-update-") {
             let _ = fs::remove_file(entry.path());
         }
     }
