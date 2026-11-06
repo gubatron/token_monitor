@@ -72,6 +72,9 @@ name = "net_set_cookie"
 path = "fuzz_targets/net_set_cookie.rs"
 test = false
 doc = false
+bench = false
+
+[[bin]]
 name = "core_storage_hourly"
 path = "fuzz_targets/core_storage_hourly.rs"
 test = false
