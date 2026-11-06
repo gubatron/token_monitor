@@ -11,15 +11,13 @@ use tokenmon_core::settings::{AppSettings, SettingsFile};
 use tokenmon_core::usage::WeekOffset;
 use tokenmon_core::{
     AUTH_FAILURE_THRESHOLD, AuthEvent, AuthEventListener, AuthSession, AuthSessionState,
-    ManualClock, ProviderError, ProviderErrorContext, ProviderId, ProviderUsagePoller,
-    SessionGeneration,
+    CapturedSession, CredentialStoreError, ManualClock, ProviderAuthSession, ProviderError,
+    ProviderErrorContext, ProviderId, ProviderUsagePoller, SessionGeneration,
 };
 use tokenmon_provider_opencode::budget::ScanFn;
 use tokenmon_provider_opencode::captions;
 use tokenmon_provider_opencode::db::{DbError, MessageRow, Scan};
-use tokenmon_provider_opencode::poller::{
-    FetchConsoleFn, OpenCodePollerDeps, OpenCodeSession, OpenCodeUsagePoller,
-};
+use tokenmon_provider_opencode::poller::{FetchConsoleFn, OpenCodePollerDeps, OpenCodeUsagePoller};
 use tokenmon_provider_opencode::pricing::Tokens;
 use tokenmon_provider_opencode::snapshot::{OpenCodeSnapshot, WindowKind, WindowUsage};
 
@@ -107,7 +105,7 @@ impl AuthSession for FakeSession {
     }
 }
 
-impl OpenCodeSession for FakeSession {
+impl ProviderAuthSession for FakeSession {
     fn workspace_id(&self) -> Option<String> {
         self.workspace()
     }
@@ -117,6 +115,29 @@ impl OpenCodeSession for FakeSession {
     fn set_needs_sign_in(&self, needs: bool) {
         self.inner.lock().unwrap().state.needs_sign_in = needs;
     }
+    fn save_account_email(&self, _email: &str) {}
+    fn note_account_identity(&self, _identity: &str) {}
+    fn apply_refreshed_cookies(&self, _set_cookie_headers: &[String]) {}
+    fn mark_session_invalid(&self, reason: Option<&str>) {
+        let mut g = self.inner.lock().unwrap();
+        g.cookie = None;
+        g.state.mark_session_invalid(reason);
+    }
+    fn sign_out(&self) {
+        let mut g = self.inner.lock().unwrap();
+        g.cookie = None;
+        g.state.mark_session_invalid(None);
+    }
+    fn save(&self, cookie_header: &str) -> Result<(), CredentialStoreError> {
+        let mut g = self.inner.lock().unwrap();
+        g.cookie = Some(cookie_header.to_owned());
+        g.state.mark_signed_in(None);
+        Ok(())
+    }
+    fn adopt(&self, _captured: &CapturedSession) -> Result<(), CredentialStoreError> {
+        Ok(())
+    }
+    fn refresh_from_disk(&self) {}
 }
 
 fn t0() -> DateTime<Utc> {

@@ -412,6 +412,24 @@ fn test_save_write_failure_is_reported() {
     assert!(s.state().last_auth_error.is_some());
 }
 
+/// The workspace id round-trips through the store, is cleared on sign-out and
+/// invalidation, and empty counts as unset.
+#[test]
+fn test_workspace_id_roundtrips_and_clears_with_session() {
+    let (store, s) = session();
+    assert_eq!(s.workspace_id(), None);
+    s.save("sid=1").unwrap();
+    s.set_workspace_id("wrk_1");
+    assert_eq!(s.workspace_id().as_deref(), Some("wrk_1"));
+    s.sign_out();
+    assert_eq!(s.workspace_id(), None);
+    store.set(CredentialKey::Workspace, "").unwrap();
+    assert_eq!(s.workspace_id(), None);
+    s.set_workspace_id("wrk_2");
+    s.mark_session_invalid(None);
+    assert_eq!(s.workspace_id(), None);
+}
+
 struct Cleaner(Mutex<u32>);
 impl BrowserStateCleaner for Cleaner {
     fn clear_browser_state(&self, _: &AuthConfig) {
