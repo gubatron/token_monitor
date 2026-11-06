@@ -11,6 +11,7 @@ pub mod alerts;
 pub mod app;
 pub mod daily;
 pub mod flush;
+pub mod logging;
 pub mod model;
 pub mod observe;
 pub mod overview;

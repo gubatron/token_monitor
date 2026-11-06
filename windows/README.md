@@ -44,6 +44,10 @@ XWIN_ACCEPT_LICENSE=1 cargo xwin check --target x86_64-pc-windows-msvc -p tokenm
 * Shared dependency versions and lints live in the workspace `Cargo.toml`. Crates use `dep = { workspace = true }`.
 * Tests live in each crate's `tests/` directory, never in `src/`.
 
+## Logs and diagnosing a crash
+
+`TokenMon.exe` has no console, so it logs to `%LOCALAPPDATA%\TokenMon\logs\tokenmon.log`. The file rolls at 1 MiB and keeps five files (`tokenmon.log`, `tokenmon.log.1` ... `.4`), so the folder stays under about 5 MiB. The default level is `info`; set `RUST_LOG` (for example `RUST_LOG=tokenmon_app=debug`) to change it. Nothing secret is logged: cookies, API keys and tokens never go to `tracing`. Release builds use `panic = "abort"`; a panic hook writes the message, thread and source location to the log before the process ends, so "the icon vanished" reports should include the last lines of this file. Startup failures (no tray icon, no IPC pipe) also show a message box. `TokenMon.exe --smoke` logs to stdout instead.
+
 ## Updates: repository and signature policy
 
 * **Release repository.** The update feed repository is chosen in one place, `tokenmon_core::update::feed::configured_repository`. It reads the build-time environment variable `TOKENMON_UPDATE_REPO` (`owner/repo`, validated as a plain GitHub slug; invalid values fall back) and defaults to `gubatron/token_monitor`. Example: `TOKENMON_UPDATE_REPO=owner/fork cargo build --release`.

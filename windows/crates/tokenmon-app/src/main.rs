@@ -5,18 +5,37 @@
 
 use std::process::ExitCode;
 
-fn init_logging() {
+/// Logs to stdout for the headless smoke run (CI reads it).
+fn init_stdout_logging() {
     // Ignore a second initialisation (tests, embedding).
     let _ = tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .try_init();
 }
 
+/// Logs to `%LOCALAPPDATA%\TokenMon\logs` (the app has no console) and
+/// records panics before the release profile aborts. Falls back to stdout
+/// when the folder is unavailable.
+fn init_file_logging() {
+    let dir = tokenmon_core::storage::AppPaths::production()
+        .ok()
+        .and_then(|p| p.directory().ok());
+    let started = dir.is_some_and(|d| tokenmon_app::logging::init_file_logging(&d).is_ok());
+    if !started {
+        init_stdout_logging();
+    }
+}
+
 fn main() -> ExitCode {
-    init_logging();
     let args: Vec<String> = std::env::args().collect();
     let version = env!("CARGO_PKG_VERSION");
-    if args.iter().any(|a| a == "--smoke") {
+    let smoke = args.iter().any(|a| a == "--smoke");
+    if smoke {
+        init_stdout_logging();
+    } else {
+        init_file_logging();
+    }
+    if smoke {
         return if tokenmon_app::smoke::run_headless(version) {
             ExitCode::SUCCESS
         } else {
