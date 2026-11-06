@@ -19,6 +19,11 @@ use crate::pricing::{Billable, Tokens, billable_cost_usd};
 /// Days of history one scan covers.
 pub const SCAN_LOOKBACK_DAYS: i64 = 62;
 
+/// Latest message time accepted (end of year 9999). Rows outside
+/// `1970..=9999` are corrupt and skipped, which keeps every later date
+/// addition and local-offset conversion inside chrono's range.
+pub const MAX_ROW_MS: i64 = 253_402_300_799_000;
+
 /// Busy timeout for the read connection.
 pub const BUSY_TIMEOUT: Duration = Duration::from_millis(2000);
 
@@ -120,7 +125,12 @@ pub struct MessageRow {
 impl MessageRow {
     /// Plan cost for this row, see [`billable_cost_usd`].
     pub fn billable(&self) -> Billable {
-        billable_cost_usd(&self.provider_id, &self.model_id, self.cost_usd, self.tokens)
+        billable_cost_usd(
+            &self.provider_id,
+            &self.model_id,
+            self.cost_usd,
+            self.tokens,
+        )
     }
 }
 
@@ -237,7 +247,11 @@ pub fn read_assistant_message_rows(
         let get = |i| row.get_ref(i).map_err(|e| query_err(&e));
         let provider_id = coerce_text(get(2)?);
         let model_id = coerce_text(get(3)?);
-        let Some(date) = Utc.timestamp_millis_opt(coerce_i64(get(0)?)).single() else {
+        let ms = coerce_i64(get(0)?);
+        if !(0..=MAX_ROW_MS).contains(&ms) {
+            continue;
+        }
+        let Some(date) = Utc.timestamp_millis_opt(ms).single() else {
             continue;
         };
         if provider_id.is_empty() || model_id.is_empty() {
@@ -320,11 +334,7 @@ impl ScanCache {
 ///
 /// # Errors
 /// [`DbError`] when the file is missing, cannot be opened or a query fails.
-pub fn load_scan(
-    db: &Path,
-    since: DateTime<Utc>,
-    cache: &ScanCache,
-) -> Result<Arc<Scan>, DbError> {
+pub fn load_scan(db: &Path, since: DateTime<Utc>, cache: &ScanCache) -> Result<Arc<Scan>, DbError> {
     if !db.is_file() {
         return Err(DbError::Missing(db.display().to_string()));
     }

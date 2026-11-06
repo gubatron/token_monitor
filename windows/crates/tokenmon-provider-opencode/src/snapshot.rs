@@ -55,7 +55,11 @@ impl WindowUsage {
     pub fn used_percent(&self) -> f64 {
         if self.limit_usd > 0.0 {
             let p = self.used_usd / self.limit_usd * 100.0;
-            if p.is_finite() { p.clamp(0.0, 100.0) } else { 0.0 }
+            if p.is_finite() {
+                p.clamp(0.0, 100.0)
+            } else {
+                0.0
+            }
         } else {
             0.0
         }
@@ -139,7 +143,11 @@ impl OpenCodeSnapshot {
             } else {
                 local.models.clone()
             },
-            monthly_tokens: if take_totals { local.monthly_tokens } else { self.monthly_tokens },
+            monthly_tokens: if take_totals {
+                local.monthly_tokens
+            } else {
+                self.monthly_tokens
+            },
             monthly_estimated_usd: if take_totals {
                 local.monthly_estimated_usd
             } else {

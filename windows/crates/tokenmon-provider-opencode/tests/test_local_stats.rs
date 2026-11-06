@@ -1,14 +1,19 @@
 //! Ports of `OpenCodeLocalScanTests` and `OpenCodeStatsTests` (spec 03 section 7.7)
 //! against a fixture database with the real schema.
+#![allow(
+    clippy::unreadable_literal,
+    clippy::unwrap_used,
+    clippy::default_trait_access,
+    clippy::redundant_closure_for_method_calls,
+    clippy::assert_is_empty
+)]
 
 mod common;
 
 use chrono::{DateTime, FixedOffset, TimeZone, Utc};
 use common::{Fixture, Msg};
 use tokenmon_provider_opencode::bounds::{monthly_bounds, weekly_bounds};
-use tokenmon_provider_opencode::db::{
-    DbError, ScanCache, load_scan, open_read_only, scan_start,
-};
+use tokenmon_provider_opencode::db::{DbError, ScanCache, load_scan, open_read_only, scan_start};
 use tokenmon_provider_opencode::snapshot::WindowKind;
 use tokenmon_provider_opencode::stats::{
     build_day_hourly_usage, daily_spends_by_day, go_rows_in, month_daily_spends,
@@ -54,11 +59,20 @@ fn test_session_started_before_rolling_window_counts_recent_messages() {
 fn test_long_session_splits_across_weeks_by_message_time() {
     let mut f = Fixture::new();
     let week = weekly_bounds(at(NOW));
-    f.session("s", week.start.timestamp() - 3 * D, "opencode-go", "minimax-m3", false);
+    f.session(
+        "s",
+        week.start.timestamp() - 3 * D,
+        "opencode-go",
+        "minimax-m3",
+        false,
+    );
     f.message(Msg::go("s", week.start.timestamp() - H, "minimax-m3", 5.0));
     f.message(Msg::go("s", week.start.timestamp() + H, "minimax-m3", 2.0));
     let snap = snapshot(&scan_of(&f), at(NOW));
-    assert_close(snap.window(WindowKind::Weekly).expect("weekly").used_usd, 2.0);
+    assert_close(
+        snap.window(WindowKind::Weekly).expect("weekly").used_usd,
+        2.0,
+    );
 }
 
 /// Monthly totals come from the subscription month only.
@@ -68,10 +82,21 @@ fn test_monthly_totals_come_from_the_month_only() {
     let week = weekly_bounds(at(NOW));
     let anchor = week.start.timestamp() + D;
     // Anchor so the month starts at week.start + 1d (use the same day-of-month).
-    f.session("anchor", anchor - 30 * D, "opencode-go", "minimax-m3", false);
+    f.session(
+        "anchor",
+        anchor - 30 * D,
+        "opencode-go",
+        "minimax-m3",
+        false,
+    );
     let month = monthly_bounds(at(NOW), at(anchor - 30 * D));
     let _ = month;
-    f.message(Msg::go("anchor", week.start.timestamp() + 2 * H, "minimax-m3", 40.0));
+    f.message(Msg::go(
+        "anchor",
+        week.start.timestamp() + 2 * H,
+        "minimax-m3",
+        40.0,
+    ));
     f.message(Msg::go("anchor", NOW - H, "minimax-m3", 2.0).tokens([10, 5, 7, 3]));
     let scan = scan_of(&f);
     let snap = snapshot(&scan, at(NOW));
@@ -80,7 +105,10 @@ fn test_monthly_totals_come_from_the_month_only() {
     // Both rows are in the current subscription month here, so assert the
     // monthly sum matches a manual bounds filter.
     let expected: f64 = go_rows_in(&scan, m).iter().map(|r| r.billable().cost).sum();
-    assert_close(snap.window(WindowKind::Monthly).expect("monthly").used_usd, expected);
+    assert_close(
+        snap.window(WindowKind::Monthly).expect("monthly").used_usd,
+        expected,
+    );
     assert_eq!(snap.monthly_tokens, 25);
     assert_eq!(snap.monthly_input_tokens, 10);
     assert_eq!(snap.monthly_output_tokens, 5);
@@ -154,7 +182,10 @@ fn test_database_missing_throws_and_is_not_created() {
     let path = dir.path().join("opencode.db");
     let err = load_scan(&path, at(0), &ScanCache::default()).expect_err("missing");
     assert!(matches!(err, DbError::Missing(_)));
-    assert!(err.to_string().starts_with("OpenCode usage database not found at "));
+    assert!(
+        err.to_string()
+            .starts_with("OpenCode usage database not found at ")
+    );
     assert!(matches!(open_read_only(&path), Err(DbError::Missing(_))));
     assert!(!path.exists());
 }
@@ -210,10 +241,26 @@ fn test_crafted_rows_are_coerced_or_skipped() {
 #[test]
 fn test_aggregation_windows_and_models() {
     let mut f = Fixture::new();
-    f.insert("a", Msg::go("", NOW - H, "minimax-m3", 4.0).tokens([10_000_000, 1_000_000, 2_000_000, 0]), false);
-    f.insert("b", Msg::go("", NOW - 2 * H, "minimax-m3", 2.0).tokens([5_000_000, 0, 1_000_000, 0]), false);
-    f.insert("c", Msg::go("", NOW - 2 * D, "claude", 90.0).provider("anthropic"), false);
-    f.insert("d", Msg::go("", NOW - 3 * H, "deepseek-v4-flash-free", 3.0).provider("opencode"), false);
+    f.insert(
+        "a",
+        Msg::go("", NOW - H, "minimax-m3", 4.0).tokens([10_000_000, 1_000_000, 2_000_000, 0]),
+        false,
+    );
+    f.insert(
+        "b",
+        Msg::go("", NOW - 2 * H, "minimax-m3", 2.0).tokens([5_000_000, 0, 1_000_000, 0]),
+        false,
+    );
+    f.insert(
+        "c",
+        Msg::go("", NOW - 2 * D, "claude", 90.0).provider("anthropic"),
+        false,
+    );
+    f.insert(
+        "d",
+        Msg::go("", NOW - 3 * H, "deepseek-v4-flash-free", 3.0).provider("opencode"),
+        false,
+    );
     f.insert("e", Msg::go("", NOW - 40 * D, "kimi-k2.6", 500.0), false);
     f.insert("f", Msg::go("", NOW - 40 * D, "kimi-k2.6", 99.0), true);
     let scan = scan_of(&f);
@@ -233,7 +280,11 @@ fn test_aggregation_windows_and_models() {
     assert_eq!(go_model.cache_read_tokens, 3_000_000);
     assert_close(go_model.cost_usd, 6.0);
     assert!(snap.models.iter().all(|m| m.provider_id != "anthropic"));
-    assert!(snap.models.iter().any(|m| m.model_id == "deepseek-v4-flash-free"));
+    assert!(
+        snap.models
+            .iter()
+            .any(|m| m.model_id == "deepseek-v4-flash-free")
+    );
     assert_eq!(snap.models[0].model_id, "minimax-m3");
     assert!(snap.is_estimated);
 }
@@ -242,7 +293,11 @@ fn test_aggregation_windows_and_models() {
 #[test]
 fn test_zen_does_not_count_toward_go_limits() {
     let mut f = Fixture::new();
-    f.insert("z", Msg::go("", NOW - H, "deepseek-v4-pro", 8.0).provider("opencode"), false);
+    f.insert(
+        "z",
+        Msg::go("", NOW - H, "deepseek-v4-pro", 8.0).provider("opencode"),
+        false,
+    );
     f.insert("g", Msg::go("", NOW - H, "minimax-m3", 1.0), false);
     let snap = snapshot(&scan_of(&f), at(NOW));
     let r = snap.window(WindowKind::Rolling5h).expect("r");
@@ -256,7 +311,11 @@ fn test_zen_does_not_count_toward_go_limits() {
 fn test_rolling_reset_tracks_last_eligible_session() {
     let mut f = Fixture::new();
     f.insert("g", Msg::go("", NOW - H, "minimax-m3", 1.0), false);
-    f.insert("z", Msg::go("", NOW - 600, "minimax-m3", 1.0).provider("opencode"), false);
+    f.insert(
+        "z",
+        Msg::go("", NOW - 600, "minimax-m3", 1.0).provider("opencode"),
+        false,
+    );
     let snap = snapshot(&scan_of(&f), at(NOW));
     let reset = snap.window(WindowKind::Rolling5h).expect("r").resets_at;
     assert_eq!(reset, Some(at(NOW - H + 5 * H)));
@@ -341,15 +400,25 @@ fn test_monthly_bounds_example_from_spec() {
     let sub = Utc.with_ymd_and_hms(2026, 5, 18, 14, 24, 41).unwrap();
     let now = Utc.with_ymd_and_hms(2026, 8, 1, 15, 0, 0).unwrap();
     let b = monthly_bounds(now, sub);
-    assert_eq!(b.start, Utc.with_ymd_and_hms(2026, 7, 18, 14, 24, 41).unwrap());
-    assert_eq!(b.end, Utc.with_ymd_and_hms(2026, 8, 18, 14, 24, 41).unwrap());
+    assert_eq!(
+        b.start,
+        Utc.with_ymd_and_hms(2026, 7, 18, 14, 24, 41).unwrap()
+    );
+    assert_eq!(
+        b.end,
+        Utc.with_ymd_and_hms(2026, 8, 18, 14, 24, 41).unwrap()
+    );
 }
 
 /// With no Go session the monthly window anchors at now, so monthly spend is zero.
 #[test]
 fn test_monthly_without_go_session_is_zero() {
     let mut f = Fixture::new();
-    f.insert("z", Msg::go("", NOW - H, "deepseek-v4-pro", 3.0).provider("opencode"), false);
+    f.insert(
+        "z",
+        Msg::go("", NOW - H, "deepseek-v4-pro", 3.0).provider("opencode"),
+        false,
+    );
     let snap = snapshot(&scan_of(&f), at(NOW));
     assert_close(snap.window(WindowKind::Monthly).expect("m").used_usd, 0.0);
 }
@@ -371,8 +440,16 @@ fn test_scaled_spends_percent() {
 fn test_month_daily_spends_track_go_only() {
     let mut f = Fixture::new();
     f.insert("g", Msg::go("", NOW - H, "minimax-m3", 3.0), false);
-    f.insert("z", Msg::go("", NOW - H, "deepseek-v4-pro", 5.0).provider("opencode"), false);
-    f.insert("d", Msg::go("", NOW - H, "x", 4.0).provider("deepseek"), false);
+    f.insert(
+        "z",
+        Msg::go("", NOW - H, "deepseek-v4-pro", 5.0).provider("opencode"),
+        false,
+    );
+    f.insert(
+        "d",
+        Msg::go("", NOW - H, "x", 4.0).provider("deepseek"),
+        false,
+    );
     let spends = month_daily_spends(&scan_of(&f), at(NOW), utc());
     assert_eq!(spends.len(), 1);
     assert_close(spends.values().sum(), 3.0);
@@ -393,7 +470,10 @@ fn test_spread_when_no_local_spends() {
 fn test_day_hourly_usage_stacks_models_by_local_hour() {
     let mut f = Fixture::new();
     let now = Utc.with_ymd_and_hms(2026, 8, 1, 18, 0, 0).unwrap();
-    let day0 = Utc.with_ymd_and_hms(2026, 8, 1, 0, 0, 0).unwrap().timestamp();
+    let day0 = Utc
+        .with_ymd_and_hms(2026, 8, 1, 0, 0, 0)
+        .unwrap()
+        .timestamp();
     f.session("s", day0, "opencode-go", "minimax-m3", false);
     f.message(Msg::go("s", day0 + 9 * H + 60, "minimax-m3", 2.0));
     f.message(Msg::go("s", day0 + 9 * H + 120, "kimi-k2.6", 1.0));
@@ -421,13 +501,21 @@ fn test_day_hourly_usage_stacks_models_by_local_hour() {
 fn test_hourly_and_models_track_mid_session_model_switch() {
     let mut f = Fixture::new();
     let now = Utc.with_ymd_and_hms(2026, 8, 3, 18, 0, 0).unwrap();
-    let day0 = Utc.with_ymd_and_hms(2026, 8, 3, 0, 0, 0).unwrap().timestamp();
+    let day0 = Utc
+        .with_ymd_and_hms(2026, 8, 3, 0, 0, 0)
+        .unwrap()
+        .timestamp();
     f.session("s", day0, "opencode-go", "minimax-m3", false);
     f.message(Msg::go("s", day0 + 15 * H, "gpt-5.6-luna", 0.5));
     let scan = load_scan(&f.path, scan_start(now), &ScanCache::default()).expect("scan");
     let day = build_day_hourly_usage(&scan.rows, now, utc(), 8);
     assert!(day.hours[15].total_usd() > 0.0);
-    assert!(snapshot(&scan, now).models.iter().any(|m| m.model_id == "gpt-5.6-luna"));
+    assert!(
+        snapshot(&scan, now)
+            .models
+            .iter()
+            .any(|m| m.model_id == "gpt-5.6-luna")
+    );
 }
 
 /// Overview series count only plan providers.
@@ -435,10 +523,17 @@ fn test_hourly_and_models_track_mid_session_model_switch() {
 fn test_overview_counts_only_plan_usage() {
     let mut f = Fixture::new();
     let now = Utc.with_ymd_and_hms(2026, 8, 3, 18, 0, 0).unwrap();
-    let day0 = Utc.with_ymd_and_hms(2026, 8, 3, 0, 0, 0).unwrap().timestamp();
+    let day0 = Utc
+        .with_ymd_and_hms(2026, 8, 3, 0, 0, 0)
+        .unwrap()
+        .timestamp();
     f.session("s", day0, "opencode-go", "minimax-m3", false);
     f.message(Msg::go("s", day0 + 10 * H, "minimax-m3", 3.0).tokens([1, 0, 0, 0]));
-    f.message(Msg::go("s", day0 + 10 * H, "deepseek-v4-pro", 1.0).provider("opencode").tokens([1, 0, 0, 0]));
+    f.message(
+        Msg::go("s", day0 + 10 * H, "deepseek-v4-pro", 1.0)
+            .provider("opencode")
+            .tokens([1, 0, 0, 0]),
+    );
     f.message(Msg::go("s", day0 + 11 * H, "grok", 5.0).provider("xai"));
     let scan = load_scan(&f.path, scan_start(now), &ScanCache::default()).expect("scan");
     let day = build_day_hourly_usage(&scan.rows, now, utc(), 8);
@@ -469,7 +564,11 @@ fn test_unused_models_excluded_from_list() {
 #[test]
 fn test_unpriced_model_flagged_on_row() {
     let mut f = Fixture::new();
-    f.insert("g", Msg::go("", NOW - H, "totally-new-model", 0.0).tokens([5, 5, 0, 0]), false);
+    f.insert(
+        "g",
+        Msg::go("", NOW - H, "totally-new-model", 0.0).tokens([5, 5, 0, 0]),
+        false,
+    );
     let snap = snapshot(&scan_of(&f), at(NOW));
     assert!(snap.models[0].is_cost_unpriced);
 }

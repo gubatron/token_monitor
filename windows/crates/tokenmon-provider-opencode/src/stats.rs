@@ -127,12 +127,18 @@ pub fn snapshot(scan: &Scan, now: DateTime<Utc>) -> OpenCodeSnapshot {
         |r| r.date >= rolling_start,
         |hit| hit.iter().map(|r| r.date).max().map(|d| d + ROLLING_5H),
     );
-    let weekly = go_window(WindowKind::Weekly, &go, |r| week.contains(r.date), |_| {
-        Some(week.end)
-    });
-    let monthly = go_window(WindowKind::Monthly, &go, |r| month.contains(r.date), |_| {
-        Some(month.end)
-    });
+    let weekly = go_window(
+        WindowKind::Weekly,
+        &go,
+        |r| week.contains(r.date),
+        |_| Some(week.end),
+    );
+    let monthly = go_window(
+        WindowKind::Monthly,
+        &go,
+        |r| month.contains(r.date),
+        |_| Some(month.end),
+    );
     let week_rows: Vec<&MessageRow> = scan.rows.iter().filter(|r| week.contains(r.date)).collect();
     let month_plan = scan
         .rows
@@ -253,7 +259,11 @@ impl HourUsage {
 
     /// `12a`, `1a` .. `11a`, `12p`, `1p` .. `11p`.
     pub fn label(&self) -> String {
-        let h12 = if self.hour.is_multiple_of(12) { 12 } else { self.hour % 12 };
+        let h12 = if self.hour.is_multiple_of(12) {
+            12
+        } else {
+            self.hour % 12
+        };
         format!("{h12}{}", if self.hour < 12 { 'a' } else { 'p' })
     }
 }
@@ -279,7 +289,9 @@ pub struct DayHourlyUsage {
 impl DayHourlyUsage {
     /// No cost and no messages in any hour.
     pub fn is_empty(&self) -> bool {
-        self.hours.iter().all(|h| h.message_count == 0 && h.total_usd() <= 0.0)
+        self.hours
+            .iter()
+            .all(|h| h.message_count == 0 && h.total_usd() <= 0.0)
     }
 }
 
@@ -301,14 +313,16 @@ pub fn build_day_hourly_usage(
         }
         let h = local.hour() as usize;
         let key = format!("{}/{}", r.provider_id, r.model_id);
-        let seg = buckets[h].entry(key.clone()).or_insert_with(|| HourSegment {
-            provider_id: r.provider_id.clone(),
-            model_id: r.model_id.clone(),
-            cost_usd: 0.0,
-            quota_cost: 0.0,
-            total_tokens: 0,
-            messages: 0,
-        });
+        let seg = buckets[h]
+            .entry(key.clone())
+            .or_insert_with(|| HourSegment {
+                provider_id: r.provider_id.clone(),
+                model_id: r.model_id.clone(),
+                cost_usd: 0.0,
+                quota_cost: 0.0,
+                total_tokens: 0,
+                messages: 0,
+            });
         seg.cost_usd += r.cost_usd;
         seg.quota_cost += r.billable().cost;
         seg.total_tokens = seg.total_tokens.saturating_add(r.tokens.total());
@@ -320,8 +334,10 @@ pub fn build_day_hourly_usage(
         .into_iter()
         .enumerate()
         .map(|(h, b)| {
-            let mut segments: Vec<HourSegment> =
-                b.into_values().filter(|s| s.cost_usd > 0.0 || s.messages > 0).collect();
+            let mut segments: Vec<HourSegment> = b
+                .into_values()
+                .filter(|s| s.cost_usd > 0.0 || s.messages > 0)
+                .collect();
             segments.sort_by(|a, b| {
                 b.cost_usd
                     .total_cmp(&a.cost_usd)
@@ -343,7 +359,9 @@ pub fn build_day_hourly_usage(
             .into_iter()
             .take(max_legend_models)
             .map(|(id, _)| LegendEntry {
-                label: id.split_once('/').map_or_else(|| id.clone(), |(_, m)| m.to_owned()),
+                label: id
+                    .split_once('/')
+                    .map_or_else(|| id.clone(), |(_, m)| m.to_owned()),
                 id,
             })
             .collect(),

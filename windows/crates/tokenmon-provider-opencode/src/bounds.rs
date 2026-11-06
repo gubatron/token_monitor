@@ -23,10 +23,16 @@ impl Bounds {
 pub fn weekly_bounds(now: DateTime<Utc>) -> Bounds {
     let days_from_monday = i64::from(now.weekday().num_days_from_monday());
     let midnight = now.date_naive().and_hms_opt(0, 0, 0).expect("midnight");
-    let start = Utc.from_utc_datetime(&midnight) - Duration::days(days_from_monday);
+    // Checked arithmetic: `now` may be anywhere in chrono's range in fuzzing.
+    let start = Utc
+        .from_utc_datetime(&midnight)
+        .checked_sub_signed(Duration::days(days_from_monday))
+        .unwrap_or(DateTime::<Utc>::MIN_UTC);
     Bounds {
         start,
-        end: start + Duration::days(7),
+        end: start
+            .checked_add_signed(Duration::days(7))
+            .unwrap_or(DateTime::<Utc>::MAX_UTC),
     }
 }
 
@@ -78,6 +84,8 @@ pub fn monthly_bounds(now: DateTime<Utc>, subscribed_at: DateTime<Utc>) -> Bound
     };
     compute().unwrap_or(Bounds {
         start: now,
-        end: now + Duration::days(30),
+        end: now
+            .checked_add_signed(Duration::days(30))
+            .unwrap_or(DateTime::<Utc>::MAX_UTC),
     })
 }

@@ -1,7 +1,15 @@
 //! Price tables, billable cost and model naming (spec 03 sections 3.5, 3.9; tests
 //! `OpenCodePriceTableTests`, `OpenCodeModelNameTests` and the Zen/catalogue
 //! cases of `OpenCodeStatsTests`).
+#![allow(
+    clippy::unreadable_literal,
+    clippy::unwrap_used,
+    clippy::default_trait_access,
+    clippy::redundant_closure_for_method_calls,
+    clippy::assert_is_empty
+)]
 
+use tokenmon_core::Srgb;
 use tokenmon_provider_opencode::model_name::{
     PURPLE, color_for_provider, display_name, model_display_name, palette_index,
     provider_short_name,
@@ -10,10 +18,12 @@ use tokenmon_provider_opencode::pricing::{
     RATES_VERIFIED_ON, Tokens, billable_cost_usd, catalog_rates, estimate, estimate_catalog,
     is_go_provider, is_plan_provider, model_id_variants, rates,
 };
-use tokenmon_core::Srgb;
 
 fn input(n: i64) -> Tokens {
-    Tokens { input: n, ..Tokens::default() }
+    Tokens {
+        input: n,
+        ..Tokens::default()
+    }
 }
 
 fn close(a: f64, b: f64) -> bool {
@@ -54,16 +64,27 @@ fn test_non_plan_and_empty_rows_are_free() {
 /// Zen free alias is valued from published token prices.
 #[test]
 fn test_zen_zero_cost_uses_published_token_value() {
-    let t = Tokens { input: 1_000_000, output: 500_000, ..Tokens::default() };
+    let t = Tokens {
+        input: 1_000_000,
+        output: 500_000,
+        ..Tokens::default()
+    };
     let b = billable_cost_usd("opencode", "deepseek-v4-flash-free", 0.0, t);
     assert!(close(b.cost, 0.28) && b.is_estimated);
-    assert!(close(estimate("opencode", "deepseek-v4-flash", input(1_000_000)), 0.14));
+    assert!(close(
+        estimate("opencode", "deepseek-v4-flash", input(1_000_000)),
+        0.14
+    ));
 }
 
 /// A contributor-free alias resolves to the paid-equivalent rate.
 #[test]
 fn test_muse_spark_free_alias_estimates_paid_equivalent_value() {
-    let t = Tokens { input: 1_000_000, output: 1_000_000, ..Tokens::default() };
+    let t = Tokens {
+        input: 1_000_000,
+        output: 1_000_000,
+        ..Tokens::default()
+    };
     let b = billable_cost_usd("opencode-go", "muse-spark-1.3-contributor-free", 0.0, t);
     assert!(close(b.cost, 0.30));
 }
@@ -71,7 +92,10 @@ fn test_muse_spark_free_alias_estimates_paid_equivalent_value() {
 /// Free aliases resolve to base rates in the catalogue.
 #[test]
 fn test_free_alias_resolves_to_base_rates() {
-    assert!(close(estimate_catalog("kimi-k3-free", input(1_000_000)), 3.0));
+    assert!(close(
+        estimate_catalog("kimi-k3-free", input(1_000_000)),
+        3.0
+    ));
     assert!(catalog_rates("nope").is_none());
 }
 
@@ -94,16 +118,28 @@ fn test_model_id_variants() {
 #[test]
 fn test_price_tables_match_spec() {
     let go = rates("opencode-go", "minimax-m2.7").expect("go");
-    assert_eq!((go.input, go.output, go.cache_read, go.cache_write), (0.30, 1.20, 0.06, 0.375));
+    assert_eq!(
+        (go.input, go.output, go.cache_read, go.cache_write),
+        (0.30, 1.20, 0.06, 0.375)
+    );
     let zen = rates("OpenCode", "gpt-5.5-pro").expect("zen");
     assert_eq!((zen.input, zen.output, zen.cache_read), (30.0, 180.0, 30.0));
     // Go-only table entry wins over fallback.
-    assert_eq!(rates("opencode-go", "deepseek-v4-flash").expect("r").input, 0.15);
-    assert_eq!(rates("opencode", "deepseek-v4-flash").expect("r").input, 0.14);
+    assert_eq!(
+        rates("opencode-go", "deepseek-v4-flash").expect("r").input,
+        0.15
+    );
+    assert_eq!(
+        rates("opencode", "deepseek-v4-flash").expect("r").input,
+        0.14
+    );
     // Fallback only.
     assert_eq!(rates("opencode", "big-pickle").expect("r").input, 0.30);
     assert!(rates("xai", "grok-4.5").is_some());
-    assert!(rates("opencode-go", "glm-5.1").is_some(), "falls back to the catalogue");
+    assert!(
+        rates("opencode-go", "glm-5.1").is_some(),
+        "falls back to the catalogue"
+    );
 }
 
 /// Provider eligibility.
@@ -145,8 +181,14 @@ fn test_catalog_names() {
     assert_eq!(provider_short_name("opencode"), "Zen");
     assert_eq!(provider_short_name("deepseek"), "DeepSeek");
     assert_eq!(provider_short_name("other"), "other");
-    assert_eq!(model_display_name("deepseek", "deepseek-v4-pro"), "DeepSeek \u{b7} deepseek-v4-pro");
-    assert_eq!(model_display_name("opencode", "muse_spark-2"), "Zen \u{b7} Muse Spark");
+    assert_eq!(
+        model_display_name("deepseek", "deepseek-v4-pro"),
+        "DeepSeek \u{b7} deepseek-v4-pro"
+    );
+    assert_eq!(
+        model_display_name("opencode", "muse_spark-2"),
+        "Zen \u{b7} Muse Spark"
+    );
 }
 
 /// Palette is deterministic, bounded, and `i64::MIN` safe.
@@ -157,7 +199,11 @@ fn test_model_palette() {
     assert_eq!(color_for_provider("opencode-go", "s", orange), orange);
     assert_eq!(color_for_provider("opencode", "s", orange), PURPLE);
     let c = color_for_provider("xai", "xai/grok", orange);
-    assert!([c.red, c.green, c.blue].iter().all(|v| (0.0..=1.0).contains(v)));
+    assert!(
+        [c.red, c.green, c.blue]
+            .iter()
+            .all(|v| (0.0..=1.0).contains(v))
+    );
     for s in ["", "a", "\u{1F600}", "provider/model-1.2"] {
         assert!(palette_index(s) < 8);
     }
