@@ -140,6 +140,28 @@ fn test_clock_backed_calendar_handles_dst_day_lengths() {
     );
 }
 
+/// Shifting outside years 0..=9999 gives None instead of a key that cannot re-parse
+/// (regression: `day_key_adding_is_invertible`).
+#[test]
+fn test_adding_days_outside_four_digit_years_is_none() {
+    let utc = Calendar::utc();
+    assert!(
+        DayKey::from_raw("0000-01-01")
+            .adding_days(-1, &utc)
+            .is_none()
+    );
+    assert!(
+        DayKey::from_raw("9999-12-31")
+            .adding_days(1, &utc)
+            .is_none()
+    );
+    assert!(
+        DayKey::from_raw("9999-12-31")
+            .adding_days(i64::MAX, &utc)
+            .is_none()
+    );
+}
+
 /// A clock whose offset changes at runtime.
 struct MovableClock(std::sync::atomic::AtomicI32);
 
