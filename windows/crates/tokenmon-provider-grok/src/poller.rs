@@ -58,13 +58,13 @@ struct State {
 /// Grok poller: displayed state plus the guarded refresh.
 pub struct GrokUsagePoller {
     auth: Arc<dyn AuthSession>,
-    history: Mutex<GrokHistoryStore>,
+    history: Arc<Mutex<GrokHistoryStore>>,
     clock: Arc<dyn Clock>,
     fetcher: Arc<dyn GrokFetch>,
     hourly: Option<Arc<dyn HourlySink>>,
     enabled: AtomicBool,
     refreshing: AtomicBool,
-    state: Mutex<State>,
+    state: Arc<Mutex<State>>,
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -91,16 +91,23 @@ impl GrokUsagePoller {
     ) -> Self {
         let poller = Self {
             auth,
-            history: Mutex::new(history),
+            history: Arc::new(Mutex::new(history)),
             clock,
             fetcher,
             hourly,
             enabled: AtomicBool::new(true),
             refreshing: AtomicBool::new(false),
-            state: Mutex::new(State::default()),
+            state: Arc::new(Mutex::new(State::default())),
         };
         let email = poller.auth.state().account_email;
         lock(&poller.history).set_active_account(email.as_deref());
+        // The listener owns clones of the shared state it clears, never the
+        // poller or the session, so the session's listener list cannot keep a
+        // reference cycle alive.
+        poller.auth.add_listener(Arc::new(SessionEvents {
+            state: Arc::clone(&poller.state),
+            hourly: poller.hourly.clone(),
+        }));
         poller
     }
 
@@ -224,15 +231,29 @@ impl GrokUsagePoller {
         )
     }
 
+    /// Writes the history to disk when it changed (call on quit and after
+    /// sign-out; a no-op when clean or when the file could not be read).
+    pub fn flush_history(&self) {
+        lock(&self.history).flush();
+    }
+
     /// Runs `f` with the history store (export, clear, flush).
     pub fn with_history<R>(&self, f: impl FnOnce(&mut GrokHistoryStore) -> R) -> R {
         f(&mut lock(&self.history))
     }
 }
 
-impl AuthEventListener for GrokUsagePoller {
+/// Clears displayed state on session events (Swift `GrokUsagePoller.init`
+/// sinks): sign-out drops the snapshot; a different account also drops the
+/// hourly activity so the old account's hours never merge into the new one's.
+struct SessionEvents {
+    state: Arc<Mutex<State>>,
+    hourly: Option<Arc<dyn HourlySink>>,
+}
+
+impl AuthEventListener for SessionEvents {
     fn on_auth_event(&self, event: AuthEvent) {
-        self.clear_snapshot();
+        *lock(&self.state) = State::default();
         if event == AuthEvent::AccountReset
             && let Some(hourly) = &self.hourly
         {
