@@ -37,7 +37,7 @@ fuzz_target!(|data: &[u8]| {
     }
     let _ = token_hour_weights(&clock, &page.events, day);
     for day in daily_tokens(&clock, &page.events).values() {
-        assert!(day.cost_usd.is_finite());
+        assert!(day.cost_usd.is_none_or(f64::is_finite));
     }
     for w in estimated_weight_by_day(&clock, &page.events, first.date, None, first.date).values() {
         assert!(w.is_finite() && *w >= 0.0);
