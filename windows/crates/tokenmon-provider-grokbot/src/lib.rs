@@ -8,15 +8,19 @@
 //! * [`parse`]: [`parse_usage_status`], the untrusted-body parser.
 //! * [`client`]: [`GrokbotUsageClient`] and the session-aware
 //!   [`GrokbotFetcher`].
+//! * [`poller`]: [`GrokbotUsagePoller`], the `ProviderUsagePoller` on core's
+//!   `PollingLoop` over the shared Cursor session.
 //! * [`publish`]: [`GrokbotPublisher`], the poller-side state: history stores,
 //!   window transitions and the daily budget bars.
 
 pub mod client;
 pub mod models;
 pub mod parse;
+pub mod poller;
 pub mod publish;
 
 pub use client::*;
 pub use models::*;
 pub use parse::*;
+pub use poller::*;
 pub use publish::*;
