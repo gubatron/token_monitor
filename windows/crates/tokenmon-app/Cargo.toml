@@ -27,6 +27,8 @@ tracing-subscriber = { workspace = true }
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "time", "sync"] }
 chrono = { workspace = true }
 thiserror = { workspace = true }
+url = { workspace = true }
+reqwest = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

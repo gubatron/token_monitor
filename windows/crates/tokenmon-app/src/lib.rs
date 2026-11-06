@@ -10,6 +10,9 @@
 pub mod alerts;
 pub mod model;
 pub mod poller;
+pub mod providers;
 pub mod registry;
+pub mod sessions;
+pub mod signin;
 pub mod smoke;
 pub mod testing;

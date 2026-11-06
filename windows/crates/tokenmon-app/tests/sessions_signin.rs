@@ -1,0 +1,143 @@
+//! Sessions over the vault and sign-in service wiring, against platform fakes.
+
+use std::sync::{Arc, Mutex};
+
+use tokenmon_app::sessions::{HostBrowserCleaner, Sessions, slug};
+use tokenmon_app::signin::{SignInService, sign_in_config};
+use tokenmon_core::{
+    AuthSession, BrowserStateCleaner, Clock, ProviderAuthSession, ProviderId, SystemClock,
+};
+use tokenmon_platform::secrets::{APP_FALLBACK_POLICY, FakeEncryptor, Vault};
+use tokenmon_platform::webauth::{FakeWebAuthHost, WebAuthHost};
+
+struct Rig {
+    _dir: tempfile::TempDir,
+    host: Arc<FakeWebAuthHost>,
+    sessions: Arc<Sessions>,
+    completed: Arc<Mutex<Vec<ProviderId>>>,
+    service: SignInService,
+}
+
+fn rig() -> Rig {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let host = Arc::new(FakeWebAuthHost::default());
+    let vault = Arc::new(Vault::new(dir.path(), Arc::new(FakeEncryptor::default())));
+    let clock: Arc<dyn Clock> = Arc::new(SystemClock);
+    let cleaner: Arc<dyn BrowserStateCleaner> = Arc::new(HostBrowserCleaner::new(
+        Arc::clone(&host) as Arc<dyn WebAuthHost>,
+    ));
+    let sessions = Arc::new(Sessions::open(
+        dir.path(),
+        &vault,
+        APP_FALLBACK_POLICY,
+        &clock,
+        &cleaner,
+    ));
+    let completed = Arc::new(Mutex::new(Vec::new()));
+    let sink = Arc::clone(&completed);
+    let service = SignInService::new(
+        Arc::clone(&host) as Arc<dyn WebAuthHost>,
+        Arc::clone(&sessions),
+        Arc::new(move |p| sink.lock().expect("lock").push(p)),
+    );
+    Rig {
+        _dir: dir,
+        host,
+        sessions,
+        completed,
+        service,
+    }
+}
+
+/// Grokbot signs in through Cursor's window and shares Cursor's session.
+#[test]
+fn test_grokbot_shares_cursor_session_and_window() {
+    let r = rig();
+    assert_eq!(
+        r.sessions.key(ProviderId::Grokbot),
+        r.sessions.key(ProviderId::Cursor)
+    );
+    assert_ne!(
+        r.sessions.key(ProviderId::Claude),
+        r.sessions.key(ProviderId::Cursor)
+    );
+    assert_eq!(slug(ProviderId::Grokbot), "cursor");
+    r.service.start(ProviderId::Grokbot).expect("opens");
+    assert_eq!(*r.host.opened.lock().expect("lock"), vec!["cursor"]);
+}
+
+/// Every cookie provider has a window; OpenRouter (API key) does not.
+#[test]
+fn test_every_cookie_provider_has_a_sign_in_config() {
+    for p in [
+        ProviderId::Grok,
+        ProviderId::Cursor,
+        ProviderId::Claude,
+        ProviderId::ChatGpt,
+        ProviderId::OpenCode,
+        ProviderId::Grokbot,
+    ] {
+        let c = sign_in_config(p).unwrap_or_else(|| panic!("{p} has a config"));
+        assert_eq!(c.provider_slug, slug(p));
+        assert!(c.start_url.starts_with("https://"));
+    }
+    assert!(sign_in_config(ProviderId::OpenRouter).is_none());
+    assert!(r_start_fails());
+}
+
+fn r_start_fails() -> bool {
+    rig().service.start(ProviderId::OpenRouter).is_err()
+}
+
+/// Grok accepts both `sso` and `sso-rw` as session cookies.
+#[test]
+fn test_grok_accepts_sso_and_sso_rw() {
+    let c = sign_in_config(ProviderId::Grok).expect("config");
+    assert!(tokenmon_provider_grok::auth::is_preferred_session_cookie(
+        "sso"
+    ));
+    assert!(tokenmon_provider_grok::auth::is_preferred_session_cookie(
+        "sso-rw"
+    ));
+    for name in ["sso", "sso-rw"] {
+        assert!(
+            c.policy
+                .auth
+                .essential_cookie_names
+                .iter()
+                .any(|n| n == name)
+        );
+    }
+    assert!((c.policy.is_domain)("accounts.grok.com") || (c.policy.is_domain)("grok.com"));
+}
+
+/// Signing out clears the credentials, then the embedded browser profile.
+#[test]
+fn test_sign_out_clears_session_and_browser_profile() {
+    let r = rig();
+    r.sessions.claude.save("sessionKey=abc").expect("saved");
+    assert!(r.sessions.claude.state().is_signed_in);
+    r.service.sign_out(ProviderId::Claude);
+    assert!(!r.sessions.claude.state().is_signed_in);
+    assert!(
+        r.host
+            .signed_out
+            .lock()
+            .expect("lock")
+            .contains(&"claude".to_owned())
+    );
+    assert!(r.completed.lock().expect("lock").is_empty());
+}
+
+/// Credentials survive reopening the sessions over the same vault.
+#[test]
+fn test_session_persists_in_the_vault() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let vault = Arc::new(Vault::new(dir.path(), Arc::new(FakeEncryptor::default())));
+    let clock: Arc<dyn Clock> = Arc::new(SystemClock);
+    let host: Arc<dyn WebAuthHost> = Arc::new(FakeWebAuthHost::default());
+    let cleaner: Arc<dyn BrowserStateCleaner> = Arc::new(HostBrowserCleaner::new(host));
+    let open = || Sessions::open(dir.path(), &vault, APP_FALLBACK_POLICY, &clock, &cleaner);
+    open().grok.save("sso=1; sso-rw=2").expect("saved");
+    assert!(open().grok.state().is_signed_in);
+}

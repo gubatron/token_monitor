@@ -5480,6 +5480,7 @@ name = "tokenmon-app"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "reqwest",
  "tempfile",
  "thiserror 2.0.21",
  "tokenmon-core",
@@ -5495,6 +5496,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "url",
 ]
 
 [[package]]

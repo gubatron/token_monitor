@@ -49,6 +49,9 @@ managed_via_loop!(
     tokenmon_provider_cursor::poller::CursorUsagePoller,
     tokenmon_provider_claude::poller::ClaudeUsagePoller,
     tokenmon_provider_opencode::poller::OpenCodeUsagePoller,
+    tokenmon_provider_chatgpt::ChatGptPoller,
+    tokenmon_provider_grokbot::GrokbotUsagePoller,
+    tokenmon_provider_openrouter::OpenRouterUsagePoller,
 );
 
 /// Shared handle to a managed poller.
