@@ -197,7 +197,7 @@ jobs:
         run: |
           set -euo pipefail
           cargo build --locked --release -p tokenmon-app --target "$TARGET"
-          exe="target/$TARGET/release/tokenmon.exe"
+          exe="target/$TARGET/release/TokenMon.exe"
           test -f "$exe"
           echo "APP_EXE=$PWD/$exe" >> "$GITHUB_ENV"
           mkdir -p "$RUNNER_TEMP/dist" "$RUNNER_TEMP/probe"
