@@ -377,9 +377,7 @@ impl HistoryAccess for GrokHistory {
         self.0.usage().with_history(|h| h.is_dirty())
     }
     fn flush(&self) {
-        self.0
-            .usage()
-            .with_history(tokenmon_provider_grok::history::GrokHistoryStore::flush);
+        self.0.usage().flush_history();
     }
 }
 
