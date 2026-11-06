@@ -24,7 +24,9 @@ use std::sync::Mutex;
 use std::time::SystemTime;
 
 use crate::line::{Entry, parse_complete_lines};
-use crate::tokens::{DailyTokens, DayCalendar, ModelTokens};
+use tokenmon_core::usage::{Calendar, DayKey};
+
+use crate::tokens::{DailyTokens, ModelTokens};
 
 /// Calendars beyond this many drop every other tally so the shared log cannot
 /// grow unbounded.
@@ -39,19 +41,41 @@ fn last_bytes(data: &[u8]) -> Vec<u8> {
     data[data.len().saturating_sub(TAIL_CHECK_BYTES)..].to_vec()
 }
 
+/// Identity of a calendar for the cache: tallies are kept per distinct
+/// calendar. Every `Clock`-driven calendar is "the local calendar" (one
+/// machine has one), every fixed offset is its own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum CalendarId {
+    Fixed(i32),
+    Local,
+}
+
+impl CalendarId {
+    fn of(calendar: &Calendar<'_>) -> Self {
+        match calendar {
+            Calendar::Fixed(offset) => Self::Fixed(offset.local_minus_utc()),
+            Calendar::Clock(_) => Self::Local,
+        }
+    }
+}
+
 /// Running per-day, per-model totals that count each response once.
 #[derive(Debug, Clone)]
 pub struct DailyTokenTally {
-    calendar: DayCalendar,
     days: DailyTokens,
     seen: HashSet<String>,
 }
 
+impl Default for DailyTokenTally {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DailyTokenTally {
-    /// An empty tally for `calendar`.
-    pub fn new(calendar: DayCalendar) -> Self {
+    /// An empty tally.
+    pub fn new() -> Self {
         Self {
-            calendar,
             days: BTreeMap::new(),
             seen: HashSet::new(),
         }
@@ -60,7 +84,7 @@ impl DailyTokenTally {
     /// Adds `entry` unless its dedupe key was already seen (dedupe is global
     /// across files and days within one tally). Entries without a key always
     /// count.
-    pub fn add(&mut self, entry: &Entry) {
+    pub fn add(&mut self, entry: &Entry, calendar: &Calendar<'_>) {
         if let Some(key) = &entry.dedupe_key
             && !self.seen.insert(key.clone())
         {
@@ -76,7 +100,7 @@ impl DailyTokenTally {
         };
         let slot = self
             .days
-            .entry(self.calendar.day_key(entry.date))
+            .entry(DayKey::for_instant(entry.date, calendar))
             .or_default()
             .entry(entry.model.clone())
             .or_default();
@@ -90,10 +114,10 @@ impl DailyTokenTally {
 }
 
 /// Totals per day and model over entries, counting each response once.
-pub fn daily_tokens_from_entries(entries: &[Entry], calendar: DayCalendar) -> DailyTokens {
-    let mut tally = DailyTokenTally::new(calendar);
+pub fn daily_tokens_from_entries(entries: &[Entry], calendar: &Calendar<'_>) -> DailyTokens {
+    let mut tally = DailyTokenTally::new();
     for e in entries {
-        tally.add(e);
+        tally.add(e, calendar);
     }
     tally.days
 }
@@ -120,7 +144,7 @@ struct TallyState {
 #[derive(Default)]
 struct Inner {
     items: HashMap<PathBuf, Item>,
-    tallies: HashMap<DayCalendar, TallyState>,
+    tallies: HashMap<CalendarId, TallyState>,
     /// Entries added since the slowest tally caught up; `added[0]` is entry
     /// number `added_base`.
     added: Vec<Entry>,
@@ -133,13 +157,13 @@ impl Inner {
         self.added_base + self.added.len()
     }
 
-    fn rebuilt_tally(&self, calendar: DayCalendar) -> DailyTokenTally {
+    fn rebuilt_tally(&self, calendar: &Calendar<'_>) -> DailyTokenTally {
         let mut paths: Vec<&PathBuf> = self.items.keys().collect();
         paths.sort();
-        let mut tally = DailyTokenTally::new(calendar);
+        let mut tally = DailyTokenTally::new();
         for path in paths {
             for e in &self.items[path].entries {
-                tally.add(e);
+                tally.add(e, calendar);
             }
         }
         tally
@@ -201,19 +225,20 @@ impl ClaudeCodeFileCache {
     }
 
     /// Totals per day and model over every cached file, in `calendar`.
-    pub fn daily_tokens(&self, calendar: DayCalendar) -> DailyTokens {
+    pub fn daily_tokens(&self, calendar: &Calendar<'_>) -> DailyTokens {
+        let id = CalendarId::of(calendar);
         let mut g = self.lock();
         if g.needs_rebuild {
             g.tallies.clear();
             g.needs_rebuild = false;
         }
         let count = g.added_count();
-        if g.tallies.contains_key(&calendar) {
+        if g.tallies.contains_key(&id) {
             let base = g.added_base;
             let Inner { tallies, added, .. } = &mut *g;
-            if let Some(state) = tallies.get_mut(&calendar) {
+            if let Some(state) = tallies.get_mut(&id) {
                 for e in &added[state.applied - base..] {
-                    state.tally.add(e);
+                    state.tally.add(e, calendar);
                 }
                 state.applied = count;
             }
@@ -223,7 +248,7 @@ impl ClaudeCodeFileCache {
             }
             let tally = g.rebuilt_tally(calendar);
             g.tallies.insert(
-                calendar,
+                id,
                 TallyState {
                     tally,
                     applied: count,
@@ -232,7 +257,7 @@ impl ClaudeCodeFileCache {
         }
         g.trim_added();
         g.tallies
-            .get(&calendar)
+            .get(&id)
             .map(|s| s.tally.days.clone())
             .unwrap_or_default()
     }

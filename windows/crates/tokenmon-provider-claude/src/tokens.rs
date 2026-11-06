@@ -2,13 +2,8 @@
 
 use std::collections::BTreeMap;
 
-use chrono::{DateTime, FixedOffset, Local, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
-
-/// A calendar day as `yyyy-MM-dd`.
-///
-/// A plain alias until the shared `DayKey` from `tokenmon-core` lands.
-pub type DayKey = String;
+pub use tokenmon_core::usage::DayKey;
 
 /// Per-day, per-model token counts (`ClaudeDailyTokens`).
 pub type DailyTokens = BTreeMap<DayKey, BTreeMap<String, ModelTokens>>;
@@ -86,50 +81,5 @@ impl ModelTokens {
             output_tokens: self.output_tokens.max(o.output_tokens),
             response_count: self.response_count.max(o.response_count),
         }
-    }
-}
-
-/// The calendar used to bucket an instant into a [`DayKey`].
-///
-/// Identity (not just behavior) matters: the cache keeps one running tally per
-/// distinct calendar. `Fixed` exists for tests and constant-offset zones;
-/// `Local` follows the machine's current zone.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum DayCalendar {
-    /// Gregorian calendar in UTC (the ledger's calendar).
-    Utc,
-    /// The machine's local zone (the daily bars' calendar).
-    Local,
-    /// A constant offset east of UTC, in seconds.
-    Fixed(i32),
-}
-
-impl DayCalendar {
-    /// The calendar date of `instant` in this calendar.
-    pub fn date(self, instant: DateTime<Utc>) -> NaiveDate {
-        match self {
-            Self::Utc => instant.date_naive(),
-            Self::Local => instant.with_timezone(&Local).date_naive(),
-            Self::Fixed(secs) => {
-                let off = FixedOffset::east_opt(secs)
-                    .unwrap_or_else(|| FixedOffset::east_opt(0).expect("zero offset is valid"));
-                instant.with_timezone(&off).date_naive()
-            }
-        }
-    }
-
-    /// `yyyy-MM-dd` key of `instant`.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use chrono::{TimeZone, Utc};
-    /// use tokenmon_provider_claude::DayCalendar;
-    /// let t = Utc.with_ymd_and_hms(2026, 10, 10, 20, 0, 0).unwrap();
-    /// assert_eq!(DayCalendar::Utc.day_key(t), "2026-10-10");
-    /// assert_eq!(DayCalendar::Fixed(9 * 3600).day_key(t), "2026-10-11");
-    /// ```
-    pub fn day_key(self, instant: DateTime<Utc>) -> DayKey {
-        self.date(instant).format("%Y-%m-%d").to_string()
     }
 }

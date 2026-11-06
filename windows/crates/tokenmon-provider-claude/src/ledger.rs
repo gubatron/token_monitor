@@ -7,11 +7,11 @@
 //! `{"days":{"2026-10-01":{"claude-opus-5-5":{...}}},"version":2}`.
 
 use std::fs;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
+use tokenmon_core::storage::{NoopPermissions, write_atomic};
 
 use crate::tokens::DailyTokens;
 
@@ -120,20 +120,8 @@ impl ClaudeCodeUsageLedger {
     /// Atomic write (temp file then rename). Failures are logged, not fatal:
     /// the in-memory ledger stays correct and the next merge retries.
     fn save(&self, days: &DailyTokens) {
-        if let Err(e) = write_atomic(&self.path, &encode_ledger(days)) {
+        if let Err(e) = write_atomic(&self.path, &encode_ledger(days), &NoopPermissions) {
             tracing::error!("claude ledger write failed: {e}");
         }
     }
-}
-
-fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    let tmp = path.with_extension("dat.tmp");
-    let mut file = fs::File::create(&tmp)?;
-    file.write_all(bytes)?;
-    file.sync_all()?;
-    drop(file);
-    fs::rename(&tmp, path)
 }

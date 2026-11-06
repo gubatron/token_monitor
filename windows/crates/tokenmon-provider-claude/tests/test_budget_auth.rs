@@ -7,12 +7,12 @@
 use std::collections::BTreeMap;
 
 use chrono::{DateTime, FixedOffset, TimeZone, Utc};
-use tokenmon_core::usage::{Calendar, DailyBudgetDay, WeekOffset};
+use tokenmon_core::usage::{Calendar, DailyBudgetDay, DayKey, WeekOffset};
 use tokenmon_provider_claude::auth::{claude_auth_config, is_auth_host, is_return_page};
 use tokenmon_provider_claude::budget::{
     SpentByDay, attach_tokens, build_daily_budget_days, weekly_resets_at,
 };
-use tokenmon_provider_claude::{DailyTokens, DayCalendar, ModelTokens};
+use tokenmon_provider_claude::{DailyTokens, ModelTokens};
 
 fn t(m: u32, d: u32, h: u32) -> DateTime<Utc> {
     Utc.with_ymd_and_hms(2026, m, d, h, 0, 0).unwrap()
@@ -120,7 +120,7 @@ fn test_attach_tokens_adds_each_local_days_tokens() {
     models.insert("claude-opus-5-5".to_owned(), tok(10, 20, 1_000_000, 30, 40));
     models.insert("claude-sonnet-5".to_owned(), tok(5, 5, 0, 0, 0));
     models.insert("mystery".to_owned(), tok(0, 1, 0, 0, 0));
-    let local: DailyTokens = BTreeMap::from([("2026-11-02".to_owned(), models)]);
+    let local: DailyTokens = BTreeMap::from([(DayKey::from_raw("2026-11-02"), models)]);
     let bars = vec![
         DailyBudgetDay::new(day1, 5.0, 14.0),
         DailyBudgetDay::new(day2, 1.0, 14.0),
@@ -152,8 +152,14 @@ fn test_attach_tokens_adds_each_local_days_tokens() {
 #[test]
 fn test_ledger_days_are_utc() {
     let late = Utc.with_ymd_and_hms(2026, 10, 10, 23, 30, 0).unwrap();
-    assert_eq!(DayCalendar::Utc.day_key(late), "2026-10-10");
-    assert_eq!(DayCalendar::Fixed(3600).day_key(late), "2026-10-11");
+    assert_eq!(
+        DayKey::for_instant(late, &Calendar::utc()).as_str(),
+        "2026-10-10"
+    );
+    assert_eq!(
+        DayKey::for_instant(late, &Calendar::fixed(FixedOffset::east_opt(3600).unwrap())).as_str(),
+        "2026-10-11"
+    );
 }
 
 /// The Claude cookie policy keeps `sessionKey` and `lastActiveOrg` only, case-insensitively.

@@ -9,7 +9,7 @@ use std::io::Write;
 use std::time::{Duration, SystemTime};
 
 use libfuzzer_sys::fuzz_target;
-use tokenmon_provider_claude::{ClaudeCodeFileCache, DayCalendar};
+use tokenmon_provider_claude::ClaudeCodeFileCache;
 
 fn line(n: u8, crlf: bool) -> String {
     let eol = if crlf { "\r\n" } else { "\n" };
@@ -55,9 +55,9 @@ fuzz_target!(|data: &[u8]| {
             let _ = f.set_modified(SystemTime::UNIX_EPOCH + Duration::from_secs(1_000_000 + tick));
         }
         cache.update(dir.path());
-        let incremental = cache.daily_tokens(DayCalendar::Utc);
+        let incremental = cache.daily_tokens(&Calendar::utc());
         let fresh = ClaudeCodeFileCache::new();
         fresh.update(dir.path());
-        assert_eq!(incremental, fresh.daily_tokens(DayCalendar::Utc));
+        assert_eq!(incremental, fresh.daily_tokens(&Calendar::utc()));
     }
 });

@@ -6,9 +6,12 @@ use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
+use chrono::FixedOffset;
+use tokenmon_core::usage::{Calendar, DayKey};
+
 use tokenmon_provider_claude::{
-    ClaudeCodeFileCache, ClaudeEnvironment, DayCalendar, parse_complete_lines, parse_jsonl,
-    parse_line, projects_directories, scan_daily_tokens, usage_line_ranges,
+    ClaudeCodeFileCache, ClaudeEnvironment, parse_complete_lines, parse_jsonl, parse_line,
+    projects_directories, scan_daily_tokens, usage_line_ranges,
 };
 
 /// A transcript line: opus-4-1, in10/out20/cr300/cw40, optional 1h split.
@@ -45,7 +48,7 @@ fn append(path: &Path, content: &str) {
         .unwrap();
 }
 
-fn responses(cache: &ClaudeCodeFileCache, dir: &Path, cal: DayCalendar) -> i64 {
+fn responses(cache: &ClaudeCodeFileCache, dir: &Path, cal: &Calendar<'_>) -> i64 {
     cache.update(dir);
     cache
         .daily_tokens(cal)
@@ -168,8 +171,8 @@ fn test_daily_tokens_dedupe_and_group_by_day_and_model() {
     );
     let cache = ClaudeCodeFileCache::new();
     cache.update(dir.path());
-    let days = cache.daily_tokens(DayCalendar::Utc);
-    let opus = days["2026-10-10"]["claude-opus-4-1"];
+    let days = cache.daily_tokens(&Calendar::utc());
+    let opus = days[&DayKey::from_raw("2026-10-10")]["claude-opus-4-1"];
     assert_eq!(
         (
             opus.response_count,
@@ -179,8 +182,14 @@ fn test_daily_tokens_dedupe_and_group_by_day_and_model() {
         ),
         (2, 20, 40, 740)
     );
-    assert_eq!(days["2026-10-10"]["claude-sonnet-4-5"].response_count, 1);
-    assert_eq!(days["2026-10-11"]["claude-opus-4-1"].total_tokens(), 370);
+    assert_eq!(
+        days[&DayKey::from_raw("2026-10-10")]["claude-sonnet-4-5"].response_count,
+        1
+    );
+    assert_eq!(
+        days[&DayKey::from_raw("2026-10-11")]["claude-opus-4-1"].total_tokens(),
+        370
+    );
 }
 
 /// Day keys use the calendar's own day.
@@ -193,12 +202,12 @@ fn test_daily_tokens_use_the_calendars_local_day() {
     );
     let cache = ClaudeCodeFileCache::new();
     cache.update(dir.path());
-    let tokyo = cache.daily_tokens(DayCalendar::Fixed(9 * 3600));
-    assert!(tokyo.contains_key("2026-10-11"));
+    let tokyo = cache.daily_tokens(&Calendar::fixed(FixedOffset::east_opt(9 * 3600).unwrap()));
+    assert!(tokyo.contains_key(&DayKey::from_raw("2026-10-11")));
     assert!(
         cache
-            .daily_tokens(DayCalendar::Utc)
-            .contains_key("2026-10-10")
+            .daily_tokens(&Calendar::utc())
+            .contains_key(&DayKey::from_raw("2026-10-10"))
     );
 }
 
@@ -224,7 +233,7 @@ fn test_scan_reads_nested_transcripts_and_skips_hidden() {
         &format!("{}\n", l("2026-10-10T10:00:00Z", 4)),
     );
     assert_eq!(
-        responses(&ClaudeCodeFileCache::new(), &projects, DayCalendar::Utc),
+        responses(&ClaudeCodeFileCache::new(), &projects, &Calendar::utc()),
         2
     );
 }
@@ -237,16 +246,16 @@ fn test_repeat_scans_follow_appends_rewrites_and_removals() {
     write(&a, &format!("{}\n", l("2026-10-10T10:00:00Z", 1)));
     write(&b, &format!("{}\n", l("2026-10-10T10:00:00Z", 2)));
     let cache = ClaudeCodeFileCache::new();
-    assert_eq!(responses(&cache, dir.path(), DayCalendar::Utc), 2);
+    assert_eq!(responses(&cache, dir.path(), &Calendar::utc()), 2);
     let third = l("2026-10-10T10:00:00Z", 3);
     append(&a, &third[..20]);
-    assert_eq!(responses(&cache, dir.path(), DayCalendar::Utc), 2);
+    assert_eq!(responses(&cache, dir.path(), &Calendar::utc()), 2);
     append(&a, &format!("{}\n", &third[20..]));
-    assert_eq!(responses(&cache, dir.path(), DayCalendar::Utc), 3);
+    assert_eq!(responses(&cache, dir.path(), &Calendar::utc()), 3);
     write(&a, &format!("{}\n", l("2026-10-10T10:00:00Z", 1)));
-    assert_eq!(responses(&cache, dir.path(), DayCalendar::Utc), 2);
+    assert_eq!(responses(&cache, dir.path(), &Calendar::utc()), 2);
     fs::remove_file(&b).unwrap();
-    assert_eq!(responses(&cache, dir.path(), DayCalendar::Utc), 1);
+    assert_eq!(responses(&cache, dir.path(), &Calendar::utc()), 1);
 }
 
 /// Each calendar keeps its own running total; a newly asked calendar catches up.
@@ -256,21 +265,26 @@ fn test_scan_keeps_separate_running_totals_per_calendar() {
     let p = dir.path().join("a.jsonl");
     write(&p, &format!("{}\n", l("2026-10-10T20:00:00Z", 1)));
     let cache = ClaudeCodeFileCache::new();
-    let tokyo = DayCalendar::Fixed(9 * 3600);
+    let tokyo = Calendar::fixed(FixedOffset::east_opt(9 * 3600).unwrap());
     cache.update(dir.path());
     assert!(
         cache
-            .daily_tokens(DayCalendar::Utc)
-            .contains_key("2026-10-10")
+            .daily_tokens(&Calendar::utc())
+            .contains_key(&DayKey::from_raw("2026-10-10"))
     );
-    assert!(cache.daily_tokens(tokyo).contains_key("2026-10-11"));
+    assert!(
+        cache
+            .daily_tokens(&tokyo)
+            .contains_key(&DayKey::from_raw("2026-10-11"))
+    );
     append(&p, &format!("{}\n", l("2026-10-10T21:00:00Z", 2)));
-    assert_eq!(responses(&cache, dir.path(), DayCalendar::Utc), 2);
+    assert_eq!(responses(&cache, dir.path(), &Calendar::utc()), 2);
     assert_eq!(
-        cache.daily_tokens(tokyo)["2026-10-11"]["claude-opus-4-1"].response_count,
+        cache.daily_tokens(&tokyo)[&DayKey::from_raw("2026-10-11")]["claude-opus-4-1"]
+            .response_count,
         2
     );
-    let fresh = cache.daily_tokens(DayCalendar::Fixed(-3600));
+    let fresh = cache.daily_tokens(&Calendar::fixed(FixedOffset::east_opt(-3600).unwrap()));
     assert_eq!(
         fresh
             .values()
@@ -295,9 +309,9 @@ fn test_crlf_transcripts_and_appends() {
         ),
     );
     let cache = ClaudeCodeFileCache::new();
-    assert_eq!(responses(&cache, dir.path(), DayCalendar::Utc), 2);
+    assert_eq!(responses(&cache, dir.path(), &Calendar::utc()), 2);
     append(&p, &format!("{}\r\n", l("2026-10-10T10:00:00Z", 3)));
-    assert_eq!(responses(&cache, dir.path(), DayCalendar::Utc), 3);
+    assert_eq!(responses(&cache, dir.path(), &Calendar::utc()), 3);
 }
 
 /// A trailing line cut mid-way, including after a `\r`, waits for the rest.
@@ -336,12 +350,12 @@ fn test_scan_is_none_without_claude_code() {
     let dir = tempfile::tempdir().unwrap();
     let missing = dir.path().join("nope");
     assert!(
-        scan_daily_tokens(&[missing], &[DayCalendar::Utc], &ClaudeCodeFileCache::new()).is_none()
+        scan_daily_tokens(&[missing], &[Calendar::utc()], &ClaudeCodeFileCache::new()).is_none()
     );
     // A file where a directory is expected does not count either.
     let file = dir.path().join("f");
     fs::write(&file, "x").unwrap();
-    assert!(scan_daily_tokens(&[file], &[DayCalendar::Utc], &ClaudeCodeFileCache::new()).is_none());
+    assert!(scan_daily_tokens(&[file], &[Calendar::utc()], &ClaudeCodeFileCache::new()).is_none());
 }
 
 /// `scan_daily_tokens` returns one result per calendar, in order.
@@ -354,11 +368,17 @@ fn test_scan_returns_one_result_per_calendar() {
     );
     let scans = scan_daily_tokens(
         &[dir.path().to_path_buf()],
-        &[DayCalendar::Utc, DayCalendar::Fixed(9 * 3600)],
+        &[
+            Calendar::utc(),
+            Calendar::fixed(FixedOffset::east_opt(9 * 3600).unwrap()),
+        ],
         &ClaudeCodeFileCache::new(),
     )
     .unwrap();
-    assert!(scans[0].contains_key("2026-10-10") && scans[1].contains_key("2026-10-11"));
+    assert!(
+        scans[0].contains_key(&DayKey::from_raw("2026-10-10"))
+            && scans[1].contains_key(&DayKey::from_raw("2026-10-11"))
+    );
 }
 
 /// Default candidates are `.config/claude/projects` then `.claude/projects`; `CLAUDE_CONFIG_DIR` overrides.
@@ -413,8 +433,11 @@ fn test_discovery_probes_both_roots_of_an_injected_profile() {
         &format!("{}\n", l("2026-10-10T10:00:00Z", 2)),
     );
     let dirs = projects_directories(&ClaudeEnvironment::new(profile.path()));
-    let scans = scan_daily_tokens(&dirs, &[DayCalendar::Utc], &ClaudeCodeFileCache::new()).unwrap();
-    assert_eq!(scans[0]["2026-10-10"]["claude-opus-4-1"].response_count, 2);
+    let scans = scan_daily_tokens(&dirs, &[Calendar::utc()], &ClaudeCodeFileCache::new()).unwrap();
+    assert_eq!(
+        scans[0][&DayKey::from_raw("2026-10-10")]["claude-opus-4-1"].response_count,
+        2
+    );
 }
 
 /// Regression (fuzz `claude_cache_refresh`): a same-size rewrite that still ends in a
@@ -433,15 +456,15 @@ fn test_regression_same_size_rewrite_is_reparsed() {
     cache.update(dir.path());
     assert!(
         cache
-            .daily_tokens(DayCalendar::Utc)
-            .contains_key("2026-10-12")
+            .daily_tokens(&Calendar::utc())
+            .contains_key(&DayKey::from_raw("2026-10-12"))
     );
     write(&p, &mk(1, 4));
     let f = fs::File::options().write(true).open(&p).unwrap();
     f.set_modified(std::time::SystemTime::now() + std::time::Duration::from_secs(5))
         .unwrap();
     cache.update(dir.path());
-    let days = cache.daily_tokens(DayCalendar::Utc);
-    assert!(!days.contains_key("2026-10-12"));
-    assert_eq!(days["2026-10-11"]["m"].input_tokens, 4);
+    let days = cache.daily_tokens(&Calendar::utc());
+    assert!(!days.contains_key(&DayKey::from_raw("2026-10-12")));
+    assert_eq!(days[&DayKey::from_raw("2026-10-11")]["m"].input_tokens, 4);
 }
