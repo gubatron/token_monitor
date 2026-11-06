@@ -43,6 +43,7 @@ use tokenmon_provider_openrouter::{
 use crate::poller::SharedPoller;
 use crate::registry::{ProviderEntry, ProviderRegistry};
 use crate::sessions::Sessions;
+use crate::sources;
 
 /// Why the registry could not be built.
 #[derive(Debug, thiserror::Error)]
@@ -121,9 +122,18 @@ impl GrokFetch for LiveGrokFetch {
 }
 
 /// Feeds Grok's good polls into the hourly activity store.
-struct GrokHourly {
+/// The Grok hourly store the poller records into, readable by the Overview.
+pub struct GrokHourly {
     store: Mutex<HourlyDeltaActivityStore>,
     clock: Arc<dyn Clock>,
+}
+
+impl GrokHourly {
+    /// The store's day start and its 24 hourly weights.
+    pub fn read(&self) -> (DateTime<Utc>, [f64; 24]) {
+        let store = self.store.lock().unwrap_or_else(PoisonError::into_inner);
+        (store.day_start(), store.hour_weights())
+    }
 }
 
 impl HourlySink for GrokHourly {
@@ -230,14 +240,14 @@ pub fn build_registry(deps: &ProviderDeps<'_>) -> Result<ProviderRegistry, Build
             clock: Arc::clone(clock),
             user_agent: user_agent.clone(),
         }),
-        Some(grok_hourly),
+        Some(Arc::clone(&grok_hourly) as Arc<dyn HourlySink>),
     ));
     let grok_settings = Arc::clone(settings);
-    let grok = GrokProviderPoller::new(
+    let grok = Arc::new(GrokProviderPoller::new(
         grok_inner,
         Arc::new(move || grok_settings.snapshot()),
         |b| b,
-    );
+    ));
 
     let cursor_http =
         CursorHttp::production(ProviderErrorContext::Cursor, *version, Arc::clone(clock))?;
@@ -360,13 +370,33 @@ pub fn build_registry(deps: &ProviderDeps<'_>) -> Result<ProviderRegistry, Build
         interval_for(ProviderId::OpenRouter),
     );
 
-    Ok(ProviderRegistry::new(vec![
-        entry(ProviderId::Grok, Arc::new(grok), sessions),
-        entry(ProviderId::Cursor, cursor, sessions),
-        entry(ProviderId::Claude, claude, sessions),
-        entry(ProviderId::OpenCode, opencode, sessions),
-        entry(ProviderId::ChatGpt, chatgpt, sessions),
-        entry(ProviderId::OpenRouter, openrouter, sessions),
-        entry(ProviderId::Grokbot, grokbot, sessions),
-    ]))
+    let registry = ProviderRegistry::new(vec![
+        entry(ProviderId::Grok, grok.clone(), sessions),
+        entry(ProviderId::Cursor, cursor.clone(), sessions),
+        entry(ProviderId::Claude, claude.clone(), sessions),
+        entry(ProviderId::OpenCode, opencode.clone(), sessions),
+        entry(ProviderId::ChatGpt, chatgpt.clone(), sessions),
+        entry(ProviderId::OpenRouter, openrouter.clone(), sessions),
+        entry(ProviderId::Grokbot, grokbot.clone(), sessions),
+    ]);
+    Ok(registry
+        .with_view(ProviderId::Grok, sources::grok_source(&grok))
+        .with_view(ProviderId::Cursor, sources::cursor_source(&cursor))
+        .with_view(ProviderId::Claude, sources::claude_source(&claude))
+        .with_view(ProviderId::OpenCode, sources::opencode_source(&opencode))
+        .with_view(ProviderId::ChatGpt, sources::chatgpt_source(&chatgpt))
+        .with_view(
+            ProviderId::OpenRouter,
+            sources::openrouter_source(&openrouter),
+        )
+        .with_view(ProviderId::Grokbot, sources::grokbot_source(&grokbot))
+        .with_history(sources::grok_history(&grok))
+        .with_hourly(ProviderId::Grok, sources::grok_hourly(&grok_hourly))
+        .with_hourly(ProviderId::Cursor, sources::cursor_hourly(&cursor))
+        .with_hourly(ProviderId::Claude, sources::claude_hourly(&claude))
+        .with_hourly(
+            ProviderId::OpenCode,
+            sources::opencode_hourly(&opencode, Arc::clone(clock)),
+        )
+        .with_hourly(ProviderId::Grokbot, sources::grokbot_hourly(&grokbot)))
 }

@@ -9,14 +9,18 @@
 
 pub mod alerts;
 pub mod app;
+pub mod daily;
 pub mod model;
+pub mod overview;
 pub mod panel;
 pub mod poller;
 pub mod providers;
 pub mod registry;
 pub mod sessions;
+pub mod settings_host;
 pub mod signin;
 pub mod smoke;
+pub mod sources;
 pub mod testing;
 pub mod tray;
 pub mod updates;

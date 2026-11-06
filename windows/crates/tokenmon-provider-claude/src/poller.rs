@@ -281,6 +281,13 @@ impl ClaudeUsagePoller {
         self.state().local_daily_tokens.clone()
     }
 
+    /// Today's per-hour five-hour-window activity: the local day the store
+    /// is on and its 24 hourly percentage-point weights (the Overview chart).
+    pub fn hourly_weights(&self) -> (DateTime<Utc>, [f64; 24]) {
+        let hourly = self.hourly.lock().unwrap_or_else(PoisonError::into_inner);
+        (hourly.day_start(), hourly.hour_weights())
+    }
+
     /// Whether a refresh is running.
     pub fn is_refreshing(&self) -> bool {
         self.refreshing.load(Ordering::SeqCst)
