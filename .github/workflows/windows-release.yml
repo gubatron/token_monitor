@@ -251,7 +251,8 @@ jobs:
           curl -fsSL --retry 3 "https://static.crates.io/crates/cargo-wix/cargo-wix-${CARGO_WIX_VERSION}.crate" \
             -o "$RUNNER_TEMP/cargo-wix.crate"
           echo "${CARGO_WIX_SHA256}  $RUNNER_TEMP/cargo-wix.crate" | sha256sum -c -
-          tar -xzf "$RUNNER_TEMP/cargo-wix.crate" -C "$RUNNER_TEMP"
+          # Git Bash tar takes "D:\..." for a remote host; Python does not.
+          python -I -m tarfile -e "$RUNNER_TEMP/cargo-wix.crate" "$RUNNER_TEMP"
           cargo install --locked --path "$RUNNER_TEMP/cargo-wix-${CARGO_WIX_VERSION}" --root "$RUNNER_TEMP/cargo-wix"
           echo "$RUNNER_TEMP/cargo-wix/bin" >> "$GITHUB_PATH"
           "$RUNNER_TEMP/cargo-wix/bin/cargo-wix" wix --version | grep -F "$CARGO_WIX_VERSION"
