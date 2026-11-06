@@ -185,19 +185,25 @@ fn test_evaluate_rearms_for_new_billing_period() {
     assert_eq!(r.sink.alerts().len(), 2);
 }
 
-/// A record without a period adopts the first reset time it sees.
+/// A record without a period adopts the first reset time it sees and stays
+/// quiet inside it; the next +7-day period fires again (Swift's third step).
 #[test]
 fn test_period_is_adopted_when_missing() {
     let r = rig(80.0);
+    let reset = 1_784_000_000;
+    let used = |r: &Rig| -> Vec<f64> { r.sink.alerts().iter().map(|a| a.used_percent).collect() };
     r.eval(Grok, 85.0);
     r.notifier
-        .evaluate(Grok, 85.0, &r.settings, None, Some(at(1_800_000_000)));
+        .evaluate(Grok, 86.0, &r.settings, None, Some(at(reset)));
     assert!(
         r.file
             .snapshot()
             .contains_key("thresholdNotifiedResetsAt.default")
     );
-    assert_eq!(r.sink.alerts().len(), 1);
+    assert_eq!(used(&r), [85.0], "adopting the period does not re-fire");
+    r.notifier
+        .evaluate(Grok, 86.0, &r.settings, None, Some(at(reset + 7 * 86_400)));
+    assert_eq!(used(&r), [85.0, 86.0], "the next period fires again");
 }
 
 /// Corrupt non-numeric records behave as absent instead of panicking.
