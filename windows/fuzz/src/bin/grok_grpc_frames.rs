@@ -17,9 +17,12 @@ fuzz_target!(|data: &[u8]| {
 
     let fields = trailer_fields(data);
     if let Err(ProviderError::Unauthorized(_)) = validate_trailers(data) {
-        let status = fields.get("grpc-status").map(|s| s.trim_matches([' ', '\t']));
+        // Same integer grammar as `validate_status` (Swift `Int`): `+16` is 16.
+        let status = fields
+            .get("grpc-status")
+            .and_then(|s| s.trim_matches([' ', '\t']).parse::<i64>().ok());
         let message = fields.get("grpc-message").map_or("", String::as_str);
-        assert!(status == Some("16") || message.to_lowercase().contains("unauthenticated"));
+        assert!(status == Some(16) || message.to_lowercase().contains("unauthenticated"));
     }
 
     // Header strings: split the input into a status and a message.

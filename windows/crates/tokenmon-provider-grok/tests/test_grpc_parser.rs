@@ -472,3 +472,18 @@ fn test_scan_protobuf_field_count_is_capped() {
     let few = scan_protobuf(&[0x08, 0x01, 0x08, 0x02], 0);
     assert_eq!(few.varints.len(), 2);
 }
+
+/// Fuzz regression (run 42312736605): a signed status `+16` parses as 16, so it
+/// is unauthorized, matching Swift `Int("+16")`; the harness had compared text.
+#[test]
+fn test_fuzz_signed_status_is_still_unauthenticated() {
+    for raw in ["+16", " 16\t", "16"] {
+        assert!(
+            matches!(
+                validate_status(Some(raw), None),
+                Err(ProviderError::Unauthorized(_))
+            ),
+            "{raw:?}"
+        );
+    }
+}

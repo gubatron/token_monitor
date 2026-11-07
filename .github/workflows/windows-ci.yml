@@ -384,7 +384,9 @@ jobs:
     needs: detect
     if: needs.detect.outputs.workspace == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # 51 targets x ~62 s plus the build is already ~55 min; leave headroom
+    # for new targets so the job is not cancelled mid-run.
+    timeout-minutes: 90
     concurrency:
       group: windows-ci-fuzz-smoke-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.ref }}
       cancel-in-progress: true
