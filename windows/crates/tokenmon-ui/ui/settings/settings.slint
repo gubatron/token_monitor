@@ -136,6 +136,8 @@ component ProviderDot inherits Rectangle {
 
 export component SettingsWindow inherits Window {
     title: "TokenMon";
+    // Taskbar button and Alt+Tab: the TokenMon logo, not the generic icon.
+    icon: @image-url("../assets/logos/tokenmon-app-icon.png");
     default-font-size: 14px;
     preferred-width: 480px;
     preferred-height: 640px;

@@ -23,6 +23,8 @@ const MAX_BLOB: u32 = 64 * 1024;
 const MAX_ENTRIES: u32 = 256;
 /// `RT_VERSION`.
 const RT_VERSION: u32 = 16;
+/// `RT_GROUP_ICON`.
+const RT_GROUP_ICON: u32 = 14;
 /// `VS_FIXEDFILEINFO.dwSignature`.
 const FIXED_SIGNATURE: u32 = 0xFEEF_04BD;
 
@@ -112,7 +114,36 @@ fn rva_to_offset(sections: &[Section], rva: u32) -> Option<u64> {
 /// assert!(read_pe_version(Cursor::new(b"MZ".to_vec())).is_none());
 /// assert!(read_pe_version(Cursor::new(Vec::new())).is_none());
 /// ```
-pub fn read_pe_version<R: Read + Seek>(mut r: R) -> Option<AppVersion> {
+pub fn read_pe_version<R: Read + Seek>(r: R) -> Option<AppVersion> {
+    let (mut img, sections, base) = open_resources(r)?;
+    let (rva, size) = find_resource_blob(&mut img, base, RT_VERSION)?;
+    let offset = rva_to_offset(&sections, rva)?;
+    let blob = img.read(offset, size.min(MAX_BLOB) as usize)?;
+    parse_version_info(&blob)
+}
+
+/// Whether a PE image carries at least one `RT_GROUP_ICON` resource: the
+/// icon Explorer, the taskbar and Alt+Tab show for the executable. `false`
+/// for anything that is not a PE image with a resource section.
+///
+/// # Examples
+///
+/// ```
+/// use std::io::Cursor;
+/// use tokenmon_platform::install::pe_version::pe_has_icon_group;
+///
+/// assert!(!pe_has_icon_group(Cursor::new(b"MZ".to_vec())));
+/// assert!(!pe_has_icon_group(Cursor::new(Vec::new())));
+/// ```
+pub fn pe_has_icon_group<R: Read + Seek>(r: R) -> bool {
+    open_resources(r)
+        .and_then(|(mut img, _, base)| find_resource_blob(&mut img, base, RT_GROUP_ICON))
+        .is_some()
+}
+
+/// Parses the PE headers and returns the image, its sections and the file
+/// offset of the root resource directory.
+fn open_resources<R: Read + Seek>(mut r: R) -> Option<(Image<R>, Vec<Section>, u64)> {
     let len = r.seek(SeekFrom::End(0)).ok()?;
     let mut img = Image { r, len };
     let dos = img.read(0, 64)?;
@@ -161,15 +192,16 @@ pub fn read_pe_version<R: Read + Seek>(mut r: R) -> Option<AppVersion> {
         })
         .collect();
     let base = rva_to_offset(&sections, res_rva)?;
-    let (rva, size) = find_version_blob(&mut img, base)?;
-    let offset = rva_to_offset(&sections, rva)?;
-    let blob = img.read(offset, size.min(MAX_BLOB) as usize)?;
-    parse_version_info(&blob)
+    Some((img, sections, base))
 }
 
 /// Walks type -> name -> language and returns the `(rva, size)` of the first
-/// `RT_VERSION` data entry.
-fn find_version_blob<R: Read + Seek>(img: &mut Image<R>, base: u64) -> Option<(u32, u32)> {
+/// data entry of resource type `kind`.
+fn find_resource_blob<R: Read + Seek>(
+    img: &mut Image<R>,
+    base: u64,
+    kind: u32,
+) -> Option<(u32, u32)> {
     let mut dir = base;
     for level in 0..3 {
         let header = img.read(dir, 16)?;
@@ -181,7 +213,7 @@ fn find_version_blob<R: Read + Seek>(img: &mut Image<R>, base: u64) -> Option<(u
             let name = u32_at(e, 0)?;
             let target = u32_at(e, 4)?;
             // Only the type level is filtered (by integer id).
-            let wanted = level != 0 || (name & 0x8000_0000 == 0 && name == RT_VERSION);
+            let wanted = level != 0 || (name & 0x8000_0000 == 0 && name == kind);
             wanted.then_some(target)
         })?;
         let is_dir = pick & 0x8000_0000 != 0;

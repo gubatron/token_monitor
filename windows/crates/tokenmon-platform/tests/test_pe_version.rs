@@ -64,6 +64,26 @@ fn test_every_byte_flip_is_total() {
     }
 }
 
+/// The icon-group check (#81) finds `RT_GROUP_ICON` by type id, is false for
+/// an image that only has a version resource, and is total over truncations.
+#[test]
+fn test_icon_group_detection() {
+    use tokenmon_platform::install::pe_has_icon_group;
+    let has = |b: Vec<u8>| pe_has_icon_group(Cursor::new(b));
+    let pe = pe_with_version(Some("1.6.0"), None, "");
+    assert!(!has(pe.clone()));
+    // Retype the only resource (type id at 0x200 + 16) from RT_VERSION (16)
+    // to RT_GROUP_ICON (14).
+    let mut icon = pe.clone();
+    icon[0x200 + 16..0x200 + 20].copy_from_slice(&14u32.to_le_bytes());
+    assert!(has(icon.clone()));
+    assert!(read(icon.clone()).is_none(), "no longer a version resource");
+    assert!(!has(Vec::new()) && !has(b"MZ".to_vec()));
+    for n in 0..icon.len() {
+        let _ = has(icon[..n].to_vec());
+    }
+}
+
 /// A resource directory that points back at itself terminates.
 #[test]
 fn test_self_referencing_resource_directory_terminates() {

@@ -69,6 +69,11 @@ pub fn run_headless(version: &str) -> bool {
         return false;
     }
 
+    if !own_icon_resource_present() {
+        tracing::error!("smoke: the exe has no application icon (RT_GROUP_ICON) resource");
+        return false;
+    }
+
     let Ok(dir) = tempfile::tempdir() else {
         tracing::error!("smoke: no temp directory");
         return false;
@@ -126,5 +131,20 @@ fn own_version_resource_matches(version: &str) -> bool {
 
 #[cfg(not(all(windows, target_env = "msvc")))]
 fn own_version_resource_matches(_version: &str) -> bool {
+    true
+}
+
+/// Without an icon group the taskbar, Alt+Tab and Explorer show the generic
+/// application icon (#81); `build.rs` embeds `tokenmon.ico` as group id 1.
+#[cfg(all(windows, target_env = "msvc"))]
+fn own_icon_resource_present() -> bool {
+    std::env::current_exe()
+        .ok()
+        .and_then(|p| std::fs::File::open(p).ok())
+        .is_some_and(tokenmon_platform::install::pe_has_icon_group)
+}
+
+#[cfg(not(all(windows, target_env = "msvc")))]
+fn own_icon_resource_present() -> bool {
     true
 }

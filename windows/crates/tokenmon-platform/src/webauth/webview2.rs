@@ -435,7 +435,7 @@ fn create_window(ctx: &Rc<Ctx>, title: &str) -> windows::core::Result<HWND> {
         let _ = AdjustWindowRect(&mut rect, style, false);
         let title = wide(title);
         let param = Box::into_raw(Box::new(Rc::clone(ctx))) as *const c_void;
-        CreateWindowExW(
+        let hwnd = CreateWindowExW(
             WINDOW_EX_STYLE(0),
             CLASS_NAME,
             PCWSTR(title.as_ptr()),
@@ -448,7 +448,47 @@ fn create_window(ctx: &Rc<Ctx>, title: &str) -> windows::core::Result<HWND> {
             None,
             Some(hinst),
             Some(param),
-        )
+        )?;
+        set_app_icon(hwnd, hinst);
+        Ok(hwnd)
+    }
+}
+
+/// Resource id of the executable's group icon (`build.rs` of the app crate).
+const APP_ICON_ID: usize = 1;
+
+/// Gives the window the TokenMon icon (big for Alt+Tab, small for the title
+/// bar and taskbar button) from the exe's icon resource, so the sign-in
+/// window never shows the generic application icon (#81). A test host or an
+/// exe without the resource keeps the default.
+///
+/// # Safety
+/// `hwnd` must be a live window of the calling thread.
+unsafe fn set_app_icon(hwnd: HWND, hinst: HINSTANCE) {
+    for (kind, metric_w, metric_h) in [
+        (ICON_BIG, SM_CXICON, SM_CYICON),
+        (ICON_SMALL, SM_CXSMICON, SM_CYSMICON),
+    ] {
+        // SAFETY: loads a shared icon resource from our own module at the
+        // metric size; the handle is owned by the system (LR_SHARED).
+        unsafe {
+            let icon = LoadImageW(
+                Some(hinst),
+                PCWSTR(APP_ICON_ID as *const u16),
+                IMAGE_ICON,
+                GetSystemMetrics(metric_w),
+                GetSystemMetrics(metric_h),
+                LR_SHARED,
+            );
+            if let Ok(icon) = icon {
+                SendMessageW(
+                    hwnd,
+                    WM_SETICON,
+                    Some(WPARAM(kind as usize)),
+                    Some(LPARAM(icon.0 as isize)),
+                );
+            }
+        }
     }
 }
 

@@ -24,7 +24,9 @@ pub mod verify;
 pub use download::{DownloadedFile, Downloader, HttpDownloader, TrustPolicy};
 pub use feed::HttpFeedFetcher;
 pub use installer::WindowsUpdateInstaller;
-pub use pe_version::{PackageVersionReader, SystemVersionReader, read_pe_version};
+pub use pe_version::{
+    PackageVersionReader, SystemVersionReader, pe_has_icon_group, read_pe_version,
+};
 pub use relaunch::{
     CommandSpec, ProcessLauncher, StdLauncher, handle_startup_args, parse_wait_for_pid,
     wait_for_pid_exit,
