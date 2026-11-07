@@ -16,6 +16,7 @@ pub mod model;
 pub mod observe;
 pub mod overview;
 pub mod panel;
+pub mod placement;
 pub mod poller;
 pub mod providers;
 pub mod registry;

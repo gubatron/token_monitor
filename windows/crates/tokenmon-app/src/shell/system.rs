@@ -8,17 +8,18 @@
 use std::ptr::{null, null_mut};
 use std::sync::OnceLock;
 
-use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
+use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM};
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     ASFW_ANY, AllowSetForegroundWindow, BringWindowToTop, CreateWindowExW, DefWindowProcW,
-    GWL_EXSTYLE, GetWindowLongPtrW, MB_ICONERROR, MB_OK, MB_SETFOREGROUND, MessageBoxW,
-    RegisterClassW, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER,
-    SetForegroundWindow, SetWindowLongPtrW, SetWindowPos, WNDCLASSW, WS_EX_APPWINDOW,
-    WS_EX_TOOLWINDOW,
+    FindWindowExW, FindWindowW, GWL_EXSTYLE, GetWindowLongPtrW, GetWindowRect, IsWindowVisible,
+    MB_ICONERROR, MB_OK, MB_SETFOREGROUND, MessageBoxW, RegisterClassW, SWP_FRAMECHANGED,
+    SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetForegroundWindow, SetWindowLongPtrW,
+    SetWindowPos, WNDCLASSW, WS_EX_APPWINDOW, WS_EX_TOOLWINDOW,
 };
 
 use crate::session::classify;
+use crate::tray::Rect;
 
 fn wide(text: &str) -> Vec<u16> {
     text.encode_utf16().chain(std::iter::once(0)).collect()
@@ -47,6 +48,44 @@ pub fn allow_any_process_foreground() {
     unsafe {
         AllowSetForegroundWindow(ASFW_ANY);
     }
+}
+
+fn window_rect(hwnd: HWND) -> Option<Rect> {
+    let mut r = RECT {
+        left: 0,
+        top: 0,
+        right: 0,
+        bottom: 0,
+    };
+    // SAFETY: `hwnd` is non-null and `r` is a valid out pointer.
+    let ok = !hwnd.is_null() && unsafe { GetWindowRect(hwnd, &raw mut r) } != 0;
+    ok.then(|| super::display::rect_from(r))
+}
+
+/// The visible notification-area overflow flyout (the `^` popup), if open.
+pub fn overflow_flyout_rect() -> Option<Rect> {
+    let class = wide("NotifyIconOverflowWindow");
+    // SAFETY: `class` is NUL-terminated and outlives the calls; a window
+    // that dies concurrently makes the API report failure.
+    let hwnd = unsafe { FindWindowW(class.as_ptr(), null()) };
+    if hwnd.is_null() || unsafe { IsWindowVisible(hwnd) } == 0 {
+        return None;
+    }
+    window_rect(hwnd)
+}
+
+/// The taskbar's notification area (`Shell_TrayWnd` > `TrayNotifyWnd`).
+pub fn notification_area_rect() -> Option<Rect> {
+    let (tray, notify) = (wide("Shell_TrayWnd"), wide("TrayNotifyWnd"));
+    // SAFETY: both buffers are NUL-terminated and outlive the calls.
+    let hwnd = unsafe {
+        let taskbar = FindWindowW(tray.as_ptr(), null());
+        if taskbar.is_null() {
+            return None;
+        }
+        FindWindowExW(taskbar, null_mut(), notify.as_ptr(), null())
+    };
+    window_rect(hwnd)
 }
 
 /// Makes the window a tool window: no taskbar button and no Alt+Tab entry.

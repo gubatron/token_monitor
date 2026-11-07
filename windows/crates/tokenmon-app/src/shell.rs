@@ -50,11 +50,12 @@ use tray_icon::{Icon, MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, 
 use crate::app::{App, AppInputs};
 use crate::overview::{OverviewStore, next_midnight, record_live};
 use crate::panel::{Action, PanelState, PanelView, ViewEnv, build_view, commit_api_key};
+use crate::placement::{PlacementInput, fallback_icon, place_panel, resolve_anchor};
 use crate::settings_host::{AppHost, AppSettingsBackend, HostParts};
 use crate::startup::{PendingShow, StartupFailure, retry};
 use crate::tray::{
-    ClickAction, MenuCommand, PANEL_GAP, TrayBackend, TrayController, TrayData, click_action,
-    context_menu, icon_size, menu_command, place_panel, was_foreground,
+    ClickAction, MenuCommand, Rect, TrayBackend, TrayController, TrayData, click_action,
+    context_menu, icon_size, menu_command, was_foreground,
 };
 use crate::updates::UpdateService;
 
@@ -87,7 +88,7 @@ struct Ui {
     rows: RefCell<Vec<RowVm>>,
     cards: RefCell<Vec<OverviewCardVm>>,
     last_view: RefCell<Option<PanelView>>,
-    anchor: Cell<Option<(i32, i32)>>,
+    anchor: Cell<Option<Rect>>,
     /// Whether the selected panel has keyboard focus, and when it last lost it
     /// (to tell "was in front" at a tray press; see [`was_foreground`]).
     focused: Cell<bool>,
@@ -352,6 +353,11 @@ impl Ui {
         window.apply(&view, &rows);
         *self.rows.borrow_mut() = rows;
         *self.last_view.borrow_mut() = Some(view);
+        if !reveal && window.is_visible() {
+            // New content can change the panel's height: re-fit it against
+            // the same anchor so it never grows down into the taskbar.
+            self.place(&window);
+        }
         if reveal {
             self.place(&window);
             window.show();
@@ -370,22 +376,22 @@ impl Ui {
         }
     }
 
-    /// Anchors the window above (or below) the tray icon, inside the work area.
+    /// Anchors the window to the tray icon on the side away from the taskbar,
+    /// inside the monitor's work area, at that monitor's DPI.
     fn place(&self, window: &PanelWindow) {
-        let size = window.window().size();
         let anchor = self.anchor.get().unwrap_or_else(default_anchor);
-        let (work, _) = display::monitor_at(anchor.0, anchor.1);
-        let (x, y) = place_panel(
-            anchor,
-            (
-                i32::try_from(size.width).unwrap_or(0),
-                i32::try_from(size.height).unwrap_or(0),
-            ),
-            work,
-        );
-        window
-            .window()
-            .set_position(slint::PhysicalPosition::new(x, y));
+        let facts = display::monitor_at(center(anchor).0, center(anchor).1);
+        let placement = place_panel(&PlacementInput {
+            icon: anchor,
+            monitor: facts.monitor,
+            work: facts.work,
+            dpi: facts.dpi,
+            logical_size: window.logical_size(),
+        });
+        window.window().set_position(slint::PhysicalPosition::new(
+            placement.origin.0,
+            placement.origin.1,
+        ));
     }
 
     fn is_panel_visible(&self) -> bool {
@@ -502,11 +508,16 @@ impl Ui {
     }
 }
 
+/// Centre of a rectangle.
+fn center(r: Rect) -> (i32, i32) {
+    (r.x + r.width / 2, r.y + r.height / 2)
+}
+
 /// Where the panel opens when no tray position is known yet (a toast click or
-/// `--show` before any tray event): the primary work area's bottom right.
-fn default_anchor() -> (i32, i32) {
-    let (work, _) = display::monitor_at(0, 0);
-    (work.x + work.width - 220, work.y + work.height + PANEL_GAP)
+/// `--show` before any tray event): beside the primary taskbar's corner.
+fn default_anchor() -> Rect {
+    let facts = display::monitor_at(0, 0);
+    fallback_icon(facts.monitor, facts.work, facts.dpi)
 }
 
 /// Entry point of the Windows build. Returns the process exit code.
@@ -805,9 +816,22 @@ fn wire_tray(ui: &Rc<Ui>, show_panel: bool) -> Result<(), StartupFailure> {
             | TrayIconEvent::Leave { rect, .. } => (*rect, Phase::Hover),
             _ => return,
         };
-        let anchor = (
-            (rect.position.x + f64::from(rect.size.width) / 2.0) as i32,
-            rect.position.y as i32,
+        // Resolved now, while the overflow flyout (if the icon lives there)
+        // is still open: an icon inside it anchors to the notification area.
+        let icon = Rect {
+            x: rect.position.x as i32,
+            y: rect.position.y as i32,
+            width: i32::try_from(rect.size.width).unwrap_or(0),
+            height: i32::try_from(rect.size.height).unwrap_or(0),
+        };
+        let probe = display::monitor_at(center(icon).0, center(icon).1);
+        let (anchor, _) = resolve_anchor(
+            Some(icon),
+            system::overflow_flyout_rect(),
+            system::notification_area_rect(),
+            probe.monitor,
+            probe.work,
+            probe.dpi,
         );
         with_ui(move |ui| {
             ui.anchor.set(Some(anchor));
@@ -868,8 +892,8 @@ fn on_tick(ui: &Rc<Ui>, tick: &mut TickState) {
         .collect();
     let sessions = Arc::clone(&ui.app.sessions);
     let signed_in = move |p: ProviderId| sessions.signed_in(p);
-    let anchor = ui.anchor.get().unwrap_or((0, 0));
-    let (_, dpi) = display::monitor_at(anchor.0, anchor.1);
+    let anchor = ui.anchor.get().unwrap_or_else(default_anchor);
+    let dpi = display::monitor_at(center(anchor).0, center(anchor).1).dpi;
     tick.controller.refresh(
         &TrayData {
             settings: &settings,

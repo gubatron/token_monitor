@@ -185,40 +185,6 @@ fn test_icon_size_follows_the_system_metric_and_dpi() {
     assert_eq!(icon_size(0, 0), TrayIconSize::Px16);
 }
 
-/// The panel opens above the icon when it fits, below when it does not, and
-/// never leaves the work area.
-#[test]
-fn test_panel_placement_clamps_to_the_work_area() {
-    use tokenmon_app::tray::{PANEL_GAP, Rect, place_panel};
-    let work = Rect {
-        x: 0,
-        y: 0,
-        width: 1920,
-        height: 1040,
-    };
-    // Bottom taskbar: anchor at the icon's top, room above; the 8 px gap would
-    // reach into the taskbar, so the panel is held to the work area's bottom.
-    let (x, y) = place_panel((1000, 1050), (420, 600), work);
-    assert_eq!((x, y), (790, 440));
-    let (_, y) = place_panel((1000, 800), (420, 600), work);
-    assert_eq!(y, 800 - 600 - PANEL_GAP);
-    // Icon near the right edge: clamp so the panel stays on screen.
-    let (x, _) = place_panel((1915, 1050), (420, 600), work);
-    assert_eq!(x, 1920 - 420);
-    // Top taskbar: not enough room above, so it opens below.
-    let top = Rect {
-        x: 0,
-        y: 40,
-        width: 1920,
-        height: 1040,
-    };
-    let (_, y) = place_panel((900, 40), (420, 600), top);
-    assert_eq!(y, 40 + PANEL_GAP);
-    // Taller than the work area: pinned to the top left.
-    let (x, y) = place_panel((100, 500), (420, 5000), work);
-    assert_eq!((x, y), (0, 0));
-}
-
 /// Whatever the tray data, the backend gets the TokenMon logo as a square
 /// bitmap of exactly the requested edge: `size * size * 4` straight-RGBA
 /// bytes, with visible pixels spread across both axes, so the `HICON` is

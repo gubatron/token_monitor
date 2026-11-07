@@ -247,24 +247,3 @@ pub const PRESS_FOCUS_WINDOW: std::time::Duration = std::time::Duration::from_mi
 pub fn was_foreground(focused: bool, since_lost: Option<std::time::Duration>) -> bool {
     focused || since_lost.is_some_and(|t| t < PRESS_FOCUS_WINDOW)
 }
-
-/// Gap between the tray icon and the panel, in pixels.
-pub const PANEL_GAP: i32 = 8;
-
-/// Where to put a `size` panel opened from the tray icon at `anchor` (the
-/// icon's top centre): above the icon when there is room, else below it, then
-/// clamped entirely inside `work` (the monitor's work area, so the taskbar is
-/// never covered). A panel larger than the work area pins to its top left.
-pub fn place_panel(anchor: (i32, i32), size: (i32, i32), work: Rect) -> (i32, i32) {
-    let (w, h) = size;
-    let above = anchor.1 - h - PANEL_GAP;
-    let y = if above >= work.y {
-        above
-    } else {
-        anchor.1 + PANEL_GAP
-    };
-    let x = anchor.0 - w / 2;
-    let max_x = (work.x + work.width - w).max(work.x);
-    let max_y = (work.y + work.height - h).max(work.y);
-    (x.clamp(work.x, max_x), y.clamp(work.y, max_y))
-}

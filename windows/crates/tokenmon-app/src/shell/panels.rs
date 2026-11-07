@@ -10,6 +10,9 @@ use tokenmon_ui::panels::{bridge, events, ui};
 
 use crate::panel::PanelView;
 
+/// The panel's width in logical pixels (`PanelShell` in the UI crate).
+pub const PANEL_WIDTH_DIP: f32 = 420.0;
+
 /// One panel window, whichever provider it shows.
 pub enum PanelWindow {
     /// Overview.
@@ -117,6 +120,14 @@ impl PanelWindow {
     /// Shows it.
     pub fn show(&self) {
         let _ = each!(self, w => w.show());
+    }
+
+    /// The size the layout wants, in logical pixels. Read from the component,
+    /// not from the window: before the first show the window's own size is not
+    /// meaningful (it may be zero or at the wrong scale), which put the panel
+    /// at the icon's centre and off-screen (#81).
+    pub fn logical_size(&self) -> (f32, f32) {
+        (PANEL_WIDTH_DIP, each!(self, w => w.get_content_height()))
     }
 
     /// The native window handle, once the window exists.
