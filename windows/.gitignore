@@ -3,3 +3,4 @@ target/
 fuzz/target/
 fuzz/artifacts/
 __pycache__/
+.tools/
