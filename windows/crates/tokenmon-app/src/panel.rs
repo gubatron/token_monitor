@@ -74,6 +74,22 @@ pub enum PanelView {
     OpenRouter(OpenRouterPanelVm),
 }
 
+impl PanelView {
+    /// The provider whose body this view fills.
+    pub fn provider(&self) -> ProviderId {
+        match self {
+            Self::Overview(_) => ProviderId::Overview,
+            Self::Grok(_) => ProviderId::Grok,
+            Self::Grokbot(_) => ProviderId::Grokbot,
+            Self::Cursor(_) => ProviderId::Cursor,
+            Self::Claude(_) => ProviderId::Claude,
+            Self::ChatGpt(_) => ProviderId::ChatGpt,
+            Self::OpenCode(_) => ProviderId::OpenCode,
+            Self::OpenRouter(_) => ProviderId::OpenRouter,
+        }
+    }
+}
+
 /// What the shell does after a panel action.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Action {

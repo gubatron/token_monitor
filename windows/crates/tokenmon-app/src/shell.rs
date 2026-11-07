@@ -1,15 +1,14 @@
-//! Windows glue: single-instance startup, the tray icon, the panel windows and
+//! Windows glue: single-instance startup, the tray icon, the panel window and
 //! the platform collaborators. Everything decidable lives in the portable
 //! modules ([`crate::panel`], [`crate::tray`], [`crate::overview`],
 //! [`crate::settings_host`]); this one only connects them to the OS.
 //!
 //! Threads: a tokio runtime runs polling and IO; the Slint event loop runs on
-//! the main thread and owns the tray, the panel windows and Settings.
+//! the main thread and owns the tray, the panel window and Settings.
 //! Background callbacks (pipe server, toast click, Settings quit) reach the UI
 //! through `slint::invoke_from_event_loop`.
 
 use std::cell::{Cell, RefCell};
-use std::collections::BTreeMap;
 use std::process::ExitCode;
 use std::rc::{Rc, Weak};
 use std::sync::Arc;
@@ -50,6 +49,7 @@ use tray_icon::{Icon, MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, 
 use crate::app::{App, AppInputs};
 use crate::overview::{OverviewStore, next_midnight, record_live};
 use crate::panel::{Action, PanelState, PanelView, ViewEnv, build_view, commit_api_key};
+use crate::panel_host::{SinglePanel, select_tab};
 use crate::placement::{PlacementInput, fallback_icon, place_panel, resolve_anchor};
 use crate::settings_host::{AppHost, AppSettingsBackend, HostParts};
 use crate::startup::{PendingShow, StartupFailure, retry};
@@ -94,7 +94,8 @@ static SHOW_REQUEST: PendingShow = PendingShow::new();
 /// (tray, menu, pipe, toast) never capture it: they post a closure that
 /// reaches it through [`with_ui`] on the UI thread.
 struct Ui {
-    windows: RefCell<BTreeMap<ProviderId, Rc<PanelWindow>>>,
+    /// The one panel window; every tab is a body inside it (#81).
+    panel: SinglePanel<PanelWindow>,
     state: RefCell<PanelState>,
     rows: RefCell<Vec<RowVm>>,
     cards: RefCell<Vec<OverviewCardVm>>,
@@ -114,7 +115,7 @@ struct Ui {
     settings_vm: Arc<SettingsViewModel>,
     settings_window: RefCell<Option<Rc<SettingsWindow>>>,
     tick: slint::Timer,
-    me: RefCell<Weak<Ui>>,
+    me: Rc<RefCell<Weak<Ui>>>,
 }
 
 thread_local! {
@@ -174,35 +175,22 @@ impl Ui {
         })
     }
 
-    /// The window for `provider`, created and wired on first use.
-    fn window_for(&self, provider: ProviderId) -> Option<Rc<PanelWindow>> {
-        if let Some(w) = self.windows.borrow().get(&provider) {
-            return Some(Rc::clone(w));
-        }
-        let weak = self.me.borrow().clone();
-        let on_close: Rc<dyn Fn()> = Rc::new(move || {
-            if let Some(ui) = weak.upgrade() {
-                ui.hide_all();
-            }
-        });
-        let window = match PanelWindow::create(provider, &self.handler(), &on_close) {
-            Ok(w) => Rc::new(w),
+    /// The panel window, created and wired on first use. There is never a
+    /// second one: tabs switch inside it.
+    fn panel_window(&self) -> Option<Rc<PanelWindow>> {
+        match self.panel.get_or_create() {
+            Ok(w) => Some(w),
             Err(e) => {
-                tracing::error!(error = %e, %provider, "panel window failed");
-                return None;
+                tracing::error!(error = %e, "panel window failed");
+                None
             }
-        };
-        self.wire_window_events(provider, &window);
-        self.windows
-            .borrow_mut()
-            .insert(provider, Rc::clone(&window));
-        Some(window)
+        }
     }
 
     /// Escape closes the panel and focus changes are tracked for the tray
     /// click toggle. Losing focus does NOT close it: the panel stays open
     /// until the user closes it (maintainer decision on #81).
-    fn wire_window_events(&self, provider: ProviderId, window: &Rc<PanelWindow>) {
+    fn wire_window_events(&self, window: &PanelWindow) {
         use slint::winit_030::{EventResult, WinitWindowAccessor, winit};
         let weak = self.me.borrow().clone();
         window.window().on_winit_window_event(move |_, event| {
@@ -211,11 +199,6 @@ impl Ui {
             let Some(ui) = weak.upgrade() else {
                 return EventResult::Propagate;
             };
-            // A tab switch hides the old window after selecting the new one;
-            // only the selected panel's events count.
-            if ui.state.borrow().selected != provider {
-                return EventResult::Propagate;
-            }
             match event {
                 WindowEvent::Focused(focused) => ui.note_focus(*focused),
                 WindowEvent::KeyboardInput { event, .. }
@@ -252,8 +235,7 @@ impl Ui {
 
     /// Brings the visible panel to the front with keyboard focus.
     fn raise_panel(&self) {
-        let provider = self.state.borrow().selected;
-        if let Some(hwnd) = self.windows.borrow().get(&provider).and_then(|w| w.hwnd()) {
+        if let Some(hwnd) = self.panel.existing().and_then(|w| w.hwnd()) {
             system::bring_to_front(hwnd);
         }
     }
@@ -273,8 +255,9 @@ impl Ui {
 
     /// Switches to `provider`'s tab and shows the panel.
     fn show_tab(&self, provider: ProviderId) {
-        self.state.borrow_mut().selected = provider;
-        self.app.settings.set_selected_provider(provider);
+        select_tab(&mut self.state.borrow_mut(), provider, &|p| {
+            self.app.settings.set_selected_provider(p);
+        });
         self.render(true);
     }
 
@@ -313,7 +296,7 @@ impl Ui {
         {
             return;
         }
-        let Some(window) = self.window_for(provider) else {
+        let Some(window) = self.panel_window() else {
             return;
         };
         if let PanelView::Overview(vm) = &view {
@@ -337,14 +320,8 @@ impl Ui {
                     tracing::info!(accepted, "panel: bring to front after show");
                 }
             }
-            Self::log_actual_geometry(&window);
-            // The new panel is up before the old one goes, so a tab switch
-            // does not flash the desktop.
-            for (p, other) in self.windows.borrow().iter() {
-                if *p != provider && other.is_visible() {
-                    other.hide();
-                }
-            }
+            debug_assert_eq!(self.panel.creations(), 1, "one panel window only");
+            self.log_actual_geometry(&window);
             self.app.model.set_menu_open(true);
         }
     }
@@ -383,7 +360,7 @@ impl Ui {
 
     /// `--debug-panel`: what the window really is after showing, to compare
     /// with the placement that was computed.
-    fn log_actual_geometry(window: &PanelWindow) {
+    fn log_actual_geometry(&self, window: &PanelWindow) {
         if !debug_panel() {
             return;
         }
@@ -393,19 +370,18 @@ impl Ui {
             actual_position = ?(pos.x, pos.y),
             scale_factor = window.window().scale_factor(),
             hwnd = ?window.hwnd(),
-            "panel: shown"
+            panel_windows_created = self.panel.creations(),
+            "panel: shown (one panel window)"
         );
     }
 
     fn is_panel_visible(&self) -> bool {
-        self.windows.borrow().values().any(|w| w.is_visible())
+        self.panel.existing().is_some_and(|w| w.is_visible())
     }
 
     fn hide_all(&self) {
-        if self.is_panel_visible() {
-            for w in self.windows.borrow().values() {
-                w.hide();
-            }
+        if let Some(w) = self.panel.existing().filter(|w| w.is_visible()) {
+            w.hide();
         }
         self.focused.set(false);
         // Also when nothing is visible: a window closed another way (Alt+F4)
@@ -509,6 +485,25 @@ impl Ui {
         self.app.model.quit();
         let _ = slint::quit_event_loop();
     }
+}
+
+/// The seam that builds the one panel window: wires its actions and keys to
+/// the UI the first time the shell needs it.
+fn panel_factory(me: &Rc<RefCell<Weak<Ui>>>) -> crate::panel_host::WindowFactory<PanelWindow> {
+    let me = Rc::clone(me);
+    Box::new(move || {
+        let weak = me.borrow().clone();
+        let ui = weak.upgrade().ok_or("the UI is gone")?;
+        let closer = weak.clone();
+        let on_close: Rc<dyn Fn()> = Rc::new(move || {
+            if let Some(ui) = closer.upgrade() {
+                ui.hide_all();
+            }
+        });
+        let window = PanelWindow::create(&ui.handler(), &on_close).map_err(|e| e.to_string())?;
+        ui.wire_window_events(&window);
+        Ok(Rc::new(window))
+    })
 }
 
 /// Centre of a rectangle.
@@ -676,8 +671,9 @@ fn run_primary(pipe: &str, show_panel: bool, version: &str) -> ExitCode {
     let settings_vm = settings_view_model(&app, &updates, version, runtime.handle());
     let store = Arc::new(OverviewStore::open(&dir));
     let selected = app.settings.snapshot().selected_provider;
+    let me: Rc<RefCell<Weak<Ui>>> = Rc::default();
     let ui = Rc::new(Ui {
-        windows: RefCell::new(BTreeMap::new()),
+        panel: SinglePanel::new(panel_factory(&me)),
         state: RefCell::new(PanelState::new(selected)),
         rows: RefCell::new(Vec::new()),
         cards: RefCell::new(Vec::new()),
@@ -694,7 +690,7 @@ fn run_primary(pipe: &str, show_panel: bool, version: &str) -> ExitCode {
         settings_vm,
         settings_window: RefCell::new(None),
         tick: slint::Timer::default(),
-        me: RefCell::new(Weak::new()),
+        me: Rc::clone(&me),
     });
     *ui.me.borrow_mut() = Rc::downgrade(&ui);
     UI.with(|u| *u.borrow_mut() = Some(Rc::clone(&ui)));

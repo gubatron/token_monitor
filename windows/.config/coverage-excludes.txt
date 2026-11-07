@@ -37,7 +37,7 @@
 
 crates/tokenmon-app/src/shell\.rs  max-lines=860  # app composition on Windows: tray icon, panel windows, Slint event loop, toast and pipe wiring; decisions live in panel, tray, overview, settings_host, startup
 crates/tokenmon-app/src/shell/display\.rs  # MonitorFromPoint/GetDpiForMonitor wrappers; placement math is crate::placement
-crates/tokenmon-app/src/shell/panels\.rs  # creates and shows the eight Slint panel windows; view building is crate::panel, binding is tokenmon-ui's bridge
+crates/tokenmon-app/src/shell/panels\.rs  # creates and shows the one Slint panel window; view building is crate::panel, binding is tokenmon-ui's bridge
 crates/tokenmon-app/src/shell/tray_wiring\.rs  # tray icon creation, tray click and menu events, the 2 s tick; decisions are crate::tray, crate::placement, crate::panel
 crates/tokenmon-app/src/shell/system\.rs  # MessageBoxW, AllowSetForegroundWindow, session-end window; message decoding is crate::session
 crates/tokenmon-app/src/shell/theme\.rs  # RegGetValueW for SystemUsesLightTheme; the mapping is tokenmon-ui's TaskbarTheme
