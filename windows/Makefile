@@ -293,6 +293,9 @@ dist: ## [W] MSI + zip + SHA256SUMS in target/wix/ (unsigned release files)
 	$(call ok,$(DIST_DIR)/: $(notdir $(MSI)) $(notdir $(ZIP)) $(notdir $(SUMS)))
 
 # MSYS_NO_PATHCONV=1 keeps Git Bash from turning /i, /x and /qb into paths.
+# Recipes never put a backslash right before a double quote: Windows make
+# passes the recipe to bash on a command line, and the MSYS runtime reads
+# \" there differently from make, so the quotes stop balancing.
 install: ## [W] Build the MSI and install it for this user (no admin)
 	$(call windows_only)
 	@"$(MAKE)" --no-print-directory installer
@@ -300,9 +303,10 @@ install: ## [W] Build the MSI and install it for this user (no admin)
 	MSYS_NO_PATHCONV=1 msiexec /i "$$(cygpath -w "$(MSI)")" $(MSI_UI) /norestart
 	@dir=$$(MSYS_NO_PATHCONV=1 reg query 'HKCU\Software\TokenMon\Installer' /v InstallDir 2>/dev/null \
 		| tr -d '\r' | sed -n 's/.*InstallDir *REG_SZ *//p'); \
-	printf "$(GREEN)ok$(RESET)  Installed $(APP_NAME) $(VERSION) to %s\n" "$${dir:-%LOCALAPPDATA%\\Programs\\TokenMon\\}"; \
-	printf "    Start it from the Start menu (TokenMon), or: \"%s$(APP_NAME).exe\"\n" "$$dir"; \
-	printf "    Remove it with: make uninstall (your data in %%LOCALAPPDATA%%\\\\TokenMon is kept)\n"
+	[ -n "$$dir" ] || dir="$$(cygpath -w "$$LOCALAPPDATA/Programs/TokenMon")/"; \
+	printf "$(GREEN)ok$(RESET)  Installed $(APP_NAME) $(VERSION) to %s\n" "$$dir"; \
+	printf "    Start it from the Start menu (TokenMon), or run %s%s.exe\n" "$$dir" "$(APP_NAME)"; \
+	printf "    make uninstall removes it and keeps your data in %s\n" "$$(cygpath -w "$$LOCALAPPDATA/TokenMon")"
 
 # Finds installed copies through Windows Installer by UpgradeCode, so it also
 # removes an MSI from a release download. Falls back to the MSI built here.
@@ -324,7 +328,7 @@ uninstall: ## [W] Uninstall the per-user MSI (keeps %LOCALAPPDATA%\TokenMon data
 			printf "$(CYAN)==>$(RESET) Uninstalling %s\n" "$$code"; \
 			MSYS_NO_PATHCONV=1 msiexec /x "$$code" $(MSI_UI) /norestart; \
 		done; \
-		printf "$(GREEN)ok$(RESET)  Uninstalled. Your data in %%LOCALAPPDATA%%\\\\TokenMon is kept.\n"; \
+		printf "$(GREEN)ok$(RESET)  Uninstalled. Your data in %s is kept.\n" "$$(cygpath -w "$$LOCALAPPDATA/TokenMon")"; \
 	fi
 
 ##@ Clean
