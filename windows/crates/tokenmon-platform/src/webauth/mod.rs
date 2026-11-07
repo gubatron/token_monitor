@@ -6,10 +6,10 @@
 //!
 //! * Portable, tested on every OS: [`machine`] (events in, actions and timers
 //!   out), [`gate`] (auth-host then return-page detection, navigation policy),
-//!   [`nav`] (Back policy, address label), [`cookies`] (allowlist selection,
-//!   chunked tokens, e-mail), [`profile`] (non-persistent per-provider
-//!   user-data folders), [`config`], and [`host`] (traits plus a headless
-//!   driver and fake host).
+//!   [`nav`] (Back policy, address label), [`layout`] (chrome geometry),
+//!   [`cookies`] (allowlist selection, chunked tokens, e-mail), [`profile`]
+//!   (non-persistent per-provider user-data folders), [`config`], and
+//!   [`host`] (traits plus a headless driver and fake host).
 //! * `webview2` (`cfg(windows)`): a thin adapter. It owns a native Win32 window
 //!   with the header, navigation bar and footer as native controls, hosts
 //!   WebView2 in the body, and executes the machine's actions. It contains no
@@ -28,6 +28,7 @@ pub mod config;
 pub mod cookies;
 pub mod gate;
 pub mod host;
+pub mod layout;
 pub mod machine;
 pub mod nav;
 pub mod profile;

@@ -70,6 +70,7 @@ use super::config::{SignInConfig, WINDOW_MIN_SIZE, WINDOW_SIZE};
 use super::cookies::WebCookie;
 use super::gate::NavigationPolicy;
 use super::host::{SignInDelegate, WebAuthError, WebAuthHost};
+use super::layout::{Bounds, body_bounds, chrome_layout, scaled};
 use super::machine::{Action, Input, SignInMachine, TimerId, ViewKind, ViewModel};
 use super::nav::NavSnapshot;
 use super::profile::{ProfileStore, remove_dir_if_exists};
@@ -83,10 +84,6 @@ const ID_CANCEL: i32 = IDCANCEL.0;
 
 const WM_APP_FOCUS: u32 = WM_APP + 1;
 const WM_APP_SIGN_OUT: u32 = WM_APP + 2;
-
-const HEADER_H: i32 = 72;
-const NAV_H: i32 = 40;
-const FOOTER_H: i32 = 64;
 
 const TIMERS: [TimerId; 6] = [
     TimerId::StatusHint,
@@ -105,8 +102,14 @@ fn wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
-fn scaled(v: i32, dpi: u32) -> i32 {
-    (v as i64 * i64::from(dpi) / 96) as i32
+/// A layout rectangle as the `RECT` WebView2's `SetBounds` takes.
+fn rect(b: Bounds) -> RECT {
+    RECT {
+        left: b.x,
+        top: b.y,
+        right: b.right(),
+        bottom: b.bottom(),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -639,12 +642,7 @@ fn create_controls(ctx: &Rc<Ctx>) -> windows::core::Result<()> {
 }
 
 fn body_rect(client: RECT, dpi: u32) -> RECT {
-    RECT {
-        left: 0,
-        top: scaled(HEADER_H + NAV_H + 2, dpi),
-        right: client.right,
-        bottom: (client.bottom - scaled(FOOTER_H + 1, dpi)).max(scaled(HEADER_H + NAV_H + 2, dpi)),
-    }
+    rect(body_bounds(client.right, client.bottom, dpi))
 }
 
 impl Ctx {
@@ -664,36 +662,27 @@ impl Ctx {
         };
         let controls = self.controls.borrow();
         let Some(k) = controls.as_ref() else { return };
-        let s = |v: i32| scaled(v, dpi);
-        let w = c.right;
-        let h = c.bottom;
-        let mv = |hwnd: HWND, x: i32, y: i32, cw: i32, ch: i32| {
+        let l = chrome_layout(c.right, c.bottom, dpi);
+        let mv = |hwnd: HWND, b: Bounds| {
             // SAFETY: child window of this thread.
             unsafe {
-                let _ = MoveWindow(hwnd, x, y, cw.max(0), ch.max(0), true);
+                let _ = MoveWindow(hwnd, b.x, b.y, b.width, b.height, true);
             }
         };
-        mv(k.title, s(16), s(10), w - s(16 + 16 + 110), s(26));
-        mv(k.status, s(16), s(38), w - s(16 + 16 + 110), s(30));
-        mv(k.cancel, w - s(16 + 90), s(14), s(90), s(28));
-        mv(k.seps[0], 0, s(HEADER_H), w, 2);
-        let ny = s(HEADER_H + 1 + 6);
-        mv(k.back, s(16), ny, s(80), s(28));
-        mv(k.forward, s(102), ny, s(96), s(28));
-        mv(k.reload, s(204), ny, s(80), s(28));
-        mv(k.address, s(296), ny + s(6), w - s(296 + 16 + 110), s(20));
-        mv(k.close_popup, w - s(16 + 100), ny, s(100), s(28));
-        mv(k.seps[1], 0, s(HEADER_H + NAV_H + 1), w, 2);
-        mv(k.seps[2], 0, h - s(FOOTER_H), w, 2);
-        mv(
-            k.finish,
-            w - s(16 + 150),
-            h - s(FOOTER_H) + s(16),
-            s(150),
-            s(32),
-        );
+        mv(k.title, l.title);
+        mv(k.status, l.status);
+        mv(k.cancel, l.cancel);
+        mv(k.back, l.back);
+        mv(k.forward, l.forward);
+        mv(k.reload, l.reload);
+        mv(k.address, l.address);
+        mv(k.close_popup, l.close_popup);
+        mv(k.finish, l.finish);
+        for (sep, b) in k.seps.iter().zip(l.separators) {
+            mv(*sep, b);
+        }
         drop(controls);
-        let b = body_rect(c, dpi);
+        let b = rect(l.body);
         for v in self.all_views() {
             // SAFETY: live controller of this thread.
             unsafe {
