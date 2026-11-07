@@ -29,6 +29,32 @@ pub trait Registry: Send + Sync {
     fn key_exists(&self, key: &str) -> Result<bool, ShellError>;
 }
 
+/// Encodes `value` as `REG_SZ` data: UTF-16LE including the terminating NUL,
+/// the bytes `RegSetValueExW` expects.
+#[must_use]
+pub fn encode_reg_sz(value: &str) -> Vec<u8> {
+    value
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .flat_map(u16::to_le_bytes)
+        .collect()
+}
+
+/// Decodes `REG_SZ` data as `RegQueryValueExW` returns it: UTF-16LE, cut at
+/// the first NUL (the terminator may be missing), an odd trailing byte
+/// ignored, unpaired surrogates replaced.
+#[must_use]
+pub fn decode_reg_sz(bytes: &[u8]) -> String {
+    let units: Vec<u16> = bytes
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|c| u16::from_le_bytes(*c))
+        .take_while(|&u| u != 0)
+        .collect();
+    String::from_utf16_lossy(&units)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Value {
     Text(String),
