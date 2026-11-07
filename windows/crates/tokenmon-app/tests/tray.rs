@@ -315,5 +315,31 @@ fn test_tooltip_follows_the_icon_content_not_the_sign_in_state() {
         TrayIconSize::Px16,
         TaskbarTheme::Dark,
     );
-    assert_eq!(c.backend().updates, ["OpenCode 12%"]);
+    assert_eq!(c.backend().updates, ["TokenMon \u{2014} OpenCode 12%"]);
+}
+
+/// The tooltip always starts with "TokenMon": just that when nothing has a
+/// value (signed out, no data), the percentages after it otherwise.
+#[test]
+fn test_tooltip_always_starts_with_the_product_name() {
+    let s = Settings::default();
+    let tip = |used: &[(ProviderId, f64)], grok_signed_in: bool| {
+        let mut c = TrayController::new(Recorder::default());
+        c.refresh(
+            &TrayData {
+                settings: &s,
+                used_percent: used,
+                signed_in: &|_| grok_signed_in,
+            },
+            TrayIconSize::Px16,
+            TaskbarTheme::Dark,
+        );
+        c.backend().updates[0].clone()
+    };
+    assert_eq!(tip(&[], false), "TokenMon");
+    assert_eq!(tip(&[(ProviderId::Grok, 40.0)], false), "TokenMon");
+    assert_eq!(
+        tip(&[(ProviderId::Grok, 41.2)], true),
+        "TokenMon \u{2014} Grok 41%"
+    );
 }

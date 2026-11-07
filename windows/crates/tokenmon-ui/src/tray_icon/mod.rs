@@ -27,5 +27,6 @@ pub use menu::{MenuAction, MenuEntry, MenuInputs, build_menu};
 pub use render::{TrayBitmap, TrayIconRequest, TrayIconSize, render_tray_icon};
 pub use theme::{FixedThemeSource, TaskbarTheme, TaskbarThemeSource};
 pub use tooltip::{
-    TOOLTIP_MAX_UTF16, TooltipEntry, build_tooltip, encode_tip_utf16, tooltip_for_content,
+    TOOLTIP_MAX_UTF16, TOOLTIP_TITLE, TooltipEntry, build_tooltip, encode_tip_utf16,
+    tooltip_for_content, tooltip_with_title,
 };

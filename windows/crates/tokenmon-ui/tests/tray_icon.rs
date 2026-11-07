@@ -579,18 +579,43 @@ fn test_tooltip_for_content_follows_the_icon_segments() {
             used: None,
         },
     ]);
-    assert_eq!(
-        tooltip_for_content(&bars, false),
-        "Grok \u{b7} OpenCode 12% \u{b7} Cursor \u{2014}"
-    );
-    assert_eq!(
-        tooltip_for_content(&bars, true),
-        "Grok \u{2014} \u{b7} OpenCode 12% \u{b7} Cursor \u{2014}"
-    );
+    // Only providers with a value follow the title.
+    let expected = "TokenMon \u{2014} OpenCode 12%";
+    assert_eq!(tooltip_for_content(&bars, false), expected);
+    assert_eq!(tooltip_for_content(&bars, true), expected);
     let selected = TrayContent::Selected {
         provider: OpenCode,
         used: Some(12.0),
     };
-    assert_eq!(tooltip_for_content(&selected, false), "OpenCode 12%");
+    assert_eq!(tooltip_for_content(&selected, false), expected);
     assert_eq!(tooltip_for_content(&TrayContent::Empty, true), "TokenMon");
+    assert_eq!(tooltip_for_content(&TrayContent::Mark, true), "TokenMon");
+}
+
+/// Signed out or no data: exactly "TokenMon"; with data: the title then
+/// every valued provider, within the 127-unit limit on whole entries.
+#[test]
+fn test_tooltip_with_title_rules() {
+    let e = |provider, used, signed_out| TooltipEntry {
+        provider,
+        used,
+        signed_out,
+    };
+    assert_eq!(tooltip_with_title(&[]), "TokenMon");
+    assert_eq!(tooltip_with_title(&[e(Grok, Some(41.0), true)]), "TokenMon");
+    assert_eq!(tooltip_with_title(&[e(Grok, None, false)]), "TokenMon");
+    assert_eq!(
+        tooltip_with_title(&[e(Grok, Some(41.2), false), e(Claude, Some(63.0), false)]),
+        "TokenMon \u{2014} Grok 41% \u{b7} Claude 63%"
+    );
+    let many: Vec<_> = [Grok, Cursor, OpenCode, Claude, ChatGpt, OpenRouter, Grokbot]
+        .into_iter()
+        .cycle()
+        .take(30)
+        .map(|p| e(p, Some(99.9), false))
+        .collect();
+    let t = tooltip_with_title(&many);
+    assert!(t.starts_with("TokenMon \u{2014} Grok 100%"), "{t}");
+    assert!(t.ends_with(" \u{2026}"), "{t}");
+    assert!(t.encode_utf16().count() <= TOOLTIP_MAX_UTF16, "{t}");
 }
