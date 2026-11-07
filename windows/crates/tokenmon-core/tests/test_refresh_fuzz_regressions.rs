@@ -88,7 +88,14 @@ fn check_merge(data: &[u8]) {
     }
     let stored_names: Vec<String> = stored
         .split(';')
-        .map(|p| p.trim().split('=').next().unwrap_or("").to_lowercase())
+        .map(|p| {
+            p.trim()
+                .split('=')
+                .next()
+                .unwrap_or("")
+                .trim()
+                .to_lowercase()
+        })
         .collect();
     let refreshed = parse_refreshed_cookies(&headers, now);
     for piece in out.split("; ").filter(|p| !p.is_empty()) {
