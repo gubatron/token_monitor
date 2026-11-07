@@ -52,7 +52,7 @@ fn check_events(data: &[u8]) {
         return;
     };
     for e in &page.events {
-        assert!(e.date.timestamp() > 0);
+        assert!(e.date > DateTime::UNIX_EPOCH);
         assert!(e.weight().is_finite() && e.weight() > 0.0);
     }
     let stats = aggregate_cost_stats(&page.events, first.date);
@@ -141,6 +141,17 @@ fn test_regression_deep_nesting_is_rejected_cleanly() {
     assert!(parse_usage_events_page(deep.as_bytes()).is_err());
     let wrapped = format!("{}5{}", r#"{"val":"#.repeat(100), "}".repeat(100));
     check_summary(format!(r#"{{"individualUsage":{{"plan":{{"used":{wrapped}}}}}}}"#).as_bytes());
+}
+
+/// Fuzz regression (run 42318776294): sub-second timestamps (`0.5`, `"+5"` ms)
+/// are positive instants whose whole-second part is 0; the invariant is
+/// "after the epoch", not `timestamp() > 0`.
+#[test]
+fn test_regression_subsecond_timestamps_are_valid_events() {
+    let body = br#"{"usageEventsDisplay":[{"timestamp":0.5,"model":"m"},{"timestamp":"+5","tokenUsage":{"inputTokens":1e+0}}]}"#;
+    let page = parse_usage_events_page(body).unwrap();
+    assert_eq!(page.events.len(), 2);
+    check_events(body);
 }
 
 /// Binary garbage and non-UTF-8 prefixes are classified, never panicked on.
