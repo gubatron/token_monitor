@@ -1,0 +1,46 @@
+# Windows-only glue excluded from coverage totals and the 0.5-point delta gate.
+#
+# Maintainer decision (a) on #4: thin cfg(windows) adapters that tests cannot
+# drive (tray, windows, WebView2, toasts, message boxes, session end, power
+# broadcasts, the registry) do not count toward coverage. The gate stays strict
+# for everything else. Real-Windows behaviour is covered by
+# `TokenMon.exe --smoke` in CI and by manual testing.
+#
+# This is the ONLY list. It is read by:
+#   * .github/workflows/windows-ci.yml, coverage job (ubuntu and windows):
+#     `scripts/ci/coverage_excludes.py regex` builds --ignore-filename-regex,
+#     and render_coverage.py applies the same list to the baseline;
+#   * `make coverage`;
+#   * the lint job: `scripts/ci/coverage_excludes.py check` fails when an
+#     entry matches no file, a matched file is not entirely cfg(windows), or a
+#     file grows past its line budget.
+#
+# Rules for excluded files:
+#   * Thin adapters only: OS calls in, OS calls out. Every decision (parsing,
+#     state machines, layout, formatting, key layout, retry policy) goes in a
+#     portable module with tests, never here. If a change needs logic, put the
+#     logic in a portable module and call it from the adapter.
+#   * Entirely cfg(windows): `#![cfg(windows)]` in the file, or a
+#     `#[cfg(windows)] mod x;` declaration (directly or through a parent
+#     module). A file that mixes portable code and Windows code is never
+#     excluded; split it first.
+#   * At most 400 lines. A file that was already larger when the decision
+#     landed carries `max-lines=N`, frozen at its size then: it may shrink,
+#     not grow. Raising a budget needs the maintainer's review.
+#
+# Format: one entry per line,
+#   <path regex>  [max-lines=N]  # <reason>
+# The regex is matched against the path relative to windows/, anchored at both
+# ends. Write `/` as the separator (it matches `\` on Windows too); no spaces,
+# no `#`, no `/` inside [...], and POSIX ERE syntax only (llvm-cov's regex
+# engine): no (?:...), \d, \w or \s.
+
+crates/tokenmon-app/src/shell\.rs  max-lines=860  # app composition on Windows: tray icon, panel windows, Slint event loop, toast and pipe wiring; decisions live in panel, tray, overview, settings_host, startup
+crates/tokenmon-app/src/shell/display\.rs  # MonitorFromPoint/GetDpiForMonitor wrappers; placement math is crate::tray
+crates/tokenmon-app/src/shell/panels\.rs  # creates and shows the eight Slint panel windows; view building is crate::panel, binding is tokenmon-ui's bridge
+crates/tokenmon-app/src/shell/system\.rs  # MessageBoxW, AllowSetForegroundWindow, session-end window; message decoding is crate::session
+crates/tokenmon-app/src/shell/theme\.rs  # RegGetValueW for SystemUsesLightTheme; the mapping is tokenmon-ui's TaskbarTheme
+crates/tokenmon-platform/src/shell/windows/registry\.rs  # HKCU Reg* calls; REG_SZ codec is shell::registry, key layout autostart/context_menu, all tested on MemoryRegistry
+crates/tokenmon-platform/src/notify/windows\.rs  # WinRT ToastNotification calls; XML and activation parsing are notify::toast
+crates/tokenmon-platform/src/power/windows\.rs  # hidden window for WM_POWERBROADCAST and connectivity hints; decoding and the gate are power::event and power::machine
+crates/tokenmon-platform/src/webauth/webview2\.rs  max-lines=1350  # Win32 window hosting WebView2; decisions are webauth::machine, gate, nav, cookies, layout

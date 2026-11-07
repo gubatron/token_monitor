@@ -54,9 +54,10 @@ env:
   CARGO_FUZZ_VERSION: "0.13.2"
   CARGO_FUZZ_SHA256: "b5b704018b63e0f151c17a057ac53b5111e1db545d1b9f72fee79f08a545931c"
   # Total line coverage may drop at most this many points vs windows-port.
+  # What is not measured (test/bench/fuzz/example code and the Windows-only
+  # glue in windows/.config/coverage-excludes.txt) is described at the
+  # coverage job.
   COVERAGE_MAX_DROP: "0.5"
-  # Test, bench, fuzz and example code is not product code.
-  COVERAGE_IGNORE: '(^|[/\\])(tests|benches|fuzz|examples)[/\\]'
 
 defaults:
   run:
@@ -145,6 +146,16 @@ jobs:
         if: hashFiles('windows/fuzz/Cargo.toml') != ''
         run: cargo check --manifest-path fuzz/Cargo.toml --bins
 
+      # Coverage leaves out the files in .config/coverage-excludes.txt. This
+      # keeps that list honest: every entry must match a file that is
+      # entirely cfg(windows) and within its line budget (see the coverage job).
+      - name: Coverage exclusion guard
+        id: excludes
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          python3 -I scripts/ci/coverage_excludes.py check 2>&1 | tee "$RUNNER_TEMP/excludes.log"
+
       - name: cargo deny (advisories, bans, licenses, sources)
         id: deny
         if: needs.detect.outputs.deny == 'true'
@@ -161,6 +172,7 @@ jobs:
           FMT: ${{ steps.fmt.outcome }}
           CLIPPY: ${{ steps.clippy.outcome }}
           DENY: ${{ steps.deny.outcome }}
+          EXCLUDES: ${{ steps.excludes.outcome }}
           HAS_DENY: ${{ needs.detect.outputs.deny }}
         run: |
           set -euo pipefail
@@ -181,11 +193,13 @@ jobs:
             echo "| \`cargo fmt --all -- --check\` | $(mark "$FMT") |"
             echo "| \`cargo clippy --workspace --all-targets -- -D warnings\` | $(mark "$CLIPPY") |"
             echo "| \`cargo deny check\` (advisories, bans, licenses, sources) | $deny_note |"
+            echo "| coverage exclusions (\`scripts/ci/coverage_excludes.py check\`) | $(mark "$EXCLUDES") |"
             details "cargo fmt" "$RUNNER_TEMP/fmt.log" "$FMT"
             details "cargo clippy" "$RUNNER_TEMP/clippy.log" "$CLIPPY"
             details "cargo deny" "$RUNNER_TEMP/deny.log" "$DENY"
+            details "coverage exclusion guard" "$RUNNER_TEMP/excludes.log" "$EXCLUDES"
           } >> "$GITHUB_STEP_SUMMARY"
-          for outcome in "$FMT" "$CLIPPY" "$DENY"; do
+          for outcome in "$FMT" "$CLIPPY" "$DENY" "$EXCLUDES"; do
             [ "$outcome" != failure ] || exit 1
           done
 
@@ -257,6 +271,24 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  # What counts toward coverage (and the COVERAGE_MAX_DROP delta gate):
+  #
+  # * Not measured: test, bench, fuzz and example code, and the Windows-only
+  #   glue listed in windows/.config/coverage-excludes.txt (maintainer
+  #   decision (a) on #4). That file is the only list; scripts/ci/
+  #   coverage_excludes.py turns it into --ignore-filename-regex here and in
+  #   `make coverage`, and render_coverage.py applies it to the baseline too.
+  # * Excluded files must stay thin cfg(windows) adapters (tray, windows,
+  #   WebView2, toasts, message boxes, session end, power broadcasts, the
+  #   registry). New logic goes in portable modules with tests, never into an
+  #   excluded file. The lint job's guard fails if an entry is not entirely
+  #   cfg(windows) or outgrows its line budget (400, or a frozen max-lines=N).
+  #   Real-Windows behaviour is covered by `TokenMon.exe --smoke` and manual
+  #   testing.
+  # * Like with like: the baseline is recomputed from its own per-file
+  #   cov.json with the current list, so adding or removing an exclusion
+  #   never shows up as a jump in the delta. A baseline without per-file data
+  #   and a different list skips the delta once, with a note.
   coverage:
     name: Coverage (${{ matrix.os }})
     needs: detect
@@ -312,13 +344,15 @@ jobs:
           LOCKED: ${{ needs.detect.outputs.locked }}
         run: |
           set -uo pipefail
+          # Test/bench/fuzz/example code plus .config/coverage-excludes.txt.
+          ignore=$("$PYTHON" -I scripts/ci/coverage_excludes.py regex) || exit 1
           cfg=$(bash scripts/ci/nextest-config.sh . "$RUNNER_TEMP/nextest.toml")
           # shellcheck disable=SC2086 # LOCKED is empty or one flag
           if ! cargo llvm-cov nextest $LOCKED --workspace --no-report --no-tests=warn \
               --config-file "$cfg" --profile ws-ci; then
             echo "::warning title=coverage::some tests failed; see the Tests job. Coverage is still reported."
           fi
-          if ! cargo llvm-cov report --ignore-filename-regex "$COVERAGE_IGNORE" \
+          if ! cargo llvm-cov report --ignore-filename-regex "$ignore" \
               --json --summary-only --output-path "$RUNNER_TEMP/cov.json"; then
             # No profile data: the workspace did not compile, so no test ran.
             {
@@ -329,7 +363,7 @@ jobs:
             } >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
-          cargo llvm-cov report --ignore-filename-regex "$COVERAGE_IGNORE" \
+          cargo llvm-cov report --ignore-filename-regex "$ignore" \
             --lcov --output-path "$RUNNER_TEMP/lcov.info"
 
       - name: Fetch the windows-port baseline
@@ -348,7 +382,10 @@ jobs:
           set -uo pipefail
           baseline=()
           if [ "$BASE_FOUND" = true ]; then
+            # cov.json (per file) lets the baseline be recomputed with the
+            # current exclusion list: like is compared with like.
             baseline=(--baseline "$RUNNER_TEMP/baseline/coverage-summary.json"
+                      --baseline-cov "$RUNNER_TEMP/baseline/cov.json"
                       --baseline-url "$BASE_URL" --baseline-label "run $BASE_RUN ($BASE_SHA)")
           fi
           mkdir -p "$RUNNER_TEMP/coverage-out"
@@ -356,7 +393,8 @@ jobs:
           # summary is written before the step fails.
           status=0
           "$PYTHON" -I scripts/ci/render_coverage.py --json "$RUNNER_TEMP/cov.json" --root . \
-            --floors .config/coverage-floors.toml "${baseline[@]}" --max-drop "$COVERAGE_MAX_DROP" \
+            --floors .config/coverage-floors.toml --excludes .config/coverage-excludes.txt \
+            "${baseline[@]}" --max-drop "$COVERAGE_MAX_DROP" \
             --write-summary "$RUNNER_TEMP/coverage-out/coverage-summary.json" \
             --commit "$GITHUB_SHA" --source "run $GITHUB_RUN_ID (${GITHUB_SHA:0:7})" \
             --title "Coverage (${{ matrix.os }})" > "$RUNNER_TEMP/coverage.md" || status=$?

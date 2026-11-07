@@ -6,6 +6,8 @@
         [--baseline previous/coverage-summary.json] [--baseline-url URL]
         [--write-summary coverage-summary.json] [--max-drop 0.5]
         [--title "Coverage (ubuntu-latest)"] [--commit SHA]
+        [--excludes windows/.config/coverage-excludes.txt]
+        [--baseline-cov previous/cov.json]
 
 Input is `cargo llvm-cov report --json --summary-only` output. The script
 prints Markdown to stdout with:
@@ -14,6 +16,15 @@ prints Markdown to stdout with:
   baseline (the coverage-summary.json of the latest windows-port run),
 * a per-crate table (files under `crates/<name>/` belong to crate `<name>`),
 * a per-file table inside a collapsed <details> block.
+
+Files listed in ``--excludes`` (the Windows-only glue, see
+coverage_excludes.py) are left out of every number. The coverage step already
+passes the same list to llvm-cov; applying it here as well keeps the baseline
+comparable: with ``--baseline-cov`` (the baseline run's cov.json) the baseline
+totals are recomputed from its per-file data with the *current* exclusions,
+so adding or removing an exclusion never shows up as a coverage jump. When
+the exclusions changed and the baseline has no per-file data, the delta gate
+is skipped once with a note, and this run becomes the next baseline.
 
 It writes a small coverage-summary.json (``--write-summary``) that the next
 run uses as its baseline, so nobody has to download lcov to see a delta.
@@ -35,6 +46,10 @@ import sys
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
+
+# `python -I` leaves the script's directory off sys.path.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import coverage_excludes  # noqa: E402
 
 SCHEMA = 1
 METRICS = ("lines", "regions", "functions")
@@ -94,12 +109,15 @@ def crate_of(rel: str) -> str:
     return "(other)"
 
 
-def load(cov_path: Path, root: str) -> tuple[Unit, dict[str, Unit], dict[str, Unit]]:
+def load(cov_path: Path, root: str,
+         excludes: list | None = None) -> tuple[Unit, dict[str, Unit], dict[str, Unit]]:
     data = json.loads(cov_path.read_text(encoding="utf-8"))
     entry = data["data"][0]
     total, crates, files = Unit(), {}, {}
     for f in entry.get("files", []):
         rel = relative(f["filename"], root)
+        if excludes and coverage_excludes.is_excluded(excludes, rel):
+            continue
         unit = Unit()
         unit.add_summary(f["summary"])
         files[rel] = unit
@@ -123,6 +141,37 @@ def load_baseline(path: Path | None) -> dict | None:
     except (ValueError, OSError):
         return None
     return data if data.get("schema") == SCHEMA else None
+
+
+def comparable_baseline(baseline: dict | None, baseline_cov: Path | None, root: str,
+                        excludes: list) -> tuple[dict | None, str]:
+    """The baseline to compare against, measured with the current exclusions.
+
+    Returns the baseline (None to skip the delta gate) and a note for the
+    summary explaining how it was obtained.
+    """
+    if baseline is None:
+        return None, ""
+    patterns = [e.pattern for e in excludes]
+    if baseline_cov is not None and baseline_cov.is_file():
+        try:
+            total, crates, _ = load(baseline_cov, root, excludes)
+        except (ValueError, KeyError, IndexError, OSError):
+            pass
+        else:
+            recomputed = summary_json(total, crates, baseline.get("commit"), baseline.get("source"), patterns)
+            if baseline.get("excludes") == patterns:
+                return recomputed, ""
+            return recomputed, (
+                f"The exclusion list differs from the baseline's, so the baseline was recomputed from its "
+                f"per-file data with the current {len(patterns)} exclusion(s): like is compared with like."
+            )
+    if baseline.get("excludes", []) != patterns:
+        return None, (
+            "The exclusion list changed and the baseline has no per-file data to recompute it from, so the "
+            "delta gate is skipped for this run only; this run is the next baseline."
+        )
+    return baseline, ""
 
 
 def fmt_pct(value: float) -> str:
@@ -157,7 +206,8 @@ class Gate:
 
 
 def render(args, total: Unit, crates: dict[str, Unit], files: dict[str, Unit],
-           floors: dict, baseline: dict | None) -> tuple[str, Gate]:
+           floors: dict, baseline: dict | None, baseline_note: str = "",
+           excludes: list | None = None) -> tuple[str, Gate]:
     gate = Gate()
     out = [f"### {args.title}", ""]
 
@@ -200,8 +250,12 @@ def render(args, total: Unit, crates: dict[str, Unit], files: dict[str, Unit],
                 f"**Delta gate** ({verdict}): lines {fmt_pct(total.pct('lines'))} vs {fmt_pct(before)} "
                 f"in {src}; a drop of more than {args.max_drop} points fails."
             )
+    elif baseline_note:
+        out.append(f"**Delta gate**: skipped. {baseline_note}")
     else:
         out.append("**Delta gate**: no baseline yet (first run on windows-port, or its artifact expired); skipped.")
+    if baseline and baseline_note:
+        out += ["", baseline_note]
 
     # Per-crate table.
     out += ["", "#### Per crate", "", "| crate | lines | regions | functions | Δ lines |",
@@ -230,16 +284,27 @@ def render(args, total: Unit, crates: dict[str, Unit], files: dict[str, Unit],
         )
     out += ["", "</details>"]
 
+    if excludes:
+        out += ["", f"<details><summary>Excluded Windows-only glue ({len(excludes)} entries, "
+                "<code>.config/coverage-excludes.txt</code>)</summary>", "",
+                "Thin cfg(windows) adapters tests cannot drive; not counted in any number above. "
+                "They must stay thin: logic goes in portable tested modules.", "",
+                "| path regex | line budget | reason |", "|---|---:|---|"]
+        out += [f"| `{md_cell(e.pattern)}` | {e.max_lines} | {md_cell(e.reason)} |" for e in excludes]
+        out += ["", "</details>"]
+
     if gate.failures:
         out += ["", "#### Coverage gate failed", ""] + [f"- {msg}" for msg in gate.failures]
     return "\n".join(out) + "\n", gate
 
 
-def summary_json(total: Unit, crates: dict[str, Unit], commit: str | None, source: str | None) -> dict:
+def summary_json(total: Unit, crates: dict[str, Unit], commit: str | None, source: str | None,
+                 excludes: list[str] | None = None) -> dict:
     return {
         "schema": SCHEMA,
         "commit": commit,
         "source": source,
+        "excludes": excludes or [],
         "totals": total.to_json(),
         "crates": {name: unit.to_json() for name, unit in sorted(crates.items())},
     }
@@ -258,15 +323,25 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--title", default="Coverage")
     parser.add_argument("--commit")
     parser.add_argument("--source", help="label stored in the summary, e.g. 'run 123 (abc1234)'")
+    parser.add_argument("--excludes", type=Path, help="coverage-excludes.txt (Windows-only glue)")
+    parser.add_argument("--baseline-cov", type=Path,
+                        help="the baseline run's cov.json, to recompute it with the current exclusions")
     args = parser.parse_args(argv)
 
     root = str(Path(args.root).resolve()) if Path(args.root).exists() else args.root
-    total, crates, files = load(args.json, root)
-    markdown, gate = render(args, total, crates, files, load_floors(args.floors), load_baseline(args.baseline))
+    try:
+        excludes = coverage_excludes.load(args.excludes) if args.excludes else []
+    except (OSError, coverage_excludes.ExcludesError) as e:
+        print(f"::error title=coverage excludes::{args.excludes}: {e}", file=sys.stderr)
+        return 1
+    total, crates, files = load(args.json, root, excludes)
+    baseline, note = comparable_baseline(load_baseline(args.baseline), args.baseline_cov, root, excludes)
+    markdown, gate = render(args, total, crates, files, load_floors(args.floors), baseline, note, excludes)
     sys.stdout.write(markdown)
     if args.write_summary:
+        patterns = [e.pattern for e in excludes]
         args.write_summary.write_text(
-            json.dumps(summary_json(total, crates, args.commit, args.source), indent=2) + "\n",
+            json.dumps(summary_json(total, crates, args.commit, args.source, patterns), indent=2) + "\n",
             encoding="utf-8",
         )
     for msg in gate.failures:

@@ -80,6 +80,19 @@ XWIN_ACCEPT_LICENSE=1 cargo xwin check --target x86_64-pc-windows-msvc -p tokenm
 
 `XWIN_ACCEPT_LICENSE=1` accepts the Microsoft SDK license non-interactively. `check` does not link or run anything; running tests needs the Windows CI runner.
 
+## Coverage
+
+CI measures line coverage on Ubuntu and Windows and fails when total line coverage drops more than 0.5 points below the latest `windows-port` run, or when a floor in `.config/coverage-floors.toml` is not met. `make coverage` gives the same numbers locally (needs `cargo-llvm-cov`; HTML in `target/llvm-cov/html`).
+
+Test, bench, fuzz and example code is not measured, and neither is the Windows-only glue listed in **`.config/coverage-excludes.txt`**: thin `cfg(windows)` adapters that tests cannot drive (tray, panel windows, WebView2, toasts, message boxes, session end, power broadcasts, the registry). Real-Windows behaviour is covered by `TokenMon.exe --smoke` in CI and by manual testing. That file is the only list; CI and `make coverage` both build `--ignore-filename-regex` from it with `scripts/ci/coverage_excludes.py`. The rules:
+
+* Excluded files stay thin adapters: OS calls in, OS calls out. New logic (parsing, decisions, state machines, layout, formatting) goes in a portable module with tests, and the adapter calls it. For example, the registry adapter uses `shell::registry::{encode_reg_sz, decode_reg_sz}` and the WebView2 window uses `webauth::layout`.
+* Only files that are entirely `cfg(windows)` can be listed. A file that mixes portable and Windows code is split first, never excluded whole.
+* Each file has a line budget: 400, or a frozen `max-lines=N` for the two that were larger when the policy started. They may shrink, not grow.
+* Every entry needs a one-line reason.
+
+The lint job runs `python3 scripts/ci/coverage_excludes.py check`, which fails when an entry has no reason or matches no file, or when a listed file is not entirely `cfg(windows)` or is over its budget. Keeping adapters thin is up to review. When the list changes, the coverage job recomputes the baseline from the previous run's per-file data with the new list, so the delta compares like with like.
+
 ## Other tools
 
 * `cargo deny check` (config in `deny.toml`): licenses compatible with an MIT app, advisories, duplicate versions (warn). Slint is used under its royalty-free desktop license; see the note in `deny.toml`.
