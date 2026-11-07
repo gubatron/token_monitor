@@ -11,8 +11,9 @@
 #   2. Set the floor a little (1-2 points) below the measured value, so normal
 #      refactoring noise does not fail CI, and commit it with the code that
 #      earned it ("ci(windows): raise tokenmon-core line floor to 80").
-#   3. Never lower a floor to make a change pass; add tests, or justify the
-#      exclusion next to --ignore-filename-regex in windows-ci.yml.
+#   3. Never lower a floor to make a change pass; add tests. Only thin
+#      cfg(windows) glue may be excluded, in .config/coverage-excludes.txt
+#      (see the rules there).
 #
 # Floors only ever go up. Start at 0 while the workspace is being built.
 

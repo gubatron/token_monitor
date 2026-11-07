@@ -127,12 +127,12 @@ endef
 define windows_only
 	@if [ "$(IS_WINDOWS)" != 1 ]; then \
 		printf "$(YELL)make $@ needs Windows$(RESET) (it builds, packages or runs TokenMon.exe).\n" >&2; \
-		printf "On macOS/Linux use: make build test lint xcheck fuzz-check parity\n" >&2; \
+		printf "On macOS/Linux use: make build test lint coverage xcheck fuzz-check parity\n" >&2; \
 		exit 1; \
 	fi
 endef
 
-.PHONY: help version build release run run-debug smoke test lint fmt fuzz-check parity xcheck \
+.PHONY: help version build release run run-debug smoke test lint coverage fmt fuzz-check parity xcheck \
 	tools installer zip dist install uninstall clean distclean
 
 ##@ Help
@@ -209,6 +209,27 @@ lint: ## fmt check, clippy -D warnings, cargo deny (if installed)
 		printf "$(YELL)cargo-deny not installed; skipped$(RESET) (cargo install cargo-deny --locked)\n"; \
 	fi
 	$(call ok,lint clean)
+
+# Same numbers as CI's coverage job: test/bench/fuzz code and the Windows-only
+# glue in .config/coverage-excludes.txt are not measured (the regex comes from
+# scripts/ci/coverage_excludes.py, the one place that reads the list). Plain
+# cargo test runs the tests here; CI uses nextest.
+COV_DIR := target/llvm-cov
+
+coverage: ## Line coverage per crate like CI, minus the glue in .config/coverage-excludes.txt
+	@$(CARGO) llvm-cov --version >/dev/null 2>&1 || { \
+		printf "cargo-llvm-cov is not installed: rustup component add llvm-tools-preview && cargo install cargo-llvm-cov --locked\n" >&2; exit 1; }
+	@$(PYTHON) -I scripts/ci/coverage_excludes.py check
+	CARGO_INCREMENTAL=0 $(CARGO) llvm-cov $(LOCKED) --workspace --no-report
+	@mkdir -p "$(COV_DIR)"
+	@ignore=$$($(PYTHON) -I scripts/ci/coverage_excludes.py regex | tr -d '\r') && \
+	$(CARGO) llvm-cov report --ignore-filename-regex "$$ignore" --json --summary-only \
+		--output-path "$(COV_DIR)/cov.json" && \
+	$(CARGO) llvm-cov report --ignore-filename-regex "$$ignore" --html --output-dir "$(COV_DIR)"
+	$(PYTHON) -I scripts/ci/render_coverage.py --json "$(COV_DIR)/cov.json" --root . \
+		--floors .config/coverage-floors.toml --excludes .config/coverage-excludes.txt \
+		--title "Coverage (local)"
+	$(call ok,HTML report: $(COV_DIR)/html/index.html)
 
 fmt: ## cargo fmt --all
 	$(CARGO) fmt --all
