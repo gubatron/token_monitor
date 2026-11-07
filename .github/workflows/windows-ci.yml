@@ -545,6 +545,96 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
+  # windows/Makefile is how the maintainer builds and installs on Windows;
+  # keep its targets working. Windows: tools (pinned, checksummed), installer
+  # and an install/uninstall round-trip on the throwaway runner. Ubuntu: the
+  # portable targets.
+  make:
+    name: Makefile (${{ matrix.os }})
+    needs: detect
+    if: needs.detect.outputs.workspace == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    concurrency:
+      group: windows-ci-make-${{ matrix.os }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.ref }}
+      cancel-in-progress: true
+    defaults:
+      run:
+        # A job-level `defaults.run` replaces the workflow-level one, so the
+        # shell is repeated here (Windows runners default to pwsh).
+        shell: bash
+        working-directory: windows
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master (2026-10-16)
+        with:
+          toolchain: ${{ needs.detect.outputs.toolchain }}
+          targets: x86_64-pc-windows-msvc
+          components: rustfmt, clippy
+
+      - name: Install Linux build dependencies (Slint)
+        if: runner.os == 'Linux'
+        run: bash scripts/ci/linux-deps.sh
+
+      # Reads the release (Windows) or test (Linux) job's cache; never writes.
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: windows -> target
+          shared-key: ${{ runner.os == 'Windows' && 'release' || 'test' }}
+          save-if: false
+
+      - name: Install GNU make (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          set -euo pipefail
+          command -v make || choco install make --version 4.4.1 --no-progress -y
+          make --version | head -n 1
+
+      - name: make help, make version
+        run: |
+          set -euo pipefail
+          make help
+          make version
+
+      - name: make version from PowerShell
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          make version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: make help test lint
+        if: runner.os == 'Linux'
+        run: make help test lint
+
+      - name: make tools, make installer
+        if: runner.os == 'Windows'
+        run: |
+          set -euo pipefail
+          make tools
+          make tools # idempotent: nothing to do the second time
+          make installer
+          msi="target/wix/tokenmon-windows-$(make -s version)-x64.msi"
+          test -f "$msi"
+          ls -l "$msi"
+
+      - name: make install, make uninstall (round-trip)
+        if: runner.os == 'Windows'
+        run: |
+          set -euo pipefail
+          exe="$LOCALAPPDATA/Programs/TokenMon/TokenMon.exe"
+          make install MSI_UI=/qn
+          test -f "$exe"
+          make uninstall MSI_UI=/qn
+          test ! -e "$exe"
+
   secrets:
     name: Secret scan of windows/ (gitleaks)
     runs-on: ubuntu-latest
@@ -614,7 +704,7 @@ jobs:
 
   summary:
     name: Summary
-    needs: [detect, lint, test, coverage, fuzz-smoke, windows-build, secrets]
+    needs: [detect, lint, test, coverage, fuzz-smoke, windows-build, make, secrets]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -644,7 +734,7 @@ jobs:
           fi
           status=0 # bash -e: keep the exit code, write the summary, then fail
           python3 -I windows/scripts/ci/render_ci_summary.py --jobs /tmp/jobs.json --run-url "$run_url" \
-            --self Summary --skip-note "$note" --supersedable coverage,fuzz-smoke,windows-build \
+            --self Summary --skip-note "$note" --supersedable coverage,fuzz-smoke,windows-build,make \
             --sha "$GITHUB_SHA" --ref "$GITHUB_REF_NAME" --event "$GITHUB_EVENT_NAME" \
             --server-url "$GITHUB_SERVER_URL" --repo "$GITHUB_REPOSITORY" > /tmp/summary.md || status=$?
           cat /tmp/summary.md >> "$GITHUB_STEP_SUMMARY"
