@@ -35,6 +35,8 @@ pub mod profile;
 
 #[cfg(windows)]
 pub mod webview2;
+#[cfg(windows)]
+mod window_icon;
 
 pub use config::SignInConfig;
 pub use cookies::{CapturePolicy, CapturedCookies, WebCookie};

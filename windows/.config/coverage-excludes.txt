@@ -36,11 +36,13 @@
 # engine): no (?:...), \d, \w or \s.
 
 crates/tokenmon-app/src/shell\.rs  max-lines=860  # app composition on Windows: tray icon, panel windows, Slint event loop, toast and pipe wiring; decisions live in panel, tray, overview, settings_host, startup
-crates/tokenmon-app/src/shell/display\.rs  # MonitorFromPoint/GetDpiForMonitor wrappers; placement math is crate::tray
+crates/tokenmon-app/src/shell/display\.rs  # MonitorFromPoint/GetDpiForMonitor wrappers; placement math is crate::placement
 crates/tokenmon-app/src/shell/panels\.rs  # creates and shows the eight Slint panel windows; view building is crate::panel, binding is tokenmon-ui's bridge
+crates/tokenmon-app/src/shell/tray_wiring\.rs  # tray icon creation, tray click and menu events, the 2 s tick; decisions are crate::tray, crate::placement, crate::panel
 crates/tokenmon-app/src/shell/system\.rs  # MessageBoxW, AllowSetForegroundWindow, session-end window; message decoding is crate::session
 crates/tokenmon-app/src/shell/theme\.rs  # RegGetValueW for SystemUsesLightTheme; the mapping is tokenmon-ui's TaskbarTheme
 crates/tokenmon-platform/src/shell/windows/registry\.rs  # HKCU Reg* calls; REG_SZ codec is shell::registry, key layout autostart/context_menu, all tested on MemoryRegistry
 crates/tokenmon-platform/src/notify/windows\.rs  # WinRT ToastNotification calls; XML and activation parsing are notify::toast
 crates/tokenmon-platform/src/power/windows\.rs  # hidden window for WM_POWERBROADCAST and connectivity hints; decoding and the gate are power::event and power::machine
+crates/tokenmon-platform/src/webauth/window_icon\.rs  # LoadImageW and WM_SETICON for the sign-in window; the icon is the exe's resource, checked by --smoke
 crates/tokenmon-platform/src/webauth/webview2\.rs  max-lines=1350  # Win32 window hosting WebView2; decisions are webauth::machine, gate, nav, cookies, layout
