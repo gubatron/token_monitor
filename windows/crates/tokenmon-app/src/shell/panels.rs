@@ -1,6 +1,8 @@
 //! The eight panel windows behind one type, so the shell treats a tab switch
 //! as "apply this view to that window".
 
+use std::rc::Rc;
+
 use slint::ComponentHandle;
 use tokenmon_core::ProviderId;
 use tokenmon_ui::panels::switcher::RowVm;
@@ -45,12 +47,14 @@ macro_rules! each {
 }
 
 impl PanelWindow {
-    /// Creates the window for `provider` and routes its actions to `handler`.
+    /// Creates the window for `provider`, routes its actions to `handler` and
+    /// its close button to `on_close`.
     pub fn create(
         provider: ProviderId,
         handler: &events::PanelHandler,
+        on_close: &Rc<dyn Fn()>,
     ) -> Result<Self, slint::PlatformError> {
-        Ok(match provider {
+        let window = match provider {
             ProviderId::Overview => {
                 let w = ui::OverviewPanel::new()?;
                 events::connect_overview(&w, handler);
@@ -91,7 +95,13 @@ impl PanelWindow {
                 events::connect_openrouter(&w, handler);
                 Self::OpenRouter(w)
             }
-        })
+        };
+        each!(&window, w => {
+            w.set_closable(true);
+            let close = Rc::clone(on_close);
+            w.on_close_panel(move || close());
+        });
+        Ok(window)
     }
 
     /// The Slint window.
@@ -107,6 +117,18 @@ impl PanelWindow {
     /// Shows it.
     pub fn show(&self) {
         let _ = each!(self, w => w.show());
+    }
+
+    /// The native window handle, once the window exists.
+    pub fn hwnd(&self) -> Option<isize> {
+        use slint::winit_030::WinitWindowAccessor;
+        use slint::winit_030::winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+        self.window()
+            .with_winit_window(|w| match w.window_handle().ok()?.as_raw() {
+                RawWindowHandle::Win32(h) => Some(h.hwnd.get()),
+                _ => None,
+            })
+            .flatten()
     }
 
     /// Hides it.

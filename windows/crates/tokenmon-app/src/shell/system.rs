@@ -11,8 +11,11 @@ use std::sync::OnceLock;
 use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    ASFW_ANY, AllowSetForegroundWindow, CreateWindowExW, DefWindowProcW, MB_ICONERROR, MB_OK,
-    MB_SETFOREGROUND, MessageBoxW, RegisterClassW, WNDCLASSW,
+    ASFW_ANY, AllowSetForegroundWindow, BringWindowToTop, CreateWindowExW, DefWindowProcW,
+    GWL_EXSTYLE, GetWindowLongPtrW, MB_ICONERROR, MB_OK, MB_SETFOREGROUND, MessageBoxW,
+    RegisterClassW, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER,
+    SetForegroundWindow, SetWindowLongPtrW, SetWindowPos, WNDCLASSW, WS_EX_APPWINDOW,
+    WS_EX_TOOLWINDOW,
 };
 
 use crate::session::classify;
@@ -43,6 +46,44 @@ pub fn allow_any_process_foreground() {
     // SAFETY: a pure call taking an integer.
     unsafe {
         AllowSetForegroundWindow(ASFW_ANY);
+    }
+}
+
+/// Makes the window a tool window: no taskbar button and no Alt+Tab entry.
+/// Deliberately not topmost, so other windows can cover the panel (#81).
+pub fn make_tool_window(hwnd: isize) {
+    let hwnd = hwnd as HWND;
+    // SAFETY: `hwnd` is the live HWND of a window owned by this thread; the
+    // calls only read and update its extended style.
+    unsafe {
+        let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+        let tool = isize::try_from(WS_EX_TOOLWINDOW).unwrap_or(0);
+        let app = isize::try_from(WS_EX_APPWINDOW).unwrap_or(0);
+        let wanted = (ex | tool) & !app;
+        if wanted != ex {
+            SetWindowLongPtrW(hwnd, GWL_EXSTYLE, wanted);
+            SetWindowPos(
+                hwnd,
+                null_mut(),
+                0,
+                0,
+                0,
+                0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
+            );
+        }
+    }
+}
+
+/// Brings the window to the foreground and gives it keyboard focus. Windows
+/// allows this for the process that just handled the tray click. Returns
+/// whether the system accepted it.
+pub fn bring_to_front(hwnd: isize) -> bool {
+    let hwnd = hwnd as HWND;
+    // SAFETY: plain calls on the live HWND of this thread's window.
+    unsafe {
+        BringWindowToTop(hwnd);
+        SetForegroundWindow(hwnd) != 0
     }
 }
 

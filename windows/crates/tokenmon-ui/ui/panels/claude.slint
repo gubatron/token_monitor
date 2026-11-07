@@ -9,6 +9,9 @@ export component ClaudePanel inherits PanelShell {
     out property <length> content-height: root.shell-content-height;
     callback select-tab(int, int);
     shell-select-tab(r, c) => { root.select-tab(r, c); }
+    in property <bool> closable <=> root.shell-closable;
+    callback close-panel();
+    shell-close() => { root.close-panel(); }
     callback open-settings();
     callback sign-in();
     callback sign-in-again();

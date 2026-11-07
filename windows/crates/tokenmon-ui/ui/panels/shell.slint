@@ -62,7 +62,13 @@ export component ProviderSwitcher inherits Rectangle {
 export component PanelShell inherits Window {
     in property <[TabRowData]> shell-tabs;
     callback shell-select-tab(int, int);
+    // The Windows panel does not dismiss itself when it loses focus, so it
+    // shows a close button (the host sets this; snapshots keep it off).
+    in property <bool> shell-closable: false;
+    callback shell-close();
     out property <length> shell-content-height: layout.preferred-height;
+    // Undecorated: the panel is a popup, not a document window.
+    no-frame: true;
     default-font-family: Typo.family;
     icon: @image-url("../assets/logos/tokenmon-app-icon.png");
     width: 420px;
@@ -71,6 +77,25 @@ export component PanelShell inherits Window {
     layout := VerticalLayout {
         padding: 12px;
         spacing: 0px;
+        if root.shell-closable: HorizontalLayout {
+            height: 20px;
+            alignment: end;
+            Rectangle {
+                width: 20px;
+                height: 20px;
+                Text {
+                    text: "\u{00D7}";
+                    font-family: Typo.family;
+                    font-size: 16px;
+                    color: Theme.secondary;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+                TouchArea {
+                    clicked => { root.shell-close(); }
+                }
+            }
+        }
         ProviderSwitcher {
             rows: root.shell-tabs;
             select(r, c) => { root.shell-select-tab(r, c); }

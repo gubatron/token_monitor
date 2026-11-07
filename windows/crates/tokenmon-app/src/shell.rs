@@ -53,8 +53,8 @@ use crate::panel::{Action, PanelState, PanelView, ViewEnv, build_view, commit_ap
 use crate::settings_host::{AppHost, AppSettingsBackend, HostParts};
 use crate::startup::{PendingShow, StartupFailure, retry};
 use crate::tray::{
-    MenuCommand, PANEL_GAP, TrayBackend, TrayController, TrayData, context_menu, icon_size,
-    menu_command, place_panel,
+    ClickAction, MenuCommand, PANEL_GAP, TrayBackend, TrayController, TrayData, click_action,
+    context_menu, icon_size, menu_command, place_panel, was_foreground,
 };
 use crate::updates::UpdateService;
 
@@ -64,10 +64,6 @@ mod system;
 mod theme;
 
 use panels::PanelWindow;
-
-/// A click on the tray icon this soon after the panel dismissed itself on
-/// focus loss is the same click: it must not reopen the panel.
-const REOPEN_GUARD: Duration = Duration::from_millis(300);
 
 /// How often the UI tick runs (tray state, live panel, rollover).
 const TICK: Duration = Duration::from_secs(2);
@@ -92,7 +88,12 @@ struct Ui {
     cards: RefCell<Vec<OverviewCardVm>>,
     last_view: RefCell<Option<PanelView>>,
     anchor: Cell<Option<(i32, i32)>>,
-    dismissed_at: Cell<Option<Instant>>,
+    /// Whether the selected panel has keyboard focus, and when it last lost it
+    /// (to tell "was in front" at a tray press; see [`was_foreground`]).
+    focused: Cell<bool>,
+    focus_lost_at: Cell<Option<Instant>>,
+    /// The decision taken when the left button went down on the tray icon.
+    pending_click: Cell<Option<ClickAction>>,
     store: Arc<OverviewStore>,
     app: Rc<App>,
     version: String,
@@ -211,44 +212,93 @@ impl Ui {
         if let Some(w) = self.windows.borrow().get(&provider) {
             return Some(Rc::clone(w));
         }
-        let window = match PanelWindow::create(provider, &self.handler()) {
+        let weak = self.me.borrow().clone();
+        let on_close: Rc<dyn Fn()> = Rc::new(move || {
+            if let Some(ui) = weak.upgrade() {
+                ui.hide_all();
+            }
+        });
+        let window = match PanelWindow::create(provider, &self.handler(), &on_close) {
             Ok(w) => Rc::new(w),
             Err(e) => {
                 tracing::error!(error = %e, %provider, "panel window failed");
                 return None;
             }
         };
-        self.wire_dismiss(provider, &window);
+        self.wire_window_events(provider, &window);
         self.windows
             .borrow_mut()
             .insert(provider, Rc::clone(&window));
         Some(window)
     }
 
-    /// Dismiss on Escape or when the selected panel loses focus.
-    fn wire_dismiss(&self, provider: ProviderId, window: &Rc<PanelWindow>) {
+    /// Escape closes the panel and focus changes are tracked for the tray
+    /// click toggle. Losing focus does NOT close it: the panel stays open
+    /// until the user closes it (maintainer decision on #81).
+    fn wire_window_events(&self, provider: ProviderId, window: &Rc<PanelWindow>) {
         use slint::winit_030::{EventResult, WinitWindowAccessor, winit};
         let weak = self.me.borrow().clone();
         window.window().on_winit_window_event(move |_, event| {
             use winit::event::WindowEvent;
             use winit::keyboard::{Key, NamedKey};
-            let dismiss = match event {
-                WindowEvent::Focused(false) => true,
-                WindowEvent::KeyboardInput { event, .. } => {
-                    event.state.is_pressed() && event.logical_key == Key::Named(NamedKey::Escape)
-                }
-                _ => false,
+            let Some(ui) = weak.upgrade() else {
+                return EventResult::Propagate;
             };
-            if dismiss
-                    && let Some(ui) = weak.upgrade()
-                    // A tab switch hides the old window after selecting the
-                    // new one; only the selected panel dismisses.
-                    && ui.state.borrow().selected == provider
-            {
-                ui.hide_all();
+            // A tab switch hides the old window after selecting the new one;
+            // only the selected panel's events count.
+            if ui.state.borrow().selected != provider {
+                return EventResult::Propagate;
+            }
+            match event {
+                WindowEvent::Focused(focused) => ui.note_focus(*focused),
+                WindowEvent::KeyboardInput { event, .. }
+                    if event.state.is_pressed()
+                        && event.logical_key == Key::Named(NamedKey::Escape) =>
+                {
+                    ui.hide_all();
+                }
+                _ => {}
             }
             EventResult::Propagate
         });
+    }
+
+    /// Records a focus change of the selected panel.
+    fn note_focus(&self, focused: bool) {
+        self.focused.set(focused);
+        if !focused {
+            self.focus_lost_at.set(Some(Instant::now()));
+        }
+    }
+
+    /// Whether the panel was the foreground window at this instant (see
+    /// [`was_foreground`]).
+    fn panel_was_foreground(&self) -> bool {
+        was_foreground(
+            self.focused.get(),
+            self.focus_lost_at.get().map(|t| t.elapsed()),
+        )
+    }
+
+    /// Brings the visible panel to the front with keyboard focus.
+    fn raise_panel(&self) {
+        let provider = self.state.borrow().selected;
+        if let Some(hwnd) = self.windows.borrow().get(&provider).and_then(|w| w.hwnd()) {
+            system::bring_to_front(hwnd);
+        }
+    }
+
+    /// Applies the tray-click decision taken at press time.
+    fn finish_tray_click(&self) {
+        let action = self
+            .pending_click
+            .take()
+            .unwrap_or_else(|| click_action(self.is_panel_visible(), self.panel_was_foreground()));
+        match action {
+            ClickAction::Show => self.show_selected(),
+            ClickAction::BringToFront => self.raise_panel(),
+            ClickAction::Hide => self.hide_all(),
+        }
     }
 
     /// Switches to `provider`'s tab and shows the panel.
@@ -303,13 +353,19 @@ impl Ui {
         *self.rows.borrow_mut() = rows;
         *self.last_view.borrow_mut() = Some(view);
         if reveal {
+            self.place(&window);
+            window.show();
+            if let Some(hwnd) = window.hwnd() {
+                system::make_tool_window(hwnd);
+                system::bring_to_front(hwnd);
+            }
+            // The new panel is up before the old one goes, so a tab switch
+            // does not flash the desktop.
             for (p, other) in self.windows.borrow().iter() {
                 if *p != provider && other.is_visible() {
                     other.hide();
                 }
             }
-            self.place(&window);
-            window.show();
             self.app.model.set_menu_open(true);
         }
     }
@@ -341,8 +397,8 @@ impl Ui {
             for w in self.windows.borrow().values() {
                 w.hide();
             }
-            self.dismissed_at.set(Some(Instant::now()));
         }
+        self.focused.set(false);
         // Also when nothing is visible: a window closed another way (Alt+F4)
         // must not leave the pollers on the active cadence.
         self.app.model.sync_menu_open(false);
@@ -353,12 +409,6 @@ impl Ui {
         if SHOW_REQUEST.take() {
             self.show_selected();
         }
-    }
-
-    fn recently_dismissed(&self) -> bool {
-        self.dismissed_at
-            .get()
-            .is_some_and(|t| t.elapsed() < REOPEN_GUARD)
     }
 
     fn on_event(&self, event: &PanelEvent) {
@@ -612,7 +662,9 @@ fn run_primary(pipe: &str, show_panel: bool, version: &str) -> ExitCode {
         cards: RefCell::new(Vec::new()),
         last_view: RefCell::new(None),
         anchor: Cell::new(None),
-        dismissed_at: Cell::new(None),
+        focused: Cell::new(false),
+        focus_lost_at: Cell::new(None),
+        pending_click: Cell::new(None),
         store,
         app: Rc::clone(&app),
         version: version.to_owned(),
@@ -728,17 +780,29 @@ fn wire_tray(ui: &Rc<Ui>, show_panel: bool) -> Result<(), StartupFailure> {
 
     // Any tray event tells where the icon is; a left click toggles the panel.
     TrayIconEvent::set_event_handler(Some(|event: TrayIconEvent| {
-        let (rect, click) = match &event {
+        #[derive(Clone, Copy)]
+        enum Phase {
+            Hover,
+            Press,
+            Release,
+        }
+        let (rect, phase) = match &event {
+            TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Down,
+                rect,
+                ..
+            } => (*rect, Phase::Press),
             TrayIconEvent::Click {
                 button: MouseButton::Left,
                 button_state: MouseButtonState::Up,
                 rect,
                 ..
-            } => (*rect, true),
+            } => (*rect, Phase::Release),
             TrayIconEvent::Click { rect, .. }
             | TrayIconEvent::Enter { rect, .. }
             | TrayIconEvent::Move { rect, .. }
-            | TrayIconEvent::Leave { rect, .. } => (*rect, false),
+            | TrayIconEvent::Leave { rect, .. } => (*rect, Phase::Hover),
             _ => return,
         };
         let anchor = (
@@ -747,13 +811,15 @@ fn wire_tray(ui: &Rc<Ui>, show_panel: bool) -> Result<(), StartupFailure> {
         );
         with_ui(move |ui| {
             ui.anchor.set(Some(anchor));
-            if !click {
-                return;
-            }
-            if ui.is_panel_visible() {
-                ui.hide_all();
-            } else if !ui.recently_dismissed() {
-                ui.show_selected();
+            match phase {
+                Phase::Hover => {}
+                // The press already moved focus to the taskbar: decide now,
+                // from whether the panel was in front just before it.
+                Phase::Press => ui.pending_click.set(Some(click_action(
+                    ui.is_panel_visible(),
+                    ui.panel_was_foreground(),
+                ))),
+                Phase::Release => ui.finish_tray_click(),
             }
         });
     }));

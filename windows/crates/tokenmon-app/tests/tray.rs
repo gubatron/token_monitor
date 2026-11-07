@@ -275,6 +275,31 @@ fn test_backend_receives_the_logo_as_a_square_bitmap_at_every_size() {
     }
 }
 
+/// The panel never auto-hides: a click on the icon opens a closed panel,
+/// raises a covered one and closes only one that is already in front (#81).
+#[test]
+fn test_click_toggle_decisions() {
+    use tokenmon_app::tray::{ClickAction, click_action};
+    assert_eq!(click_action(false, false), ClickAction::Show);
+    assert_eq!(click_action(false, true), ClickAction::Show);
+    assert_eq!(click_action(true, false), ClickAction::BringToFront);
+    assert_eq!(click_action(true, true), ClickAction::Hide);
+}
+
+/// Pressing the icon moves focus to the taskbar, so a panel that lost focus
+/// within the last instant still counts as the foreground one; a panel that
+/// has been behind other windows for a while does not.
+#[test]
+fn test_was_foreground_accounts_for_the_press_stealing_focus() {
+    use std::time::Duration;
+    use tokenmon_app::tray::was_foreground;
+    assert!(was_foreground(true, None));
+    assert!(was_foreground(false, Some(Duration::ZERO)));
+    assert!(was_foreground(false, Some(Duration::from_millis(249))));
+    assert!(!was_foreground(false, Some(Duration::from_millis(250))));
+    assert!(!was_foreground(false, None));
+}
+
 /// A failed icon update is not remembered as done: the next refresh retries
 /// even though nothing else changed (#72).
 #[test]

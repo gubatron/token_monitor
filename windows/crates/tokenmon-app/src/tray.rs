@@ -196,6 +196,58 @@ pub struct Rect {
     pub height: i32,
 }
 
+/// What a completed tray click does to the panel.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClickAction {
+    /// Open the panel.
+    Show,
+    /// The panel is open but covered by other windows: raise it.
+    BringToFront,
+    /// The panel is open and in front: close it.
+    Hide,
+}
+
+/// The tray-click toggle. The panel does not dismiss itself when another
+/// window is clicked (maintainer decision on #81), so it can sit behind other
+/// windows; clicking the icon then raises it, and only a panel that is already
+/// the foreground window is closed by the click.
+///
+/// ```
+/// use tokenmon_app::tray::{ClickAction, click_action};
+/// assert_eq!(click_action(false, false), ClickAction::Show);
+/// assert_eq!(click_action(true, false), ClickAction::BringToFront);
+/// assert_eq!(click_action(true, true), ClickAction::Hide);
+/// ```
+pub fn click_action(visible: bool, was_foreground: bool) -> ClickAction {
+    match (visible, was_foreground) {
+        (false, _) => ClickAction::Show,
+        (true, false) => ClickAction::BringToFront,
+        (true, true) => ClickAction::Hide,
+    }
+}
+
+/// How long before a tray press the panel can have lost focus and still count
+/// as having been the foreground window: pressing the tray icon moves focus
+/// to the taskbar first, so by the time the press is reported the panel is
+/// already inactive.
+pub const PRESS_FOCUS_WINDOW: std::time::Duration = std::time::Duration::from_millis(250);
+
+/// Whether the panel was the foreground window when a tray press happened:
+/// it has focus now, or lost it within [`PRESS_FOCUS_WINDOW`] (to the
+/// taskbar, because of this very press).
+///
+/// ```
+/// use std::time::Duration;
+/// use tokenmon_app::tray::was_foreground;
+/// assert!(was_foreground(true, None));
+/// assert!(was_foreground(false, Some(Duration::from_millis(20))));
+/// assert!(!was_foreground(false, Some(Duration::from_secs(5))));
+/// assert!(!was_foreground(false, None));
+/// ```
+pub fn was_foreground(focused: bool, since_lost: Option<std::time::Duration>) -> bool {
+    focused || since_lost.is_some_and(|t| t < PRESS_FOCUS_WINDOW)
+}
+
 /// Gap between the tray icon and the panel, in pixels.
 pub const PANEL_GAP: i32 = 8;
 
