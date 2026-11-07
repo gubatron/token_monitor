@@ -337,6 +337,15 @@ jobs:
         with:
           tool: cargo-llvm-cov@${{ env.CARGO_LLVM_COV_VERSION }},cargo-nextest@${{ env.CARGO_NEXTEST_VERSION }}
 
+      # The restored cache keeps test binaries of test files that were since
+      # renamed or deleted, and `cargo llvm-cov report` reads every executable
+      # under the target dir: their stale line numbers read as uncovered code
+      # (Ubuntu 85.5% vs Windows 94-97%, #80). Drop them so only this run's
+      # binaries are measured; the dependency rlibs stay cached.
+      - name: Drop stale test binaries from the cached target dir
+        run: |
+          "$PYTHON" -I scripts/ci/prune_stale_test_binaries.py target/llvm-cov-target
+
       # Test failures are the test job's to report; coverage is measured
       # whatever the outcome so the summary always has numbers.
       - name: Run tests with coverage instrumentation

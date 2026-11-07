@@ -220,6 +220,7 @@ coverage: ## Line coverage per crate like CI, minus the glue in .config/coverage
 	@$(CARGO) llvm-cov --version >/dev/null 2>&1 || { \
 		printf "cargo-llvm-cov is not installed: rustup component add llvm-tools-preview && cargo install cargo-llvm-cov --locked\n" >&2; exit 1; }
 	@$(PYTHON) -I scripts/ci/coverage_excludes.py check
+	@$(PYTHON) -I scripts/ci/prune_stale_test_binaries.py target/llvm-cov-target
 	CARGO_INCREMENTAL=0 $(CARGO) llvm-cov $(LOCKED) --workspace --no-report
 	@mkdir -p "$(COV_DIR)"
 	@ignore=$$($(PYTHON) -I scripts/ci/coverage_excludes.py regex | tr -d '\r') && \
