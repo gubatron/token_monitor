@@ -159,10 +159,24 @@ fn fill_len(len: f32, used: Option<f64>) -> f32 {
 /// ```
 pub fn render_tray_icon(req: &TrayIconRequest) -> TrayBitmap {
     let s = req.size.pixels();
+    if req.content == TrayContent::Mark
+        && let Some(rgba) = super::mark::mark_rgba(s)
+    {
+        return TrayBitmap { size: s, rgba };
+    }
     let mut pm = Pixmap::new(s, s).expect("tray icon size is non-zero");
     let chrome = req.theme.chrome_rgb();
     match &req.content {
         TrayContent::Empty => draw_empty(&mut pm, s, chrome),
+        // Only reached when the icon file lacks this size: a plain tile.
+        TrayContent::Mark => draw_logo(
+            &mut pm,
+            ProviderId::Overview,
+            0.0,
+            0.0,
+            s as f32,
+            &paint_rgba(chrome, 1.0),
+        ),
         TrayContent::Selected { provider, used } => {
             draw_selected(&mut pm, s, *provider, *used, chrome);
         }

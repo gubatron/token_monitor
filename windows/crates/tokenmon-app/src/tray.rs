@@ -93,8 +93,11 @@ impl<B: TrayBackend> TrayController<B> {
         // One entry per composite segment, as the icon draws them (#61): a
         // percent shown in the icon is never replaced by a bare name.
         let tooltip = tooltip_for_content(&content, (data.signed_in)(ProviderId::Grok));
+        // The icon is always the TokenMon logo (the macOS menu bar draws
+        // provider glyphs and percentages; Windows keeps usage in the tooltip
+        // so the mark stays recognisable at 16 px).
         let request = TrayIconRequest {
-            content,
+            content: TrayContent::Mark,
             size,
             theme,
         };

@@ -29,6 +29,10 @@ pub enum TrayContent {
     },
     /// Up to [`MAX_BARS`] vertical bars in provider accents.
     Bars(Vec<BarSegment>),
+    /// The TokenMon logo, from the app icon (what the Windows tray shows;
+    /// usage goes in the tooltip). The macOS menu bar draws the other
+    /// variants.
+    Mark,
 }
 
 /// App state the content is derived from.
@@ -108,6 +112,7 @@ impl TrayContent {
         let pct = |u: Option<f64>| u.map_or(-1, |v| v.clamp(0.0, 100.0).round() as i32);
         match self {
             Self::Empty => "empty".to_owned(),
+            Self::Mark => "mark".to_owned(),
             Self::Selected { provider, used } => format!("sel-{provider}-{}", pct(*used)),
             Self::Bars(b) => {
                 let parts: Vec<String> = b

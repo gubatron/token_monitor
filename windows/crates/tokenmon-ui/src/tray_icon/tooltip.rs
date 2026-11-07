@@ -77,7 +77,7 @@ pub fn tooltip_for_content(content: &TrayContent, grok_signed_in: bool) -> Strin
         signed_out: provider == ProviderId::Grok && !grok_signed_in,
     };
     let entries: Vec<TooltipEntry> = match content {
-        TrayContent::Empty => return "TokenMon".to_owned(),
+        TrayContent::Empty | TrayContent::Mark => return "TokenMon".to_owned(),
         TrayContent::Selected { provider, used } => vec![entry(*provider, *used)],
         TrayContent::Bars(bars) => bars.iter().map(|b| entry(b.provider, b.used)).collect(),
     };

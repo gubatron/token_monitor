@@ -1,6 +1,8 @@
 //! Tray controller: NIM_MODIFY only when the rendered key or tooltip changes
 //! (spec 04 section 2) and the right-click menu.
 
+#![allow(clippy::chunks_exact_to_as_chunks)] // as_chunks needs a newer MSRV than rust-version guarantees
+
 use tokenmon_app::tray::{TrayBackend, TrayController, TrayData, context_menu, panel_target};
 use tokenmon_core::ProviderId;
 use tokenmon_core::settings::Settings;
@@ -215,6 +217,62 @@ fn test_panel_placement_clamps_to_the_work_area() {
     // Taller than the work area: pinned to the top left.
     let (x, y) = place_panel((100, 500), (420, 5000), work);
     assert_eq!((x, y), (0, 0));
+}
+
+/// Whatever the tray data, the backend gets the TokenMon logo as a square
+/// bitmap of exactly the requested edge: `size * size * 4` straight-RGBA
+/// bytes, with visible pixels spread across both axes, so the `HICON` is
+/// never the thin vertical line of #81 (a 2-4 px wide usage bar).
+#[test]
+fn test_backend_receives_the_logo_as_a_square_bitmap_at_every_size() {
+    #[derive(Default)]
+    struct Shapes(Vec<(u32, usize, (u32, u32))>);
+    impl TrayBackend for Shapes {
+        fn update(&mut self, bitmap: &TrayBitmap, _tooltip: &str) -> bool {
+            let n = bitmap.size as usize;
+            let (mut cols, mut rows) = (
+                std::collections::BTreeSet::new(),
+                std::collections::BTreeSet::new(),
+            );
+            for (i, p) in bitmap.rgba.chunks_exact(4).enumerate() {
+                if p[3] > 0 {
+                    cols.insert(i % n);
+                    rows.insert(i / n);
+                }
+            }
+            self.0.push((
+                bitmap.size,
+                bitmap.rgba.len(),
+                (cols.len() as u32, rows.len() as u32),
+            ));
+            true
+        }
+    }
+    let s = Settings::default();
+    for size in [
+        TrayIconSize::Px16,
+        TrayIconSize::Px20,
+        TrayIconSize::Px24,
+        TrayIconSize::Px32,
+        TrayIconSize::Px40,
+    ] {
+        let mut c = TrayController::new(Shapes::default());
+        let signed_in = |_: ProviderId| true;
+        let used = [(ProviderId::Grok, 40.0)];
+        assert!(c.refresh(
+            &TrayData {
+                settings: &s,
+                used_percent: &used,
+                signed_in: &signed_in,
+            },
+            size,
+            TaskbarTheme::Dark,
+        ));
+        let n = size.pixels();
+        let (edge, len, (cols, rows)) = c.backend().0[0];
+        assert_eq!((edge, len), (n, (n * n * 4) as usize));
+        assert!(cols * 2 > n && rows * 2 > n, "{n}px: {cols}x{rows} covered");
+    }
 }
 
 /// A failed icon update is not remembered as done: the next refresh retries

@@ -268,6 +268,40 @@ fn test_bgra_premultiplied_conversion() {
     assert_eq!(b.to_bgra_premultiplied(), vec![25, 50, 100, 128]);
 }
 
+/// The Mark content is the app icon's own frame at every tray size: square,
+/// `size * size * 4` straight-RGBA bytes, not a sliver, and independent of
+/// the taskbar theme (it is a full-colour logo).
+#[test]
+fn test_mark_is_the_app_icon_at_every_size() {
+    for size in ALL_SIZES {
+        let n = size.pixels() as usize;
+        let dark = render_tray_icon(&req(TrayContent::Mark, size, TaskbarTheme::Dark));
+        let light = render_tray_icon(&req(TrayContent::Mark, size, TaskbarTheme::Light));
+        assert_eq!(dark.size as usize, n);
+        assert_eq!(dark.rgba.len(), n * n * 4);
+        assert_eq!(dark, light);
+        assert!(
+            opaque_pixels(&dark) * 4 > n * n,
+            "{n}px logo covers too little: {}",
+            opaque_pixels(&dark)
+        );
+        assert_eq!(Some(dark.rgba.clone()), mark_rgba(size.pixels()));
+    }
+    assert!(mark_rgba(17).is_none());
+}
+
+/// Malformed icon files decode to nothing instead of panicking.
+#[test]
+fn test_decode_ico_frame_rejects_garbage() {
+    assert!(decode_ico_frame(&[], 16).is_none());
+    assert!(decode_ico_frame(&[0, 0, 1, 0, 1, 0], 16).is_none());
+    // A directory entry pointing past the end of the file.
+    let mut ico = vec![0, 0, 1, 0, 1, 0, 16, 16, 0, 0, 1, 0, 32, 0];
+    ico.extend_from_slice(&1000u32.to_le_bytes());
+    ico.extend_from_slice(&9999u32.to_le_bytes());
+    assert!(decode_ico_frame(&ico, 16).is_none());
+}
+
 /// The cache key changes with theme, size, rounded percent and content.
 #[test]
 fn test_cache_key_includes_every_input() {
