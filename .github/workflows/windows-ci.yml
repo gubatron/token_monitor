@@ -590,6 +590,8 @@ jobs:
           shared-key: ${{ runner.os == 'Windows' && 'release' || 'test' }}
           save-if: false
 
+      # windows-latest ships GNU Make 4.4.1 (C:\mingw64\bin); Chocolatey's
+      # package (checksummed) is the fallback if an image drops it.
       - name: Install GNU make (Windows)
         if: runner.os == 'Windows'
         run: |
@@ -627,12 +629,14 @@ jobs:
 
       - name: make install, make uninstall (round-trip)
         if: runner.os == 'Windows'
+        # A bad msiexec switch opens a usage dialog that never closes.
+        timeout-minutes: 10
         run: |
           set -euo pipefail
           exe="$LOCALAPPDATA/Programs/TokenMon/TokenMon.exe"
-          make install MSI_UI=/qn
+          make install QUIET=1
           test -f "$exe"
-          make uninstall MSI_UI=/qn
+          make uninstall QUIET=1
           test ! -e "$exe"
 
   secrets:

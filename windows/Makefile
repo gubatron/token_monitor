@@ -66,7 +66,10 @@ CARGO       ?= cargo
 LOCKED      := --locked
 TOOLS_DIR   := .tools
 DIST_DIR    := target/wix
-MSI_UI      ?= /qb
+# QUIET=1: no msiexec UI. A flag, not "MSI_UI=/qn": Git Bash rewrites a
+# /switch on make's command line into a path, and msiexec then blocks on
+# its usage dialog.
+MSI_UI      := $(if $(filter 1 yes true,$(QUIET)),/qn,/qb)
 UPGRADE_CODE := {97EEF0DA-B00F-4527-93D7-EF335558A346}
 
 # Pinned like .github/workflows/windows-release.yml (same versions, URLs and
@@ -145,7 +148,7 @@ help: ## Show this help (default)
 	@printf "  make run              # release build, then start TokenMon\n"
 	@printf "  make install          # MSI -> %%LOCALAPPDATA%%\\\\Programs\\\\TokenMon\n"
 	@printf "  make test lint        # the gate before every push\n"
-	@printf "  make install MSI_UI=/qn   # silent install\n"
+	@printf "  make install QUIET=1  # no installer UI (also for uninstall)\n"
 	@printf "\n"
 
 version: ## Print the workspace version

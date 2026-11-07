@@ -2,6 +2,48 @@
 
 Rust system-tray app for Windows 10 and 11 (x64). Behavior is specified in `docs/spec/`; the plan, crate ownership and agent protocol are in `docs/IMPLEMENTATION_PLAN.md`.
 
+## Quick start on Windows
+
+1. Install the prerequisites once (from PowerShell or cmd), then open a new terminal so `PATH` picks them up:
+   ```powershell
+   winget install Git.Git Rustlang.Rustup Python.Python.3.12 ezwinports.make
+   winget install Microsoft.VisualStudio.2022.BuildTools --override "--quiet --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+   ```
+   Git for Windows provides the bash the Makefile runs its recipes in; the Build Tools provide the MSVC linker. `choco install make` works too. rustup installs the pinned toolchain on first use.
+2. Build and run, or install:
+   ```sh
+   git clone https://github.com/gubatron/token_monitor.git
+   cd token_monitor/windows
+   make run        # release build, then start TokenMon (look for the tray icon)
+   make install    # build the MSI and install it for this user, no admin
+   ```
+
+`make` (or `make help`) lists every target. Any shell works: on Windows the Makefile finds Git for Windows' `bash.exe` next to `git` (set `GIT_BASH` to its `bin\bash.exe` if it lives elsewhere) and runs every recipe there, so the recipes are the same on every OS.
+
+| Target | What it does | macOS/Linux |
+|---|---|---|
+| `help` | List the targets (default) | yes |
+| `version` | Print the workspace version | yes |
+| `build`, `release` | Debug or release build of `TokenMon.exe` (`x86_64-pc-windows-msvc` on Windows) | yes (native stub) |
+| `run`, `run-debug` | Build, stop a running TokenMon, launch the new one detached | no |
+| `smoke` | Release build, then `TokenMon.exe --smoke` (headless, one refresh cycle) | no |
+| `test` | `cargo test --workspace` | yes |
+| `lint` | `cargo fmt --check`, clippy `-D warnings`, `cargo deny` if installed | yes |
+| `fmt` | `cargo fmt --all` | yes |
+| `fuzz-check` | `cargo check` of `fuzz/` on stable | yes |
+| `parity` | Check `docs/PARITY.md` against the Swift tests | yes |
+| `xcheck` | clippy for `x86_64-pc-windows-msvc` (through `cargo xwin` on macOS/Linux) | yes |
+| `tools` | WiX 3.14.1 and cargo-wix 0.3.9 into `.tools/`, pinned and SHA-256 checked like the release workflow; does nothing once they are there | no |
+| `installer` | Per-user MSI: `target/wix/tokenmon-windows-<version>-x64.msi` | no |
+| `zip` | Portable zip: `target/wix/tokenmon-windows-<version>-x64.zip` | no |
+| `dist` | MSI, zip and `SHA256SUMS` in `target/wix/` (unsigned) | no |
+| `install` | `installer`, then `msiexec /i` for this user (`QUIET=1` for no UI) and print where it went | no |
+| `uninstall` | `msiexec /x` every product with TokenMon's UpgradeCode; keeps your data in `%LOCALAPPDATA%\TokenMon` | no |
+| `clean` | `cargo clean`, including `target/wix` | yes |
+| `distclean` | `clean`, plus `.tools/` | yes |
+
+The Makefile never runs `installer/smoke-test.ps1` (see below).
+
 ## Layout
 
 | Crate | Role | Builds on macOS/Linux |
@@ -88,6 +130,8 @@ The same build and test, without a release, run:
 * on demand: `gh workflow run windows-release.yml --ref windows-port` (add `-f gates=false` to skip the CI gates). The files are kept as the run's artifacts for 14 days.
 
 ### Build the MSI by hand (on Windows)
+
+`make installer` (or `make dist` for the MSI, the zip and `SHA256SUMS`) does all of this. By hand:
 
 ```sh
 cd windows
