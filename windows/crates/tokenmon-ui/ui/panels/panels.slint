@@ -1,12 +1,14 @@
-// All panels, re-exported for the build script and the bridge.
-export { GrokPanel } from "grok.slint";
-export { GrokbotPanel } from "grokbot.slint";
-export { CursorPanel } from "cursor.slint";
-export { ClaudePanel } from "claude.slint";
-export { ChatGptPanel } from "chatgpt.slint";
-export { OpenCodePanel } from "opencode.slint";
-export { OpenRouterPanel } from "openrouter.slint";
-export { OverviewPanel } from "overview.slint";
+// The panel window, its provider tab enum and every provider's state global,
+// re-exported for the build script and the bridge.
+export { PanelWindow, ProviderTab } from "window.slint";
+export { GrokVm } from "grok.slint";
+export { GrokbotVm } from "grokbot.slint";
+export { CursorVm } from "cursor.slint";
+export { ClaudeVm } from "claude.slint";
+export { ChatGptVm } from "chatgpt.slint";
+export { OpenCodeVm } from "opencode.slint";
+export { OpenRouterVm } from "openrouter.slint";
+export { OverviewVm } from "overview.slint";
 // Globals the host sets (dark theme, font family); per compile unit.
 export { Theme, Typo } from "../components/kit.slint";
 export * from "types.slint";

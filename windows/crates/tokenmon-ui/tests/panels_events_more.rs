@@ -5,12 +5,13 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use slint::ComponentHandle;
 use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
 use slint::platform::{Platform, WindowAdapter};
 use tokenmon_core::ProviderId;
 use tokenmon_ui::panels::events::{
-    PanelEvent, PanelHandler, connect_chatgpt, connect_claude, connect_cursor, connect_opencode,
-    connect_openrouter, connect_overview,
+    PanelEvent, PanelHandler, connect_chatgpt, connect_chrome, connect_claude, connect_cursor,
+    connect_opencode, connect_openrouter, connect_overview,
 };
 use tokenmon_ui::panels::ui;
 
@@ -32,7 +33,9 @@ fn test_remaining_panel_callbacks_emit_events() {
     let sink = log.clone();
     let handler: PanelHandler = Rc::new(move |e| sink.borrow_mut().push(e));
 
-    let cursor = ui::CursorPanel::new().unwrap();
+    let w = ui::PanelWindow::new().unwrap();
+    connect_chrome(&w, &handler);
+    let cursor = w.global::<ui::CursorVm>();
     connect_cursor(&cursor, &handler);
     cursor.invoke_sign_in();
     cursor.invoke_sign_in_again();
@@ -40,34 +43,34 @@ fn test_remaining_panel_callbacks_emit_events() {
     cursor.invoke_previous_week();
     cursor.invoke_next_week();
     // A negative cell index from the UI must not wrap around.
-    cursor.invoke_select_tab(-1, 3);
+    w.invoke_select_tab(-1, 3);
 
-    let claude = ui::ClaudePanel::new().unwrap();
+    let claude = w.global::<ui::ClaudeVm>();
     connect_claude(&claude, &handler);
     claude.invoke_sign_in();
     claude.invoke_toggle_code_models();
     claude.invoke_toggle_show_all_models();
     claude.invoke_next_week();
 
-    let gpt = ui::ChatGptPanel::new().unwrap();
+    let gpt = w.global::<ui::ChatGptVm>();
     connect_chatgpt(&gpt, &handler);
     gpt.invoke_sign_out();
     gpt.invoke_open_settings();
 
-    let oc = ui::OpenCodePanel::new().unwrap();
+    let oc = w.global::<ui::OpenCodeVm>();
     connect_opencode(&oc, &handler);
     oc.invoke_sign_in_again();
     oc.invoke_toggle_models();
     oc.invoke_toggle_show_all_models();
     oc.invoke_previous_week();
 
-    let or = ui::OpenRouterPanel::new().unwrap();
+    let or = w.global::<ui::OpenRouterVm>();
     connect_openrouter(&or, &handler);
     or.invoke_sign_out();
     or.invoke_key_edited("sk-or".into());
     or.invoke_toggle_show_all_models();
 
-    let ov = ui::OverviewPanel::new().unwrap();
+    let ov = w.global::<ui::OverviewVm>();
     connect_overview(&ov, &handler);
     ov.invoke_card_sign_out(2);
     ov.invoke_card_sign_in(-4);

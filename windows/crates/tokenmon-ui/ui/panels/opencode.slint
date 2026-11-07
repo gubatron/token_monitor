@@ -1,17 +1,9 @@
-import { PanelShell } from "shell.slint";
 import { PanelHeader, PoolCard, DailyCard, ModelsCard, FooterBlock, MessageBlock, Caption, ActionButton } from "parts.slint";
 import { Theme, Typo, PanelCard, PanelSectionHeader, DigitText, ResetCaption, SegmentedUsageBar, CategoryRow, MetricStatGrid } from "../components/kit.slint";
 import { TrackData, ModelsData, DailyData, FooterData, HeaderData, TabRowData, BarSegment, CategoryItem, MetricItem } from "types.slint";
 
-// OpenCode Go panel (spec 03 section 3.12).
-export component OpenCodePanel inherits PanelShell {
-    in property <[TabRowData]> tabs <=> root.shell-tabs;
-    out property <length> content-height: root.shell-content-height;
-    callback select-tab(int, int);
-    shell-select-tab(r, c) => { root.select-tab(r, c); }
-    in property <bool> closable <=> root.shell-closable;
-    callback close-panel();
-    shell-close() => { root.close-panel(); }
+/// State and actions of the OpenCode panel body; the host sets and connects these once.
+export global OpenCodeVm {
     callback open-settings();
     callback sign-in();
     callback sign-in-again();
@@ -33,33 +25,38 @@ export component OpenCodePanel inherits PanelShell {
     in property <[MetricItem]> metrics;
     in property <string> sign-in-label;
     in property <FooterData> footer;
-    PanelHeader { data: root.header; open-settings => { root.open-settings(); } }
-    if !root.has-usage: MessageBlock {
-        text: root.message;
-        button: root.button;
-        clicked => { root.sign-in(); }
+}
+
+// OpenCode Go panel (spec 03 section 3.12).
+export component OpenCodeBody inherits VerticalLayout {
+    spacing: 10px;
+    PanelHeader { data: OpenCodeVm.header; open-settings => { OpenCodeVm.open-settings(); } }
+    if !OpenCodeVm.has-usage: MessageBlock {
+        text: OpenCodeVm.message;
+        button: OpenCodeVm.button;
+        clicked => { OpenCodeVm.sign-in(); }
     }
-    if root.has-usage: PoolCard { title: root.pool-title; tracks: root.tracks; }
-    if root.has-usage && root.estimate-note != "": Caption { text: root.estimate-note; warning: true; }
-    if root.has-usage && root.daily.present: DailyCard {
-        data: root.daily;
-        previous-week => { root.previous-week(); }
-        next-week => { root.next-week(); }
+    if OpenCodeVm.has-usage: PoolCard { title: OpenCodeVm.pool-title; tracks: OpenCodeVm.tracks; }
+    if OpenCodeVm.has-usage && OpenCodeVm.estimate-note != "": Caption { text: OpenCodeVm.estimate-note; warning: true; }
+    if OpenCodeVm.has-usage && OpenCodeVm.daily.present: DailyCard {
+        data: OpenCodeVm.daily;
+        previous-week => { OpenCodeVm.previous-week(); }
+        next-week => { OpenCodeVm.next-week(); }
     }
-    if root.has-usage && root.models.present: ModelsCard {
-        data: root.models;
-        toggle-expanded => { root.toggle-models(); }
-        toggle-show-all => { root.toggle-show-all-models(); }
+    if OpenCodeVm.has-usage && OpenCodeVm.models.present: ModelsCard {
+        data: OpenCodeVm.models;
+        toggle-expanded => { OpenCodeVm.toggle-models(); }
+        toggle-show-all => { OpenCodeVm.toggle-show-all-models(); }
     }
-    if root.has-usage && root.has-metrics: MetricStatGrid { items: root.metrics; }
-    if root.has-usage && root.sign-in-label != "": ActionButton {
-        text: root.sign-in-label;
+    if OpenCodeVm.has-usage && OpenCodeVm.has-metrics: MetricStatGrid { items: OpenCodeVm.metrics; }
+    if OpenCodeVm.has-usage && OpenCodeVm.sign-in-label != "": ActionButton {
+        text: OpenCodeVm.sign-in-label;
         width: 160px;
-        clicked => { root.sign-in(); }
+        clicked => { OpenCodeVm.sign-in(); }
     }
-    if root.has-usage: FooterBlock {
-        data: root.footer;
-        sign-in-again => { root.sign-in-again(); }
-        sign-out => { root.sign-out(); }
+    if OpenCodeVm.has-usage: FooterBlock {
+        data: OpenCodeVm.footer;
+        sign-in-again => { OpenCodeVm.sign-in-again(); }
+        sign-out => { OpenCodeVm.sign-out(); }
     }
 }

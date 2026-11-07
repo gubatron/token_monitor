@@ -4,11 +4,13 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use slint::ComponentHandle;
 use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
 use slint::platform::{Platform, WindowAdapter};
 use tokenmon_core::ProviderId;
 use tokenmon_ui::panels::events::{
-    PanelEvent, PanelHandler, connect_grok, connect_grokbot, connect_openrouter, connect_overview,
+    PanelEvent, PanelHandler, connect_chrome, connect_grok, connect_grokbot, connect_openrouter,
+    connect_overview,
 };
 use tokenmon_ui::panels::ui;
 
@@ -29,7 +31,9 @@ fn test_panel_callbacks_emit_events() {
     let sink = log.clone();
     let handler: PanelHandler = Rc::new(move |e| sink.borrow_mut().push(e));
 
-    let grok = ui::GrokPanel::new().unwrap();
+    let w = ui::PanelWindow::new().unwrap();
+    connect_chrome(&w, &handler);
+    let grok = w.global::<ui::GrokVm>();
     connect_grok(&grok, &handler);
     grok.invoke_open_settings();
     grok.invoke_sign_in();
@@ -37,18 +41,18 @@ fn test_panel_callbacks_emit_events() {
     grok.invoke_sign_out();
     grok.invoke_previous_week();
     grok.invoke_next_week();
-    grok.invoke_select_tab(1, 2);
+    w.invoke_select_tab(1, 2);
 
-    let bot = ui::GrokbotPanel::new().unwrap();
+    let bot = w.global::<ui::GrokbotVm>();
     connect_grokbot(&bot, &handler);
     bot.invoke_sign_in();
 
-    let or = ui::OpenRouterPanel::new().unwrap();
+    let or = w.global::<ui::OpenRouterVm>();
     connect_openrouter(&or, &handler);
     or.invoke_submit_key("sk-or-v1-x".into());
     or.invoke_replace_key();
 
-    let ov = ui::OverviewPanel::new().unwrap();
+    let ov = w.global::<ui::OverviewVm>();
     connect_overview(&ov, &handler);
     ov.invoke_card_sign_in(3);
     ov.invoke_previous_day();

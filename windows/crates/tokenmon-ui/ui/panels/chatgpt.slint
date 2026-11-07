@@ -1,17 +1,9 @@
-import { PanelShell } from "shell.slint";
 import { PanelHeader, PoolCard, DailyCard, ModelsCard, FooterBlock, MessageBlock, Caption, ActionButton } from "parts.slint";
 import { Theme, Typo, PanelCard, PanelSectionHeader, DigitText, ResetCaption, SegmentedUsageBar, CategoryRow, MetricStatGrid } from "../components/kit.slint";
 import { TrackData, ModelsData, DailyData, FooterData, HeaderData, TabRowData, BarSegment, CategoryItem, MetricItem } from "types.slint";
 
-// ChatGPT panel (spec 03 section 2.7). No bars, no hover.
-export component ChatGptPanel inherits PanelShell {
-    in property <[TabRowData]> tabs <=> root.shell-tabs;
-    out property <length> content-height: root.shell-content-height;
-    callback select-tab(int, int);
-    shell-select-tab(r, c) => { root.select-tab(r, c); }
-    in property <bool> closable <=> root.shell-closable;
-    callback close-panel();
-    shell-close() => { root.close-panel(); }
+/// State and actions of the ChatGpt panel body; the host sets and connects these once.
+export global ChatGptVm {
     callback open-settings();
     callback sign-in();
     callback sign-in-again();
@@ -24,17 +16,22 @@ export component ChatGptPanel inherits PanelShell {
     in property <[TrackData]> tracks;
     in property <string> blocked;
     in property <FooterData> footer;
-    PanelHeader { data: root.header; open-settings => { root.open-settings(); } }
-    if !root.has-usage: MessageBlock {
-        text: root.message;
-        button: root.button;
-        clicked => { root.sign-in(); }
+}
+
+// ChatGPT panel (spec 03 section 2.7). No bars, no hover.
+export component ChatGptBody inherits VerticalLayout {
+    spacing: 10px;
+    PanelHeader { data: ChatGptVm.header; open-settings => { ChatGptVm.open-settings(); } }
+    if !ChatGptVm.has-usage: MessageBlock {
+        text: ChatGptVm.message;
+        button: ChatGptVm.button;
+        clicked => { ChatGptVm.sign-in(); }
     }
-    if root.has-usage: PoolCard { title: root.pool-title; tracks: root.tracks; }
-    if root.has-usage && root.blocked != "": Caption { text: root.blocked; warning: true; }
-    if root.has-usage: FooterBlock {
-        data: root.footer;
-        sign-in-again => { root.sign-in-again(); }
-        sign-out => { root.sign-out(); }
+    if ChatGptVm.has-usage: PoolCard { title: ChatGptVm.pool-title; tracks: ChatGptVm.tracks; }
+    if ChatGptVm.has-usage && ChatGptVm.blocked != "": Caption { text: ChatGptVm.blocked; warning: true; }
+    if ChatGptVm.has-usage: FooterBlock {
+        data: ChatGptVm.footer;
+        sign-in-again => { ChatGptVm.sign-in-again(); }
+        sign-out => { ChatGptVm.sign-out(); }
     }
 }

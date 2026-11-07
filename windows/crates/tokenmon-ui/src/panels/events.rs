@@ -12,6 +12,8 @@
 
 use std::rc::Rc;
 
+use slint::ComponentHandle;
+
 use tokenmon_core::ProviderId;
 
 use super::ui;
@@ -64,18 +66,11 @@ fn index(v: i32) -> usize {
     usize::try_from(v).unwrap_or(0)
 }
 
-/// Callbacks every panel shares: tab selection and settings.
+/// The gear every provider body shows in its header: open Settings.
 macro_rules! common {
     ($w:expr, $h:expr) => {{
         let h = $h.clone();
         $w.on_open_settings(move || h(PanelEvent::OpenSettings));
-        let h = $h.clone();
-        $w.on_select_tab(move |row, col| {
-            h(PanelEvent::SelectTab {
-                row: index(row),
-                col: index(col),
-            });
-        });
     }};
 }
 
@@ -101,29 +96,54 @@ macro_rules! weeks {
     }};
 }
 
+/// Connects the window chrome: the switcher cells. Call once per window.
+pub fn connect_chrome(w: &ui::PanelWindow, handler: &PanelHandler) {
+    let h = handler.clone();
+    w.on_select_tab(move |row, col| {
+        h(PanelEvent::SelectTab {
+            row: index(row),
+            col: index(col),
+        });
+    });
+}
+
+/// Connects every provider body of the one panel window. Call once per
+/// window; the view models can then change as often as they like.
+pub fn connect_all(w: &ui::PanelWindow, handler: &PanelHandler) {
+    connect_chrome(w, handler);
+    connect_overview(&w.global::<ui::OverviewVm>(), handler);
+    connect_grok(&w.global::<ui::GrokVm>(), handler);
+    connect_grokbot(&w.global::<ui::GrokbotVm>(), handler);
+    connect_cursor(&w.global::<ui::CursorVm>(), handler);
+    connect_claude(&w.global::<ui::ClaudeVm>(), handler);
+    connect_chatgpt(&w.global::<ui::ChatGptVm>(), handler);
+    connect_opencode(&w.global::<ui::OpenCodeVm>(), handler);
+    connect_openrouter(&w.global::<ui::OpenRouterVm>(), handler);
+}
+
 /// Connects a Grok panel.
-pub fn connect_grok(w: &ui::GrokPanel, handler: &PanelHandler) {
+pub fn connect_grok(w: &ui::GrokVm<'_>, handler: &PanelHandler) {
     common!(w, handler);
     auth!(w, handler, ProviderId::Grok, ProviderId::Grok);
     weeks!(w, handler, ProviderId::Grok);
 }
 
 /// Connects a Grokbot panel (its sign-in and sign-out act on Cursor's session).
-pub fn connect_grokbot(w: &ui::GrokbotPanel, handler: &PanelHandler) {
+pub fn connect_grokbot(w: &ui::GrokbotVm<'_>, handler: &PanelHandler) {
     common!(w, handler);
     auth!(w, handler, ProviderId::Cursor, ProviderId::Cursor);
     weeks!(w, handler, ProviderId::Grokbot);
 }
 
 /// Connects a Cursor panel.
-pub fn connect_cursor(w: &ui::CursorPanel, handler: &PanelHandler) {
+pub fn connect_cursor(w: &ui::CursorVm<'_>, handler: &PanelHandler) {
     common!(w, handler);
     auth!(w, handler, ProviderId::Cursor, ProviderId::Cursor);
     weeks!(w, handler, ProviderId::Cursor);
 }
 
 /// Connects a Claude panel (usage and Claude Code sections).
-pub fn connect_claude(w: &ui::ClaudePanel, handler: &PanelHandler) {
+pub fn connect_claude(w: &ui::ClaudeVm<'_>, handler: &PanelHandler) {
     common!(w, handler);
     auth!(w, handler, ProviderId::Claude, ProviderId::Claude);
     weeks!(w, handler, ProviderId::Claude);
@@ -134,13 +154,13 @@ pub fn connect_claude(w: &ui::ClaudePanel, handler: &PanelHandler) {
 }
 
 /// Connects a ChatGPT panel (no chart, so no week arrows).
-pub fn connect_chatgpt(w: &ui::ChatGptPanel, handler: &PanelHandler) {
+pub fn connect_chatgpt(w: &ui::ChatGptVm<'_>, handler: &PanelHandler) {
     common!(w, handler);
     auth!(w, handler, ProviderId::ChatGpt, ProviderId::ChatGpt);
 }
 
 /// Connects an OpenCode panel.
-pub fn connect_opencode(w: &ui::OpenCodePanel, handler: &PanelHandler) {
+pub fn connect_opencode(w: &ui::OpenCodeVm<'_>, handler: &PanelHandler) {
     common!(w, handler);
     auth!(w, handler, ProviderId::OpenCode, ProviderId::OpenCode);
     weeks!(w, handler, ProviderId::OpenCode);
@@ -153,7 +173,7 @@ pub fn connect_opencode(w: &ui::OpenCodePanel, handler: &PanelHandler) {
 }
 
 /// Connects an OpenRouter panel (API-key entry instead of a sign-in window).
-pub fn connect_openrouter(w: &ui::OpenRouterPanel, handler: &PanelHandler) {
+pub fn connect_openrouter(w: &ui::OpenRouterVm<'_>, handler: &PanelHandler) {
     common!(w, handler);
     let h = handler.clone();
     w.on_sign_out(move || h(PanelEvent::SignOut(ProviderId::OpenRouter)));
@@ -170,7 +190,7 @@ pub fn connect_openrouter(w: &ui::OpenRouterPanel, handler: &PanelHandler) {
 }
 
 /// Connects the Overview panel. Its arrows page the hourly chart by day.
-pub fn connect_overview(w: &ui::OverviewPanel, handler: &PanelHandler) {
+pub fn connect_overview(w: &ui::OverviewVm<'_>, handler: &PanelHandler) {
     common!(w, handler);
     let h = handler.clone();
     w.on_card_sign_in(move |i| h(PanelEvent::OverviewSignIn(index(i))));

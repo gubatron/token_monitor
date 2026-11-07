@@ -3,7 +3,7 @@
 //! Kept mechanical on purpose: no strings or numbers are decided here.
 
 use slint::{Color, ModelRc, SharedString, VecModel};
-use tokenmon_core::Srgb;
+use tokenmon_core::{ProviderId, Srgb};
 
 use super::claude_chatgpt::{ChatGptUsage, ClaudePanelVm, ClaudeUsage};
 use super::common::{
@@ -203,8 +203,22 @@ pub fn tab_rows(rows: &[RowVm]) -> ModelRc<ui::TabRowData> {
     )
 }
 
-/// Fills a [`ui::GrokPanel`].
-pub fn apply_grok(w: &ui::GrokPanel, p: &PanelVm<GrokUsage>) {
+/// The body of the one panel window that shows `provider`.
+pub fn provider_tab(provider: ProviderId) -> ui::ProviderTab {
+    match provider {
+        ProviderId::Overview => ui::ProviderTab::Overview,
+        ProviderId::Grok => ui::ProviderTab::Grok,
+        ProviderId::Grokbot => ui::ProviderTab::Grokbot,
+        ProviderId::Cursor => ui::ProviderTab::Cursor,
+        ProviderId::Claude => ui::ProviderTab::Claude,
+        ProviderId::ChatGpt => ui::ProviderTab::Chatgpt,
+        ProviderId::OpenCode => ui::ProviderTab::Opencode,
+        ProviderId::OpenRouter => ui::ProviderTab::Openrouter,
+    }
+}
+
+/// Fills a [`ui::GrokVm`].
+pub fn apply_grok(w: &ui::GrokVm<'_>, p: &PanelVm<GrokUsage>) {
     let (message, button) = frame_text(p);
     w.set_header(header(&p.header));
     w.set_has_usage(p.usage.is_some());
@@ -242,8 +256,8 @@ pub fn apply_grok(w: &ui::GrokPanel, p: &PanelVm<GrokUsage>) {
     }
 }
 
-/// Fills a [`ui::GrokbotPanel`].
-pub fn apply_grokbot(w: &ui::GrokbotPanel, p: &PanelVm<GrokbotUsage>) {
+/// Fills a [`ui::GrokbotVm`].
+pub fn apply_grokbot(w: &ui::GrokbotVm<'_>, p: &PanelVm<GrokbotUsage>) {
     let (message, button) = frame_text(p);
     w.set_header(header(&p.header));
     w.set_has_usage(p.usage.is_some());
@@ -260,8 +274,8 @@ pub fn apply_grokbot(w: &ui::GrokbotPanel, p: &PanelVm<GrokbotUsage>) {
     }
 }
 
-/// Fills a [`ui::CursorPanel`].
-pub fn apply_cursor(w: &ui::CursorPanel, p: &PanelVm<CursorUsage>) {
+/// Fills a [`ui::CursorVm`].
+pub fn apply_cursor(w: &ui::CursorVm<'_>, p: &PanelVm<CursorUsage>) {
     let (message, button) = frame_text(p);
     w.set_header(header(&p.header));
     w.set_has_usage(p.usage.is_some());
@@ -277,8 +291,8 @@ pub fn apply_cursor(w: &ui::CursorPanel, p: &PanelVm<CursorUsage>) {
     }
 }
 
-/// Fills a [`ui::ClaudePanel`].
-pub fn apply_claude(w: &ui::ClaudePanel, v: &ClaudePanelVm) {
+/// Fills a [`ui::ClaudeVm`].
+pub fn apply_claude(w: &ui::ClaudeVm<'_>, v: &ClaudePanelVm) {
     let p: &PanelVm<ClaudeUsage> = &v.panel;
     let (message, button) = frame_text(p);
     w.set_header(header(&p.header));
@@ -298,8 +312,8 @@ pub fn apply_claude(w: &ui::ClaudePanel, v: &ClaudePanelVm) {
     }
 }
 
-/// Fills a [`ui::ChatGptPanel`].
-pub fn apply_chatgpt(w: &ui::ChatGptPanel, p: &PanelVm<ChatGptUsage>) {
+/// Fills a [`ui::ChatGptVm`].
+pub fn apply_chatgpt(w: &ui::ChatGptVm<'_>, p: &PanelVm<ChatGptUsage>) {
     let (message, button) = frame_text(p);
     w.set_header(header(&p.header));
     w.set_has_usage(p.usage.is_some());
@@ -313,8 +327,8 @@ pub fn apply_chatgpt(w: &ui::ChatGptPanel, p: &PanelVm<ChatGptUsage>) {
     }
 }
 
-/// Fills a [`ui::OpenCodePanel`].
-pub fn apply_opencode(w: &ui::OpenCodePanel, p: &PanelVm<OpenCodeUsage>) {
+/// Fills a [`ui::OpenCodeVm`].
+pub fn apply_opencode(w: &ui::OpenCodeVm<'_>, p: &PanelVm<OpenCodeUsage>) {
     let (message, button) = frame_text(p);
     w.set_header(header(&p.header));
     w.set_has_usage(p.usage.is_some());
@@ -333,8 +347,8 @@ pub fn apply_opencode(w: &ui::OpenCodePanel, p: &PanelVm<OpenCodeUsage>) {
     }
 }
 
-/// Fills a [`ui::OpenRouterPanel`].
-pub fn apply_openrouter(w: &ui::OpenRouterPanel, v: &OpenRouterPanelVm) {
+/// Fills a [`ui::OpenRouterVm`].
+pub fn apply_openrouter(w: &ui::OpenRouterVm<'_>, v: &OpenRouterPanelVm) {
     let p = &v.panel;
     w.set_header(header(&p.header));
     w.set_has_usage(p.usage.is_some());
@@ -368,8 +382,8 @@ pub fn apply_openrouter(w: &ui::OpenRouterPanel, v: &OpenRouterPanelVm) {
     }
 }
 
-/// Fills a [`ui::OverviewPanel`].
-pub fn apply_overview(w: &ui::OverviewPanel, v: &OverviewPanelVm) {
+/// Fills a [`ui::OverviewVm`].
+pub fn apply_overview(w: &ui::OverviewVm<'_>, v: &OverviewPanelVm) {
     w.set_version(text(&v.version_text));
     w.set_cards(model(
         v.cards

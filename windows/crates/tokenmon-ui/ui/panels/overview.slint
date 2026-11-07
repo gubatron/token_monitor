@@ -1,17 +1,9 @@
-import { PanelShell } from "shell.slint";
 import { PanelHeader, Caption, ActionButton } from "parts.slint";
 import { Theme, Typo, PanelCard, PanelSectionHeader, PanelMetaLabel, DigitText, SlimUsageTrack, ResetCaption, WeekChartNavigation, ProviderHeaderRow, Logos } from "../components/kit.slint";
 import { TabRowData, OverviewCardData, HourBarData, LegendData } from "types.slint";
 
-// Overview panel (spec 04 section 3.5).
-export component OverviewPanel inherits PanelShell {
-    in property <[TabRowData]> tabs <=> root.shell-tabs;
-    out property <length> content-height: root.shell-content-height;
-    callback select-tab(int, int);
-    shell-select-tab(r, c) => { root.select-tab(r, c); }
-    in property <bool> closable <=> root.shell-closable;
-    callback close-panel();
-    shell-close() => { root.close-panel(); }
+/// State and actions of the Overview panel body; the host sets and connects these once.
+export global OverviewVm {
     callback open-settings();
     /// A card's sign-in button (argument: card index).
     callback card-sign-in(int);
@@ -28,13 +20,18 @@ export component OverviewPanel inherits PanelShell {
     in property <[HourBarData]> hours;
     in property <[LegendData]> legend;
     in property <string> empty-message;
+}
+
+// Overview panel (spec 04 section 3.5).
+export component OverviewBody inherits VerticalLayout {
+    spacing: 10px;
     ProviderHeaderRow {
         logo-key: "tokenmon-mark";
         title: "TokenMon";
-        trailing: root.version;
-        open-settings => { root.open-settings(); }
+        trailing: OverviewVm.version;
+        open-settings => { OverviewVm.open-settings(); }
     }
-    for c[i] in root.cards: PanelCard {
+    for c[i] in OverviewVm.cards: PanelCard {
         HorizontalLayout {
             spacing: 8px;
             Image {
@@ -71,7 +68,7 @@ export component OverviewPanel inherits PanelShell {
         if c.sign-in != "": ActionButton {
             text: c.sign-in;
             width: 160px;
-            clicked => { root.card-sign-in(i); }
+            clicked => { OverviewVm.card-sign-in(i); }
         }
         if c.has-sign-out: Rectangle {
             height: 16px;
@@ -85,35 +82,35 @@ export component OverviewPanel inherits PanelShell {
             }
             TouchArea {
                 mouse-cursor: pointer;
-                clicked => { root.card-sign-out(i); }
+                clicked => { OverviewVm.card-sign-out(i); }
             }
         }
     }
     PanelCard {
-        PanelSectionHeader { title: root.daily-title; }
-        if root.has-nav: WeekChartNavigation {
-            can-previous: root.can-back;
-            can-next: root.can-forward;
-            previous-week => { root.previous-day(); }
-            next-week => { root.next-day(); }
+        PanelSectionHeader { title: OverviewVm.daily-title; }
+        if OverviewVm.has-nav: WeekChartNavigation {
+            can-previous: OverviewVm.can-back;
+            can-next: OverviewVm.can-forward;
+            previous-week => { OverviewVm.previous-day(); }
+            next-week => { OverviewVm.next-day(); }
         }
-        if root.empty-message != "": Text {
-            text: root.empty-message;
+        if OverviewVm.empty-message != "": Text {
+            text: OverviewVm.empty-message;
             font-family: Typo.family;
             font-size: Typo.body-size;
             color: Theme.tertiary;
             wrap: word-wrap;
             min-height: 48px;
         }
-        if root.empty-message == "": VerticalLayout {
+        if OverviewVm.empty-message == "": VerticalLayout {
             spacing: 8px;
             chart := Rectangle {
                 height: 68px + 5px + 14px;
-                private property <int> hovered: touch.has-hover ? Math.min(root.hours.length - 1, Math.floor(touch.mouse-x / (hlay.width / max(1, root.hours.length)))) : -1;
+                private property <int> hovered: touch.has-hover ? Math.min(OverviewVm.hours.length - 1, Math.floor(touch.mouse-x / (hlay.width / max(1, OverviewVm.hours.length)))) : -1;
                 hlay := HorizontalLayout {
                     alignment: center;
                     spacing: 2px;
-                    for h[hi] in root.hours: VerticalLayout {
+                    for h[hi] in OverviewVm.hours: VerticalLayout {
                         spacing: 5px;
                         width: 20px;
                         Rectangle {
@@ -146,7 +143,7 @@ export component OverviewPanel inherits PanelShell {
                     }
                 }
                 touch := TouchArea { }
-                if chart.hovered >= 0 && chart.hovered < root.hours.length && root.hours[chart.hovered].tooltip != "": Rectangle {
+                if chart.hovered >= 0 && chart.hovered < OverviewVm.hours.length && OverviewVm.hours[chart.hovered].tooltip != "": Rectangle {
                     z: 100;
                     x: max(0px, min(touch.mouse-x - self.width / 2, chart.width - self.width));
                     y: 0px;
@@ -160,7 +157,7 @@ export component OverviewPanel inherits PanelShell {
                         x: 10px;
                         y: 6px;
                         width: parent.width - 20px;
-                        text: root.hours[chart.hovered].tooltip;
+                        text: OverviewVm.hours[chart.hovered].tooltip;
                         font-family: Typo.family;
                         font-size: Typo.caption-size;
                         color: Theme.primary;
@@ -171,7 +168,7 @@ export component OverviewPanel inherits PanelShell {
             HorizontalLayout {
                 spacing: 10px;
                 alignment: start;
-                for l in root.legend: HorizontalLayout {
+                for l in OverviewVm.legend: HorizontalLayout {
                     spacing: 4px;
                     Rectangle { width: 8px; height: 10px; border-radius: 2px; background: l.color; y: 2px; }
                     Text {

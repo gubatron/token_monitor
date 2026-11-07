@@ -242,10 +242,11 @@ fn test_every_panel_state_renders_offscreen() {
         ),
     ];
     for (name, input) in grok_cases {
-        let w = ui::GrokPanel::new().unwrap();
+        let w = ui::PanelWindow::new().unwrap();
+        w.set_selected(ui::ProviderTab::Grok);
         font!(w);
         w.set_tabs(tabs.clone());
-        apply_grok(&w, &grok::build(&input, &c));
+        apply_grok(&w.global::<ui::GrokVm>(), &grok::build(&input, &c));
         let (buf, h) = render(&w, &last, |w| w.get_content_height());
         check_and_save(name, &buf, h);
         count += 1;
@@ -294,10 +295,11 @@ fn test_every_panel_state_renders_offscreen() {
         ),
     ];
     for (name, input) in bot_cases {
-        let w = ui::GrokbotPanel::new().unwrap();
+        let w = ui::PanelWindow::new().unwrap();
+        w.set_selected(ui::ProviderTab::Grokbot);
         font!(w);
         w.set_tabs(tabs.clone());
-        apply_grokbot(&w, &build_grokbot(&input, &c));
+        apply_grokbot(&w.global::<ui::GrokbotVm>(), &build_grokbot(&input, &c));
         let (buf, h) = render(&w, &last, |w| w.get_content_height());
         check_and_save(name, &buf, h);
         count += 1;
@@ -351,10 +353,11 @@ fn test_every_panel_state_renders_offscreen() {
         ),
     ];
     for (name, input) in cursor_cases {
-        let w = ui::CursorPanel::new().unwrap();
+        let w = ui::PanelWindow::new().unwrap();
+        w.set_selected(ui::ProviderTab::Cursor);
         font!(w);
         w.set_tabs(tabs.clone());
-        apply_cursor(&w, &build_cursor(&input, &c));
+        apply_cursor(&w.global::<ui::CursorVm>(), &build_cursor(&input, &c));
         let (buf, h) = render(&w, &last, |w| w.get_content_height());
         check_and_save(name, &buf, h);
         count += 1;
@@ -431,10 +434,11 @@ fn test_every_panel_state_renders_offscreen() {
         ),
     ];
     for (name, input) in claude_cases {
-        let w = ui::ClaudePanel::new().unwrap();
+        let w = ui::PanelWindow::new().unwrap();
+        w.set_selected(ui::ProviderTab::Claude);
         font!(w);
         w.set_tabs(tabs.clone());
-        apply_claude(&w, &build_claude(&input, &c));
+        apply_claude(&w.global::<ui::ClaudeVm>(), &build_claude(&input, &c));
         let (buf, h) = render(&w, &last, |w| w.get_content_height());
         check_and_save(name, &buf, h);
         count += 1;
@@ -473,10 +477,11 @@ fn test_every_panel_state_renders_offscreen() {
             },
         ),
     ] {
-        let w = ui::ChatGptPanel::new().unwrap();
+        let w = ui::PanelWindow::new().unwrap();
+        w.set_selected(ui::ProviderTab::Chatgpt);
         font!(w);
         w.set_tabs(tabs.clone());
-        apply_chatgpt(&w, &build_chatgpt(&input, &c));
+        apply_chatgpt(&w.global::<ui::ChatGptVm>(), &build_chatgpt(&input, &c));
         let (buf, h) = render(&w, &last, |w| w.get_content_height());
         check_and_save(name, &buf, h);
         count += 1;
@@ -553,10 +558,11 @@ fn test_every_panel_state_renders_offscreen() {
             },
         ),
     ] {
-        let w = ui::OpenCodePanel::new().unwrap();
+        let w = ui::PanelWindow::new().unwrap();
+        w.set_selected(ui::ProviderTab::Opencode);
         font!(w);
         w.set_tabs(tabs.clone());
-        apply_opencode(&w, &build_opencode(&input, &c));
+        apply_opencode(&w.global::<ui::OpenCodeVm>(), &build_opencode(&input, &c));
         let (buf, h) = render(&w, &last, |w| w.get_content_height());
         check_and_save(name, &buf, h);
         count += 1;
@@ -617,10 +623,14 @@ fn test_every_panel_state_renders_offscreen() {
             },
         ),
     ] {
-        let w = ui::OpenRouterPanel::new().unwrap();
+        let w = ui::PanelWindow::new().unwrap();
+        w.set_selected(ui::ProviderTab::Openrouter);
         font!(w);
         w.set_tabs(tabs.clone());
-        apply_openrouter(&w, &build_openrouter(&input, &c));
+        apply_openrouter(
+            &w.global::<ui::OpenRouterVm>(),
+            &build_openrouter(&input, &c),
+        );
         let (buf, h) = render(&w, &last, |w| w.get_content_height());
         check_and_save(name, &buf, h);
         count += 1;
@@ -676,10 +686,11 @@ fn test_every_panel_state_renders_offscreen() {
                 earliest_day: None,
             },
         };
-        let w = ui::OverviewPanel::new().unwrap();
+        let w = ui::PanelWindow::new().unwrap();
+        w.set_selected(ui::ProviderTab::Overview);
         font!(w);
         w.set_tabs(overview_tabs.clone());
-        apply_overview(&w, &build_overview(&input, &c));
+        apply_overview(&w.global::<ui::OverviewVm>(), &build_overview(&input, &c));
         let (buf, h) = render(&w, &last, |w| w.get_content_height());
         check_and_save(name, &buf, h);
         if name == "overview_populated" {
@@ -687,6 +698,6 @@ fn test_every_panel_state_renders_offscreen() {
         }
         count += 1;
     }
-    win(&ui::OverviewPanel::new().unwrap(), "unused");
+    win(&ui::PanelWindow::new().unwrap(), "unused");
     assert!(count == 27, "expected the full scenario table, ran {count}");
 }

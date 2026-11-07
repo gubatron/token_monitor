@@ -1,17 +1,9 @@
-import { PanelShell } from "shell.slint";
 import { PanelHeader, PoolCard, DailyCard, ModelsCard, FooterBlock, MessageBlock, Caption, ActionButton } from "parts.slint";
 import { Theme, Typo, PanelCard, PanelSectionHeader, DigitText, ResetCaption, SegmentedUsageBar, CategoryRow, MetricStatGrid } from "../components/kit.slint";
 import { TrackData, ModelsData, DailyData, FooterData, HeaderData, TabRowData, BarSegment, CategoryItem, MetricItem } from "types.slint";
 
-// Cursor panel (spec 02 section 3.5).
-export component CursorPanel inherits PanelShell {
-    in property <[TabRowData]> tabs <=> root.shell-tabs;
-    out property <length> content-height: root.shell-content-height;
-    callback select-tab(int, int);
-    shell-select-tab(r, c) => { root.select-tab(r, c); }
-    in property <bool> closable <=> root.shell-closable;
-    callback close-panel();
-    shell-close() => { root.close-panel(); }
+/// State and actions of the Cursor panel body; the host sets and connects these once.
+export global CursorVm {
     callback open-settings();
     callback sign-in();
     callback sign-in-again();
@@ -28,22 +20,27 @@ export component CursorPanel inherits PanelShell {
     in property <bool> has-metrics;
     in property <[MetricItem]> metrics;
     in property <FooterData> footer;
-    PanelHeader { data: root.header; open-settings => { root.open-settings(); } }
-    if !root.has-usage: MessageBlock {
-        text: root.message;
-        button: root.button;
-        clicked => { root.sign-in(); }
+}
+
+// Cursor panel (spec 02 section 3.5).
+export component CursorBody inherits VerticalLayout {
+    spacing: 10px;
+    PanelHeader { data: CursorVm.header; open-settings => { CursorVm.open-settings(); } }
+    if !CursorVm.has-usage: MessageBlock {
+        text: CursorVm.message;
+        button: CursorVm.button;
+        clicked => { CursorVm.sign-in(); }
     }
-    if root.has-usage: PoolCard { title: root.pool-title; tracks: root.tracks; }
-    if root.has-usage && root.daily.present: DailyCard {
-        data: root.daily;
-        previous-week => { root.previous-week(); }
-        next-week => { root.next-week(); }
+    if CursorVm.has-usage: PoolCard { title: CursorVm.pool-title; tracks: CursorVm.tracks; }
+    if CursorVm.has-usage && CursorVm.daily.present: DailyCard {
+        data: CursorVm.daily;
+        previous-week => { CursorVm.previous-week(); }
+        next-week => { CursorVm.next-week(); }
     }
-    if root.has-usage && root.has-metrics: MetricStatGrid { items: root.metrics; }
-    if root.has-usage: FooterBlock {
-        data: root.footer;
-        sign-in-again => { root.sign-in-again(); }
-        sign-out => { root.sign-out(); }
+    if CursorVm.has-usage && CursorVm.has-metrics: MetricStatGrid { items: CursorVm.metrics; }
+    if CursorVm.has-usage: FooterBlock {
+        data: CursorVm.footer;
+        sign-in-again => { CursorVm.sign-in-again(); }
+        sign-out => { CursorVm.sign-out(); }
     }
 }

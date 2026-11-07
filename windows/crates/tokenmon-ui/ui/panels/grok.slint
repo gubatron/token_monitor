@@ -1,17 +1,9 @@
-import { PanelShell } from "shell.slint";
 import { PanelHeader, PoolCard, DailyCard, ModelsCard, FooterBlock, MessageBlock, Caption, ActionButton } from "parts.slint";
 import { Theme, Typo, PanelCard, PanelSectionHeader, DigitText, ResetCaption, SegmentedUsageBar, CategoryRow, MetricStatGrid } from "../components/kit.slint";
 import { TrackData, ModelsData, DailyData, FooterData, HeaderData, TabRowData, BarSegment, CategoryItem, MetricItem } from "types.slint";
 
-// Grok panel (spec 02 section 1.7).
-export component GrokPanel inherits PanelShell {
-    in property <[TabRowData]> tabs <=> root.shell-tabs;
-    out property <length> content-height: root.shell-content-height;
-    callback select-tab(int, int);
-    shell-select-tab(r, c) => { root.select-tab(r, c); }
-    in property <bool> closable <=> root.shell-closable;
-    callback close-panel();
-    shell-close() => { root.close-panel(); }
+/// State and actions of the Grok panel body; the host sets and connects these once.
+export global GrokVm {
     callback open-settings();
     callback sign-in();
     callback sign-in-again();
@@ -31,47 +23,52 @@ export component GrokPanel inherits PanelShell {
     in property <string> extra-credits;
     in property <DailyData> daily;
     in property <FooterData> footer;
-    PanelHeader { data: root.header; open-settings => { root.open-settings(); } }
-    if !root.has-usage: MessageBlock {
-        text: root.message;
-        button: root.button;
-        clicked => { root.sign-in(); }
+}
+
+// Grok panel (spec 02 section 1.7).
+export component GrokBody inherits VerticalLayout {
+    spacing: 10px;
+    PanelHeader { data: GrokVm.header; open-settings => { GrokVm.open-settings(); } }
+    if !GrokVm.has-usage: MessageBlock {
+        text: GrokVm.message;
+        button: GrokVm.button;
+        clicked => { GrokVm.sign-in(); }
     }
-    if root.has-usage: PanelCard {
+    if GrokVm.has-usage: PanelCard {
         HorizontalLayout {
             spacing: 8px;
-            PanelSectionHeader { title: root.pool-title; horizontal-stretch: 1; }
-            DigitText { text: root.pool-used; }
+            PanelSectionHeader { title: GrokVm.pool-title; horizontal-stretch: 1; }
+            DigitText { text: GrokVm.pool-used; }
         }
-        SegmentedUsageBar { segments: root.segments; }
-        if root.reset-caption != "": ResetCaption { text: root.reset-caption; }
+        SegmentedUsageBar { segments: GrokVm.segments; }
+        if GrokVm.reset-caption != "": ResetCaption { text: GrokVm.reset-caption; }
     }
-    if root.has-usage && root.has-categories: PanelCard {
+    if GrokVm.has-usage && GrokVm.has-categories: PanelCard {
         PanelSectionHeader { title: "Categories"; }
         HorizontalLayout {
             spacing: 12px;
             alignment: start;
-            for chip in root.chips: CategoryRow {
+            for chip in GrokVm.chips: CategoryRow {
                 name: chip.name;
                 percent-text: chip.percent-text;
                 dot: chip.color;
             }
         }
     }
-    if root.has-usage && root.extra-credits != "": PanelCard {
+    if GrokVm.has-usage && GrokVm.extra-credits != "": PanelCard {
         HorizontalLayout {
             PanelSectionHeader { title: "Extra Credits"; horizontal-stretch: 1; }
-            DigitText { text: root.extra-credits; }
+            DigitText { text: GrokVm.extra-credits; }
         }
     }
-    if root.has-usage && root.daily.present: DailyCard {
-        data: root.daily;
-        previous-week => { root.previous-week(); }
-        next-week => { root.next-week(); }
+    if GrokVm.has-usage && GrokVm.daily.present: DailyCard {
+        data: GrokVm.daily;
+        previous-week => { GrokVm.previous-week(); }
+        next-week => { GrokVm.next-week(); }
     }
-    if root.has-usage: FooterBlock {
-        data: root.footer;
-        sign-in-again => { root.sign-in-again(); }
-        sign-out => { root.sign-out(); }
+    if GrokVm.has-usage: FooterBlock {
+        data: GrokVm.footer;
+        sign-in-again => { GrokVm.sign-in-again(); }
+        sign-out => { GrokVm.sign-out(); }
     }
 }

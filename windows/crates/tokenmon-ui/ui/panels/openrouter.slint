@@ -1,17 +1,9 @@
-import { PanelShell } from "shell.slint";
 import { PanelHeader, PoolCard, DailyCard, ModelsCard, FooterBlock, MessageBlock, Caption, ActionButton } from "parts.slint";
 import { Theme, Typo, PanelCard, PanelSectionHeader, DigitText, MetricStatGrid } from "../components/kit.slint";
 import { TrackData, ModelsData, FooterData, HeaderData, TabRowData, MetricItem } from "types.slint";
 
-// OpenRouter panel (spec 03 section 4.6): API key entry instead of a sign-in window.
-export component OpenRouterPanel inherits PanelShell {
-    in property <[TabRowData]> tabs <=> root.shell-tabs;
-    out property <length> content-height: root.shell-content-height;
-    callback select-tab(int, int);
-    shell-select-tab(r, c) => { root.select-tab(r, c); }
-    in property <bool> closable <=> root.shell-closable;
-    callback close-panel();
-    shell-close() => { root.close-panel(); }
+/// State and actions of the OpenRouter panel body; the host sets and connects these once.
+export global OpenRouterVm {
     callback open-settings();
     callback sign-out();
     /// The user typed in the key field (argument: the new draft).
@@ -38,24 +30,29 @@ export component OpenRouterPanel inherits PanelShell {
     in property <string> replace-link;
     in property <FooterData> footer;
     in-out property <string> key-draft;
-    PanelHeader { data: root.header; open-settings => { root.open-settings(); } }
-    if !root.has-usage: Caption { text: root.message; }
-    if root.has-usage: PoolCard {
-        title: root.budget-title;
-        trailing: root.used-text;
-        tracks: root.tracks;
+}
+
+// OpenRouter panel (spec 03 section 4.6): API key entry instead of a sign-in window.
+export component OpenRouterBody inherits VerticalLayout {
+    spacing: 10px;
+    PanelHeader { data: OpenRouterVm.header; open-settings => { OpenRouterVm.open-settings(); } }
+    if !OpenRouterVm.has-usage: Caption { text: OpenRouterVm.message; }
+    if OpenRouterVm.has-usage: PoolCard {
+        title: OpenRouterVm.budget-title;
+        trailing: OpenRouterVm.used-text;
+        tracks: OpenRouterVm.tracks;
     }
-    if root.has-usage && root.no-limit != "": Caption { text: root.no-limit; }
-    if root.has-usage: VerticalLayout {
+    if OpenRouterVm.has-usage && OpenRouterVm.no-limit != "": Caption { text: OpenRouterVm.no-limit; }
+    if OpenRouterVm.has-usage: VerticalLayout {
         spacing: 8px;
         PanelSectionHeader { title: "Stats"; }
-        MetricStatGrid { items: root.stats; }
+        MetricStatGrid { items: OpenRouterVm.stats; }
     }
-    if root.has-usage && root.models.present: ModelsCard {
-        data: root.models;
-        toggle-show-all => { root.toggle-show-all-models(); }
+    if OpenRouterVm.has-usage && OpenRouterVm.models.present: ModelsCard {
+        data: OpenRouterVm.models;
+        toggle-show-all => { OpenRouterVm.toggle-show-all-models(); }
     }
-    if root.has-key-entry: VerticalLayout {
+    if OpenRouterVm.has-key-entry: VerticalLayout {
         spacing: 6px;
         HorizontalLayout {
             spacing: 8px;
@@ -66,9 +63,9 @@ export component OpenRouterPanel inherits PanelShell {
                 background: Theme.control-background;
                 border-width: 1px;
                 border-color: Theme.separator;
-                if root.key-draft == "": Text {
+                if OpenRouterVm.key-draft == "": Text {
                     x: 8px;
-                    text: root.key-placeholder;
+                    text: OpenRouterVm.key-placeholder;
                     font-family: Typo.family;
                     font-size: Typo.body-size;
                     color: Theme.tertiary;
@@ -77,39 +74,39 @@ export component OpenRouterPanel inherits PanelShell {
                 input := TextInput {
                     x: 8px;
                     width: parent.width - 16px;
-                    text <=> root.key-draft;
+                    text <=> OpenRouterVm.key-draft;
                     font-family: Typo.family;
                     font-size: Typo.body-size;
                     color: Theme.primary;
                     input-type: password;
                     single-line: true;
                     vertical-alignment: center;
-                    accessible-label: root.key-placeholder;
-                    edited => { root.key-edited(self.text); }
-                    accepted => { if root.key-button-enabled { root.submit-key(self.text); } }
+                    accessible-label: OpenRouterVm.key-placeholder;
+                    edited => { OpenRouterVm.key-edited(self.text); }
+                    accepted => { if OpenRouterVm.key-button-enabled { OpenRouterVm.submit-key(self.text); } }
                 }
             }
             ActionButton {
                 width: 72px;
-                text: root.key-button;
-                enabled: root.key-button-enabled;
-                clicked => { root.submit-key(root.key-draft); }
+                text: OpenRouterVm.key-button;
+                enabled: OpenRouterVm.key-button-enabled;
+                clicked => { OpenRouterVm.submit-key(OpenRouterVm.key-draft); }
             }
         }
-        if root.key-error != "": Text {
-            text: root.key-error;
+        if OpenRouterVm.key-error != "": Text {
+            text: OpenRouterVm.key-error;
             font-family: Typo.family;
             font-size: Typo.caption-size;
             color: Theme.destructive;
             wrap: word-wrap;
         }
     }
-    if root.replace-link != "": Rectangle {
+    if OpenRouterVm.replace-link != "": Rectangle {
         height: 16px;
         accessible-role: button;
-        accessible-label: root.replace-link;
+        accessible-label: OpenRouterVm.replace-link;
         Text {
-            text: root.replace-link;
+            text: OpenRouterVm.replace-link;
             font-family: Typo.family;
             font-size: Typo.caption-size;
             color: Theme.secondary;
@@ -117,11 +114,11 @@ export component OpenRouterPanel inherits PanelShell {
         }
         TouchArea {
             mouse-cursor: pointer;
-            clicked => { root.replace-key(); }
+            clicked => { OpenRouterVm.replace-key(); }
         }
     }
-    if root.has-usage: FooterBlock {
-        data: root.footer;
-        sign-out => { root.sign-out(); }
+    if OpenRouterVm.has-usage: FooterBlock {
+        data: OpenRouterVm.footer;
+        sign-out => { OpenRouterVm.sign-out(); }
     }
 }

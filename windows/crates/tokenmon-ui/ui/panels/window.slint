@@ -1,0 +1,80 @@
+// The one panel window (issue #81): 420 wide, 12 padding, the 4-per-row
+// provider switcher, then the selected provider's body. Switching tabs changes
+// `selected`; no second window is ever created.
+import { ProviderSwitcher } from "shell.slint";
+import { Theme, Typo } from "../components/kit.slint";
+import { TabRowData } from "types.slint";
+import { OverviewBody } from "overview.slint";
+import { GrokBody } from "grok.slint";
+import { GrokbotBody } from "grokbot.slint";
+import { CursorBody } from "cursor.slint";
+import { ClaudeBody } from "claude.slint";
+import { ChatGptBody } from "chatgpt.slint";
+import { OpenCodeBody } from "opencode.slint";
+import { OpenRouterBody } from "openrouter.slint";
+
+/// Which provider's body the panel window shows.
+export enum ProviderTab {
+    overview,
+    grok,
+    grokbot,
+    cursor,
+    claude,
+    chatgpt,
+    opencode,
+    openrouter,
+}
+
+export component PanelWindow inherits Window {
+    in property <[TabRowData]> tabs;
+    in property <ProviderTab> selected: ProviderTab.overview;
+    callback select-tab(int, int);
+    // The Windows panel does not dismiss itself when it loses focus, so it
+    // shows a close button (the host sets this; snapshots keep it off).
+    in property <bool> closable: false;
+    callback close-panel();
+    out property <length> content-height: layout.preferred-height;
+    // Undecorated: the panel is a popup, not a document window.
+    no-frame: true;
+    default-font-family: Typo.family;
+    icon: @image-url("../assets/logos/tokenmon-app-icon.png");
+    width: 420px;
+    height: layout.preferred-height;
+    background: Theme.window-background;
+    layout := VerticalLayout {
+        padding: 12px;
+        spacing: 0px;
+        if root.closable: HorizontalLayout {
+            height: 20px;
+            alignment: end;
+            Rectangle {
+                width: 20px;
+                height: 20px;
+                Text {
+                    text: "\u{00D7}";
+                    font-family: Typo.family;
+                    font-size: 16px;
+                    color: Theme.secondary;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+                TouchArea {
+                    clicked => { root.close-panel(); }
+                }
+            }
+        }
+        ProviderSwitcher {
+            rows: root.tabs;
+            select(r, c) => { root.select-tab(r, c); }
+        }
+        Rectangle { height: 12px; }
+        if root.selected == ProviderTab.overview: OverviewBody { }
+        if root.selected == ProviderTab.grok: GrokBody { }
+        if root.selected == ProviderTab.grokbot: GrokbotBody { }
+        if root.selected == ProviderTab.cursor: CursorBody { }
+        if root.selected == ProviderTab.claude: ClaudeBody { }
+        if root.selected == ProviderTab.chatgpt: ChatGptBody { }
+        if root.selected == ProviderTab.opencode: OpenCodeBody { }
+        if root.selected == ProviderTab.openrouter: OpenRouterBody { }
+    }
+}
