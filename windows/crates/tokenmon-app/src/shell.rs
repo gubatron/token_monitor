@@ -76,6 +76,15 @@ const TRAY_ATTEMPTS: u32 = 5;
 /// Longest the exit waits for blocking scans (transcripts, SQLite) to end.
 const RUNTIME_SHUTDOWN: Duration = Duration::from_secs(2);
 
+/// `--debug-panel`: log the panel placement inputs and outputs, the actual
+/// window geometry after showing, and focus and click decisions, to the rolling
+/// log in `%LOCALAPPDATA%/TokenMon/logs` (#81).
+static DEBUG_PANEL: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+fn debug_panel() -> bool {
+    DEBUG_PANEL.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 /// A "show the panel" request from the pipe that may precede the UI.
 static SHOW_REQUEST: PendingShow = PendingShow::new();
 
@@ -267,6 +276,9 @@ impl Ui {
     /// Records a focus change of the selected panel.
     fn note_focus(&self, focused: bool) {
         self.focused.set(focused);
+        if debug_panel() {
+            tracing::info!(focused, "panel: focus changed");
+        }
         if !focused {
             self.focus_lost_at.set(Some(Instant::now()));
         }
@@ -363,8 +375,12 @@ impl Ui {
             window.show();
             if let Some(hwnd) = window.hwnd() {
                 system::make_tool_window(hwnd);
-                system::bring_to_front(hwnd);
+                let accepted = system::bring_to_front(hwnd);
+                if debug_panel() {
+                    tracing::info!(accepted, "panel: bring to front after show");
+                }
             }
+            Self::log_actual_geometry(&window);
             // The new panel is up before the old one goes, so a tab switch
             // does not flash the desktop.
             for (p, other) in self.windows.borrow().iter() {
@@ -392,6 +408,36 @@ impl Ui {
             placement.origin.0,
             placement.origin.1,
         ));
+        if debug_panel() {
+            tracing::info!(
+                anchor = ?anchor,
+                monitor = ?facts.monitor,
+                work = ?facts.work,
+                dpi = facts.dpi,
+                logical_size = ?window.logical_size(),
+                edge = ?placement.edge,
+                size = ?placement.size,
+                gap = placement.gap,
+                origin = ?placement.origin,
+                "panel: place"
+            );
+        }
+    }
+
+    /// `--debug-panel`: what the window really is after showing, to compare
+    /// with the placement that was computed.
+    fn log_actual_geometry(window: &PanelWindow) {
+        if !debug_panel() {
+            return;
+        }
+        let (size, pos) = (window.window().size(), window.window().position());
+        tracing::info!(
+            actual_size = ?(size.width, size.height),
+            actual_position = ?(pos.x, pos.y),
+            scale_factor = window.window().scale_factor(),
+            hwnd = ?window.hwnd(),
+            "panel: shown"
+        );
     }
 
     fn is_panel_visible(&self) -> bool {
@@ -526,6 +572,13 @@ pub fn run(args: &[String], version: &str) -> ExitCode {
     // First: wait out a replaced predecessor and tidy update leftovers.
     handle_startup_args(args.iter().map(String::as_str), &exe);
     let launch = LaunchArgs::parse_lenient(args.iter().skip(1));
+    DEBUG_PANEL.store(
+        args.iter().any(|a| a == "--debug-panel"),
+        std::sync::atomic::Ordering::Relaxed,
+    );
+    if debug_panel() {
+        tracing::info!("panel: --debug-panel on (version {version})");
+    }
     // A second launch asks the running instance to show its panel; that
     // instance needs foreground rights for the window to come to the front.
     system::allow_any_process_foreground();
@@ -825,24 +878,40 @@ fn wire_tray(ui: &Rc<Ui>, show_panel: bool) -> Result<(), StartupFailure> {
             height: i32::try_from(rect.size.height).unwrap_or(0),
         };
         let probe = display::monitor_at(center(icon).0, center(icon).1);
-        let (anchor, _) = resolve_anchor(
+        let overflow = system::overflow_flyout_rect();
+        let notify = system::notification_area_rect();
+        let (anchor, source) = resolve_anchor(
             Some(icon),
-            system::overflow_flyout_rect(),
-            system::notification_area_rect(),
+            overflow,
+            notify,
             probe.monitor,
             probe.work,
             probe.dpi,
         );
+        if debug_panel() && !matches!(phase, Phase::Hover) {
+            tracing::info!(
+                ?icon,
+                ?overflow,
+                ?notify,
+                ?anchor,
+                ?source,
+                dpi = probe.dpi,
+                "panel: tray event anchor"
+            );
+        }
         with_ui(move |ui| {
             ui.anchor.set(Some(anchor));
             match phase {
                 Phase::Hover => {}
                 // The press already moved focus to the taskbar: decide now,
                 // from whether the panel was in front just before it.
-                Phase::Press => ui.pending_click.set(Some(click_action(
-                    ui.is_panel_visible(),
-                    ui.panel_was_foreground(),
-                ))),
+                Phase::Press => {
+                    let action = click_action(ui.is_panel_visible(), ui.panel_was_foreground());
+                    if debug_panel() {
+                        tracing::info!(?action, "panel: tray press");
+                    }
+                    ui.pending_click.set(Some(action));
+                }
                 Phase::Release => ui.finish_tray_click(),
             }
         });

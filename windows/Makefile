@@ -174,11 +174,11 @@ define launch
 		sleep 0.2; i=$$((i + 1)); \
 	done; \
 	taskkill //F //IM $(APP_NAME).exe >/dev/null 2>&1 || true
-	@cmd //c start "" "$$(cygpath -w "$(1)")"
+	@cmd //c start "" "$$(cygpath -w "$(1)")" $(ARGS)
 	$(call ok,Launched $(1) (look for the tray icon))
 endef
 
-run: ## [W] Release build, then launch TokenMon.exe
+run: ## [W] Release build, then launch TokenMon.exe (ARGS=--debug-panel logs panel placement)
 	$(call windows_only)
 	@"$(MAKE)" --no-print-directory release
 	$(call launch,$(RELEASE_EXE))
