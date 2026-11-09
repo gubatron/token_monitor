@@ -1,12 +1,13 @@
 //! `SecretRoutingCredentialStore`: secrets to the vault, identity values to
-//! plain files (spec 1.6.2).
+//! plain files (spec 1.6.2, as amended by decision #38: a secret never touches
+//! a plain file).
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use tokenmon_core::{CredentialKey, CredentialKind, CredentialStore, CredentialStoreError};
 
-use super::files::FileBackedCredentialStore;
+use super::files::{FileBackedCredentialStore, secure_delete};
 use super::vault::Vault;
 
 /// Every key, in `Ord` order (the migration order).
@@ -59,7 +60,7 @@ pub struct SecretRoutingCredentialStore {
 
 impl SecretRoutingCredentialStore {
     /// Builds the store and migrates any secret still sitting in a plain file
-    /// into the vault (the file is deleted only after a verified read-back).
+    /// into the vault (see `migrate`: the file is always deleted).
     pub fn new(vault: Arc<Vault>, dir: impl Into<PathBuf>, prefix: impl Into<String>) -> Self {
         let prefix = prefix.into();
         let store = Self {
@@ -75,21 +76,67 @@ impl SecretRoutingCredentialStore {
         format!("{}{}", self.prefix, key.as_str())
     }
 
+    /// A secret in a plain `.dat` file (an older build, or the retired
+    /// fallback) is moved into the vault and the file securely deleted. When
+    /// the vault refuses it the file is deleted anyway and the account is left
+    /// signed out: a credential is never kept unencrypted (decision #38).
+    /// Nothing here logs a value.
     fn migrate(&self) {
         for key in ALL_KEYS
             .into_iter()
             .filter(|k| k.kind() == CredentialKind::Secret)
         {
-            let Some(value) = self.files.get(key) else {
+            self.sweep_staging_files(key);
+            let path = self.files.path(key);
+            if std::fs::symlink_metadata(&path).is_err() {
                 continue;
-            };
+            }
             let account = self.account(key);
-            if self.vault.set(&value, &account)
-                && self.vault.value(&account).as_deref() == Some(value.as_str())
-            {
-                self.files.remove(key);
+            let moved = self.files.get(key).is_some_and(|value| {
+                let value = zeroize::Zeroizing::new(value);
+                !value.is_empty()
+                    && self.vault.set(&value, &account)
+                    && self.vault.value(&account).as_deref() == Some(value.as_str())
+            });
+            if moved {
+                tracing::info!(
+                    key = key.as_str(),
+                    "moved a plaintext credential into the vault"
+                );
             } else {
-                tracing::warn!(key = key.as_str(), "vault migration failed, file kept");
+                // Drop any older vault copy too, so the provider is signed out.
+                self.vault.remove(&account);
+                tracing::warn!(
+                    key = key.as_str(),
+                    "could not move a plaintext credential into the vault; deleted it, sign in again"
+                );
+            }
+            if let Err(e) = secure_delete(&path) {
+                tracing::error!(key = key.as_str(), error = %e, "could not delete a plaintext credential file");
+            }
+        }
+    }
+
+    /// Leftover `.<name>.<pid>-<n>.tmp` staging files of a crashed write.
+    fn sweep_staging_files(&self, key: CredentialKey) {
+        let path = self.files.path(key);
+        let (Some(dir), Some(name)) = (path.parent(), path.file_name().and_then(|n| n.to_str()))
+        else {
+            return;
+        };
+        let stem = format!(".{name}.");
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let file = entry.file_name();
+            let Some(file) = file.to_str() else { continue };
+            if file.starts_with(&stem)
+                && Path::new(file)
+                    .extension()
+                    .is_some_and(|e| e.eq_ignore_ascii_case("tmp"))
+            {
+                let _ = secure_delete(&entry.path());
             }
         }
     }

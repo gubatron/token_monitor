@@ -36,6 +36,34 @@ pub fn atomic_write(path: &Path, bytes: &[u8]) -> io::Result<()> {
     result
 }
 
+/// Deletes a file that held a secret: overwrites its bytes with zeros, syncs,
+/// then removes it. Best effort against forensic recovery (an SSD or a
+/// journaling file system may keep old blocks), but the file is always
+/// unlinked even when the overwrite fails. A missing file is success.
+pub fn secure_delete(path: &Path) -> io::Result<()> {
+    let overwrite = (|| {
+        let len = fs::metadata(path)?.len();
+        let mut f = fs::OpenOptions::new().write(true).open(path)?;
+        let zeros = [0u8; 4096];
+        let mut left = len;
+        while left > 0 {
+            let n = usize::try_from(left.min(4096)).unwrap_or(4096);
+            f.write_all(&zeros[..n])?;
+            left -= n as u64;
+        }
+        f.sync_all()
+    })();
+    if let Err(e) = &overwrite
+        && e.kind() != io::ErrorKind::NotFound
+    {
+        tracing::warn!(error = %e, "could not overwrite a secret file before deleting it");
+    }
+    match fs::remove_file(path) {
+        Err(e) if e.kind() != io::ErrorKind::NotFound => Err(e),
+        _ => Ok(()),
+    }
+}
+
 /// `FileBackedCredentialStore(prefix)`: `<dir>/<prefix><key>.dat`, atomic
 /// writes, owner-only.
 #[derive(Debug, Clone)]

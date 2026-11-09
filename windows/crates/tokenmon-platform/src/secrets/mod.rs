@@ -10,7 +10,8 @@
 //! * [`Vault`]: one encrypted file holding every provider's secrets, with
 //!   write-then-read-back verification, pending removals and the
 //!   "unavailable means locked out for the process" rule.
-//! * [`FileBackedCredentialStore`]: plain owner-only `<prefix><key>.dat` files.
+//! * [`FileBackedCredentialStore`]: plain owner-only `<prefix><key>.dat` files
+//!   for non-secret labels only (email, identity, workspace id).
 //! * [`SecretRoutingCredentialStore`]: the production
 //!   [`CredentialStore`](tokenmon_core::CredentialStore) that routes by
 //!   [`CredentialKind`](tokenmon_core::CredentialKind).
@@ -30,7 +31,7 @@ mod dpapi;
 #[cfg(windows)]
 pub use dpapi::DpapiEncryptor;
 pub use encryptor::{CryptError, Encryptor, FakeEncryptor};
-pub use files::{FileBackedCredentialStore, atomic_write};
+pub use files::{FileBackedCredentialStore, atomic_write, secure_delete};
 pub use payload::{
     MAX_PAYLOAD_BYTES, PayloadError, VaultPayload, decode_payload, decode_pending, encode_payload,
 };
