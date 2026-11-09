@@ -161,6 +161,7 @@
 		B5921DDB23CA5A2E32D2D6A5 /* ObservationProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = 272DA88178BA65200C0629CD /* ObservationProbe.swift */; };
 		B67FBAA347596D838C51E26C /* ClaudeAuthSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC60B0D0A8A377C8F0FA3CD3 /* ClaudeAuthSession.swift */; };
 		B6AE97A11512FCC2625251FD /* CredentialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEA50B8916C7B05482A58191 /* CredentialStore.swift */; };
+		B700652F2DD043C0A4538C72 /* AccountsPrivacyNote.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2D1A99EE1BD2F037EE86F36 /* AccountsPrivacyNote.swift */; };
 		BCD4EC6E69DAD41E771AD486 /* DailyQuotaDeltaStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2441EBA671C3E4F18BA26E2A /* DailyQuotaDeltaStore.swift */; };
 		BD4564789284D754F62CCD90 /* MenuBarStatusRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CFCB359B0E4FCFFB5F79CE0 /* MenuBarStatusRenderer.swift */; };
 		BFB33052870FC418C89A47ED /* GrokUsageClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846EA62429F22B08E47CD558 /* GrokUsageClientTests.swift */; };
@@ -357,6 +358,7 @@
 		A17550B220ADFC13EB666DED /* OpenCodeModelNameTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeModelNameTests.swift; sourceTree = "<group>"; };
 		A184FA4C6EC0C25EAA78002C /* CursorUsagePoller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorUsagePoller.swift; sourceTree = "<group>"; };
 		A1A3C12CF7CE4ACA1F91372F /* OverviewHourlyHistoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewHourlyHistoryTests.swift; sourceTree = "<group>"; };
+		A2D1A99EE1BD2F037EE86F36 /* AccountsPrivacyNote.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountsPrivacyNote.swift; sourceTree = "<group>"; };
 		A431C434EB3E0B6FAD49FC5B /* JSONTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONTests.swift; sourceTree = "<group>"; };
 		A536607A4C132B9B95FD2E68 /* ISO8601.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ISO8601.swift; sourceTree = "<group>"; };
 		A54FF93D09BE7BC172616F12 /* MenuBarStatusRendererTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarStatusRendererTests.swift; sourceTree = "<group>"; };
@@ -522,6 +524,7 @@
 		189E269EC8C6AF992DED1A6C /* Settings */ = {
 			isa = PBXGroup;
 			children = (
+				A2D1A99EE1BD2F037EE86F36 /* AccountsPrivacyNote.swift */,
 				24166148544CA5C059FC8F1F /* AppSettings.swift */,
 				DDE9B2E5E834AAC33179D1D0 /* PreferencesView.swift */,
 				B241A8BA6A9968EAF244B7A8 /* SettingsTab.swift */,
@@ -1272,6 +1275,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B700652F2DD043C0A4538C72 /* AccountsPrivacyNote.swift in Sources */,
 				8BB76C62F022DC30E7C84C5C /* AppDelegate.swift in Sources */,
 				AE99E42791B76C883445B33B /* AppInstaller.swift in Sources */,
 				E356ED7177119DEB29328479 /* AppLog.swift in Sources */,

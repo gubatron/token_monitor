@@ -257,6 +257,16 @@ private struct AccountsSettingsTab: View {
     var body: some View {
         Form {
             Section {
+                Label {
+                    Text(AccountsPrivacyNote.text)
+                        .fixedSize(horizontal: false, vertical: true)
+                } icon: {
+                    Image(systemName: "lock.shield")
+                }
+                .foregroundStyle(.secondary)
+            }
+
+            Section {
                 ProviderAccountRow(
                     provider: .grok,
                     auth: model.grokAuth,
