@@ -54,7 +54,7 @@ const EXE: &str = r"C:\Program Files\TokenMon\TokenMon.exe";
 struct Fixture {
     dir: tempfile::TempDir,
     app: App,
-    host: AppHost,
+    host: Arc<AppHost>,
     registry: Arc<MemoryRegistry>,
     history: Arc<FakeHistory>,
     quit: Arc<AtomicBool>,
@@ -92,7 +92,7 @@ fn fixture_with(updates: Option<Arc<UpdateService>>) -> Fixture {
                 .expect("updates"),
         )
     });
-    let host = AppHost::new(HostParts {
+    let host = Arc::new(AppHost::new(HostParts {
         settings: Arc::clone(&app.settings),
         model: Arc::clone(&app.model),
         sessions: Arc::clone(&app.sessions),
@@ -105,7 +105,7 @@ fn fixture_with(updates: Option<Arc<UpdateService>>) -> Fixture {
         tz: Arc::new(|_| FixedOffset::east_opt(0).expect("utc")),
         handle: tokio::runtime::Handle::current(),
         quit: Arc::new(move || q.store(true, Ordering::SeqCst)),
-    });
+    }));
     Fixture {
         dir,
         app,
@@ -194,6 +194,24 @@ async fn test_host_status_describes_a_fresh_install() {
     assert!(status.accounts.iter().all(|a| !a.signed_in));
     assert!(!status.openrouter.connected);
     assert_eq!(status.refresh, RefreshStatus::None);
+}
+
+/// On the real host, first run (nothing signed in) opens Settings on the
+/// Accounts tab, and once a key is stored the last tab is kept (issue #82).
+#[tokio::test]
+async fn test_host_first_run_opens_on_accounts_then_keeps_last_tab() {
+    use tokenmon_ui::settings::SettingsViewModel;
+    use tokenmon_ui::settings::screen::SettingsTab;
+    let f = fixture();
+    let vm = SettingsViewModel::new(
+        Arc::new(AppSettingsBackend::new(Arc::clone(&f.app.settings))),
+        f.host.clone(),
+        Arc::new(tokenmon_ui::settings::fake::FixedSaveDialog::default()),
+    );
+    assert_eq!(vm.opening_tab(SettingsTab::General), SettingsTab::Accounts);
+    assert!(f.host.save_openrouter_key("sk-or-v1-abc").is_ok());
+    assert_eq!(vm.opening_tab(SettingsTab::Data), SettingsTab::Data);
+    assert_eq!(vm.opening_tab(SettingsTab::General), SettingsTab::General);
 }
 
 /// A bad OpenRouter key is refused with the session's message; a good one

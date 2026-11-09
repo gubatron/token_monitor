@@ -9,7 +9,10 @@ use super::model::{
     ACTIVE_POLL_RANGE, ExportFormat, IDLE_POLL_RANGE, ProductCategory, SaveDialog, SettingsBackend,
     SettingsChange, SettingsHost, THRESHOLD_RANGE,
 };
-use super::screen::{GROK_CATEGORIES_ID, LocalState, SettingsScreen, build_screen};
+use super::screen::{
+    GROK_CATEGORIES_ID, LocalState, SettingsScreen, SettingsTab, any_signed_in, build_screen,
+    tab_on_open,
+};
 
 /// Direction of a stepper press.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -61,6 +64,12 @@ impl SettingsViewModel {
     /// Current display model.
     pub fn screen(&self) -> SettingsScreen {
         build_screen(&self.backend.snapshot(), &self.host.status(), &self.local())
+    }
+
+    /// Tab Settings should open on given the tab it showed last: Accounts when
+    /// nothing is signed in, else `last`.
+    pub fn opening_tab(&self, last: SettingsTab) -> SettingsTab {
+        tab_on_open(any_signed_in(&self.host.status()), last)
     }
 
     /// Toggles "Launch at Login". The window re-reads the real state afterwards,

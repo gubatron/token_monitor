@@ -53,6 +53,23 @@ fn save_ppm(name: &str, buf: &[PremultipliedRgbaColor]) {
     std::fs::write(dir.join(format!("settings-{name}.ppm")), out).expect("write snapshot");
 }
 
+/// Same render as a PNG under the cargo target tmp dir (viewable without a PPM tool).
+fn save_png(name: &str, buf: &[PremultipliedRgbaColor]) {
+    let dir = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"));
+    let file = std::fs::File::create(dir.join(format!("settings-{name}.png"))).expect("png");
+    let mut enc = png::Encoder::new(std::io::BufWriter::new(file), WIDTH, HEIGHT);
+    enc.set_color(png::ColorType::Rgba);
+    enc.set_depth(png::BitDepth::Eight);
+    let data: Vec<u8> = buf
+        .iter()
+        .flat_map(|p| [p.red, p.green, p.blue, p.alpha])
+        .collect();
+    enc.write_header()
+        .expect("header")
+        .write_image_data(&data)
+        .expect("data");
+}
+
 fn distinct_colors(buf: &[PremultipliedRgbaColor]) -> usize {
     buf.iter()
         .map(|p| (p.red, p.green, p.blue))
@@ -99,6 +116,7 @@ fn test_each_tab_renders_offscreen() {
         win.set_current_tab(i32::try_from(index).expect("tab index fits"));
         let buf = render(&window);
         save_ppm(name, &buf);
+        save_png(name, &buf);
         assert!(
             distinct_colors(&buf) > 8,
             "{name} tab looks blank ({} colors)",

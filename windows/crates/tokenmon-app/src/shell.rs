@@ -40,7 +40,9 @@ use tokenmon_provider_opencode::db::DataDirEnv;
 use tokenmon_ui::panels::events::{PanelEvent, PanelHandler};
 use tokenmon_ui::panels::overview::OverviewCardVm;
 use tokenmon_ui::panels::switcher::{RowVm, build_switcher};
-use tokenmon_ui::settings::bind::{SettingsWindow, create_settings_window, refresh};
+use tokenmon_ui::settings::bind::{
+    SettingsWindow, create_settings_window, refresh, select_opening_tab,
+};
 use tokenmon_ui::settings::{NativeSaveDialog, SettingsViewModel};
 use tokenmon_ui::tray_icon::{MenuAction, MenuEntry, TrayBitmap};
 use tray_icon::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem};
@@ -456,6 +458,7 @@ impl Ui {
             },
         };
         refresh(&window, &self.settings_vm);
+        select_opening_tab(&window, &self.settings_vm);
         let _ = window.show();
     }
 

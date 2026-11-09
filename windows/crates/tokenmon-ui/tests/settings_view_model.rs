@@ -8,8 +8,9 @@ use tokenmon_core::ProviderId;
 use tokenmon_ui::settings::fake::HostCall;
 use tokenmon_ui::settings::model::{ACTIVE_POLL_RANGE, IDLE_POLL_RANGE};
 use tokenmon_ui::settings::screen::{
-    ACCOUNT_PROVIDERS, GROK_CATEGORIES_ID, HISTORY_STORE_FAILED, MENU_BAR_FOOTER_OFF,
-    MENU_BAR_FOOTER_ON, account_subtitle, threshold_text,
+    ACCOUNT_PROVIDERS, ACCOUNTS_PRIVACY_NOTE, GROK_CATEGORIES_ID, HISTORY_STORE_FAILED,
+    MENU_BAR_FOOTER_OFF, MENU_BAR_FOOTER_ON, SettingsTab, account_subtitle, any_signed_in,
+    tab_on_open, threshold_text,
 };
 use tokenmon_ui::settings::view_model::{Step, stepped};
 use tokenmon_ui::settings::{
@@ -404,4 +405,84 @@ fn test_export_format_names() {
     assert_eq!(ExportFormat::from_extension("xml"), None);
     assert_eq!(ProductCategory::from_id("API"), Some(ProductCategory::Api));
     assert_eq!(ProductCategory::from_id("x"), None);
+}
+
+fn signed_in(p: ProviderId) -> AccountStatus {
+    AccountStatus {
+        provider: p,
+        signed_in: true,
+        email: None,
+        last_error: None,
+    }
+}
+
+/// Nothing signed in forces Accounts whatever tab was last; any session or an
+/// OpenRouter key keeps the last tab.
+#[test]
+fn test_tab_on_open_first_run_selects_accounts() {
+    for last in [
+        SettingsTab::General,
+        SettingsTab::Providers,
+        SettingsTab::Accounts,
+        SettingsTab::Data,
+    ] {
+        assert_eq!(tab_on_open(false, last), SettingsTab::Accounts);
+        assert_eq!(tab_on_open(true, last), last);
+    }
+}
+
+/// Signed-in detection covers every cookie provider and OpenRouter.
+#[test]
+fn test_any_signed_in_covers_sessions_and_openrouter_key() {
+    assert!(!any_signed_in(&HostStatus::default()));
+    for p in ACCOUNT_PROVIDERS {
+        let host = HostStatus {
+            accounts: vec![signed_in(p)],
+            ..HostStatus::default()
+        };
+        assert!(any_signed_in(&host), "{p:?}");
+    }
+    let mut host = HostStatus::default();
+    host.openrouter.connected = true;
+    assert!(any_signed_in(&host));
+}
+
+/// The view model reads the host status when deciding the opening tab.
+#[test]
+fn test_view_model_opening_tab_follows_host_status() {
+    let f = fixture(None);
+    assert_eq!(
+        f.vm.opening_tab(SettingsTab::General),
+        SettingsTab::Accounts
+    );
+    f.host.status.lock().unwrap().accounts = vec![signed_in(ProviderId::Claude)];
+    assert_eq!(f.vm.opening_tab(SettingsTab::Data), SettingsTab::Data);
+}
+
+/// Tab indices round-trip and unknown indices fall back to General.
+#[test]
+fn test_settings_tab_index_round_trip() {
+    for t in [
+        SettingsTab::General,
+        SettingsTab::Providers,
+        SettingsTab::Accounts,
+        SettingsTab::Data,
+    ] {
+        assert_eq!(SettingsTab::from_index(t.index()), t);
+    }
+    assert_eq!(SettingsTab::from_index(9), SettingsTab::General);
+}
+
+/// The Accounts screen carries the privacy note, and it stays honest about
+/// the plaintext fallback ("normally encrypted") and the storage path.
+#[test]
+fn test_accounts_screen_has_truthful_privacy_note() {
+    let f = fixture(None);
+    let note = f.vm.screen().accounts.privacy_note;
+    assert_eq!(note, ACCOUNTS_PRIVACY_NOTE);
+    assert!(note.contains("no servers"));
+    assert!(note.contains("normally encrypted"));
+    assert!(note.contains("Windows Data Protection"));
+    assert!(note.contains(r"%LOCALAPPDATA%\TokenMon"));
+    assert!(note.contains("signing out deletes it"));
 }

@@ -177,6 +177,7 @@ export component SettingsWindow inherits Window {
     // Accounts
     in property <[AccountRowData]> account-rows;
     in property <string> accounts-footer;
+    in property <string> accounts-privacy-note;
     in property <bool> openrouter-connected;
     in property <string> openrouter-error;
     in-out property <string> openrouter-draft;
@@ -437,6 +438,10 @@ export component SettingsWindow inherits Window {
                     padding: 16px;
                     spacing: 16px;
                     alignment: start;
+                    Caption {
+                        text: root.accounts-privacy-note;
+                        color: Palette.foreground.transparentize(0.25);
+                    }
                     Section {
                         title: "Accounts";
                         footer: root.accounts-footer;

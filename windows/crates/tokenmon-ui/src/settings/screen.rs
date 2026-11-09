@@ -18,6 +18,11 @@ pub const MENU_BAR_FOOTER_ON: &str =
 pub const MENU_BAR_FOOTER_OFF: &str = "Choose which graphs stay pinned in the menu bar.";
 /// Footer of the Accounts section.
 pub const ACCOUNTS_FOOTER: &str = "Grokbot uses your Cursor account.";
+/// Privacy note shown above the Accounts list (issue #82). Kept in one constant
+/// so it is a one-line change once the plaintext-fallback decision (#38) lands:
+/// while `APP_FALLBACK_POLICY` is `PlainFile` a session can land in an
+/// owner-only file when the vault cannot be written, hence "normally".
+pub const ACCOUNTS_PRIVACY_NOTE: &str = "TokenMon has no servers and never sees your passwords. When you sign in, the provider's own page handles your login; TokenMon keeps only the session it needs, normally encrypted with your Windows account (Windows Data Protection) on this PC in %LOCALAPPDATA%\\TokenMon. It is sent only to the provider it belongs to, and signing out deletes it.";
 /// Footer of the SuperGrok Categories section.
 pub const CATEGORIES_FOOTER: &str = "Categories shown in the Grok breakdown.";
 /// Footer of the SuperGrok History section.
@@ -32,6 +37,57 @@ pub const ACCOUNT_PROVIDERS: [ProviderId; 5] = [
     ProviderId::Cursor,
     ProviderId::OpenCode,
 ];
+
+/// A tab of the Settings window, in display order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SettingsTab {
+    /// General.
+    #[default]
+    General,
+    /// Providers.
+    Providers,
+    /// Accounts ("sign in to providers").
+    Accounts,
+    /// Data.
+    Data,
+}
+
+impl SettingsTab {
+    /// Position in the tab bar.
+    pub const fn index(self) -> i32 {
+        match self {
+            Self::General => 0,
+            Self::Providers => 1,
+            Self::Accounts => 2,
+            Self::Data => 3,
+        }
+    }
+
+    /// Tab at a tab-bar position; out-of-range falls back to General.
+    pub const fn from_index(index: i32) -> Self {
+        match index {
+            1 => Self::Providers,
+            2 => Self::Accounts,
+            3 => Self::Data,
+            _ => Self::General,
+        }
+    }
+}
+
+/// True when any cookie provider has a session or OpenRouter has a key.
+pub fn any_signed_in(host: &HostStatus) -> bool {
+    host.openrouter.connected || host.accounts.iter().any(|a| a.signed_in)
+}
+
+/// Tab to show when Settings opens: first run (nothing signed in) goes to
+/// Accounts so the user can sign in; otherwise the last tab is kept.
+pub const fn tab_on_open(any_signed_in: bool, last: SettingsTab) -> SettingsTab {
+    if any_signed_in {
+        last
+    } else {
+        SettingsTab::Accounts
+    }
+}
 
 /// A labelled switch.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -145,6 +201,8 @@ pub struct AccountsScreen {
     pub openrouter_connected: bool,
     /// Red caption for OpenRouter.
     pub openrouter_error: String,
+    /// Privacy note above the list ([`ACCOUNTS_PRIVACY_NOTE`]).
+    pub privacy_note: String,
 }
 
 /// Data tab.
@@ -347,6 +405,7 @@ fn accounts(h: &HostStatus, local: &LocalState) -> AccountsScreen {
         })
         .collect();
     AccountsScreen {
+        privacy_note: ACCOUNTS_PRIVACY_NOTE.to_owned(),
         rows,
         openrouter_connected: h.openrouter.connected,
         openrouter_error: local

@@ -10,7 +10,7 @@ use slint::{Color, ComponentHandle, ModelRc, SharedString, VecModel};
 use super::model::ExportFormat;
 use super::screen::{
     ACCOUNTS_FOOTER, ALERTS_FOOTER, AccountRow, CATEGORIES_FOOTER, HISTORY_FOOTER,
-    PROVIDERS_FOOTER, ProviderRow, SettingsScreen, ToggleRow, UPDATES_FOOTER,
+    PROVIDERS_FOOTER, ProviderRow, SettingsScreen, SettingsTab, ToggleRow, UPDATES_FOOTER,
 };
 use super::view_model::{SettingsViewModel, Step};
 
@@ -125,6 +125,7 @@ pub fn apply_screen(w: &SettingsWindow, s: &SettingsScreen) {
     let a = &s.accounts;
     w.set_account_rows(account_rows(&a.rows));
     w.set_accounts_footer(ACCOUNTS_FOOTER.into());
+    w.set_accounts_privacy_note(a.privacy_note.as_str().into());
     w.set_openrouter_connected(a.openrouter_connected);
     w.set_openrouter_error(a.openrouter_error.as_str().into());
 
@@ -154,6 +155,13 @@ pub fn create_settings_window(
 /// external status changes such as a completed sign-in).
 pub fn refresh(w: &SettingsWindow, vm: &SettingsViewModel) {
     apply_screen(w, &vm.screen());
+}
+
+/// Selects the tab Settings opens on (call each time the window is shown, not
+/// on every refresh): Accounts on first run, otherwise the tab left open.
+pub fn select_opening_tab(w: &SettingsWindow, vm: &SettingsViewModel) {
+    let last = SettingsTab::from_index(w.get_current_tab());
+    w.set_current_tab(vm.opening_tab(last).index());
 }
 
 macro_rules! route {
