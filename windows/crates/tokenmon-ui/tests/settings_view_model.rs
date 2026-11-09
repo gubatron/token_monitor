@@ -473,15 +473,18 @@ fn test_settings_tab_index_round_trip() {
     assert_eq!(SettingsTab::from_index(9), SettingsTab::General);
 }
 
-/// The Accounts screen carries the privacy note, and it stays honest about
-/// the plaintext fallback ("normally encrypted") and the storage path.
+/// The Accounts screen carries the privacy note: no servers, never reads or
+/// stores passwords, always encrypted with the Windows account (there is no
+/// plaintext fallback, decision #38), and the storage path.
 #[test]
 fn test_accounts_screen_has_truthful_privacy_note() {
     let f = fixture(None);
     let note = f.vm.screen().accounts.privacy_note;
     assert_eq!(note, ACCOUNTS_PRIVACY_NOTE);
     assert!(note.contains("no servers"));
-    assert!(note.contains("normally encrypted"));
+    assert!(note.starts_with("TokenMon has no servers and never reads or stores your passwords."));
+    assert!(!note.contains("normally"));
+    assert!(note.contains("always encrypted with your Windows account"));
     assert!(note.contains("Windows Data Protection"));
     assert!(note.contains(r"%LOCALAPPDATA%\TokenMon"));
     assert!(note.contains("signing out deletes it"));
