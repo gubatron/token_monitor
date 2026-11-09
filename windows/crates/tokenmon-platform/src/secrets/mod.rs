@@ -34,10 +34,7 @@ pub use files::{FileBackedCredentialStore, atomic_write};
 pub use payload::{
     MAX_PAYLOAD_BYTES, PayloadError, VaultPayload, decode_payload, decode_pending, encode_payload,
 };
-pub use routing::{
-    APP_FALLBACK_POLICY, FallbackPolicy, SecretRoutingCredentialStore, SecretStoreError,
-    VAULT_UNAVAILABLE_REASON,
-};
+pub use routing::{SecretRoutingCredentialStore, SecretStoreError, VAULT_UNAVAILABLE_REASON};
 #[cfg(windows)]
 pub(crate) use secure_file::current_user_sid;
 pub use secure_file::{

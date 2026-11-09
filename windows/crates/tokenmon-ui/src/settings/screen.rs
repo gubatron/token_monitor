@@ -18,10 +18,7 @@ pub const MENU_BAR_FOOTER_ON: &str =
 pub const MENU_BAR_FOOTER_OFF: &str = "Choose which graphs stay pinned in the menu bar.";
 /// Footer of the Accounts section.
 pub const ACCOUNTS_FOOTER: &str = "Grokbot uses your Cursor account.";
-/// Privacy note shown above the Accounts list (issue #82). Kept in one constant
-/// so it is a one-line change once the plaintext-fallback decision (#38) lands:
-/// while `APP_FALLBACK_POLICY` is `PlainFile` a session can land in an
-/// owner-only file when the vault cannot be written, hence "normally".
+/// Privacy note shown above the Accounts list (issue #82, decision #38).
 pub const ACCOUNTS_PRIVACY_NOTE: &str = "TokenMon has no servers and never sees your passwords. When you sign in, the provider's own page handles your login; TokenMon keeps only the session it needs, normally encrypted with your Windows account (Windows Data Protection) on this PC in %LOCALAPPDATA%\\TokenMon. It is sent only to the provider it belongs to, and signing out deletes it.";
 /// Footer of the SuperGrok Categories section.
 pub const CATEGORIES_FOOTER: &str = "Categories shown in the Grok breakdown.";

@@ -7,7 +7,7 @@ use tokenmon_app::signin::{SignInService, sign_in_config};
 use tokenmon_core::{
     AuthSession, BrowserStateCleaner, Clock, ProviderAuthSession, ProviderId, SystemClock,
 };
-use tokenmon_platform::secrets::{APP_FALLBACK_POLICY, FakeEncryptor, Vault};
+use tokenmon_platform::secrets::{FakeEncryptor, Vault};
 use tokenmon_platform::webauth::{FakeWebAuthHost, WebAuthHost};
 
 struct Rig {
@@ -26,13 +26,7 @@ fn rig() -> Rig {
     let cleaner: Arc<dyn BrowserStateCleaner> = Arc::new(HostBrowserCleaner::new(
         Arc::clone(&host) as Arc<dyn WebAuthHost>,
     ));
-    let sessions = Arc::new(Sessions::open(
-        dir.path(),
-        &vault,
-        APP_FALLBACK_POLICY,
-        &clock,
-        &cleaner,
-    ));
+    let sessions = Arc::new(Sessions::open(dir.path(), &vault, &clock, &cleaner));
     let completed = Arc::new(Mutex::new(Vec::new()));
     let sink = Arc::clone(&completed);
     let service = SignInService::new(
@@ -137,7 +131,7 @@ fn test_session_persists_in_the_vault() {
     let clock: Arc<dyn Clock> = Arc::new(SystemClock);
     let host: Arc<dyn WebAuthHost> = Arc::new(FakeWebAuthHost::default());
     let cleaner: Arc<dyn BrowserStateCleaner> = Arc::new(HostBrowserCleaner::new(host));
-    let open = || Sessions::open(dir.path(), &vault, APP_FALLBACK_POLICY, &clock, &cleaner);
+    let open = || Sessions::open(dir.path(), &vault, &clock, &cleaner);
     open().grok.save("sso=1; sso-rw=2").expect("saved");
     assert!(open().grok.state().is_signed_in);
 }

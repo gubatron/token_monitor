@@ -18,7 +18,7 @@ use tokenmon_core::update::{
     AppVersion, InstallError, InstallOutcome, InstallRequest, ReleaseFeedFetcher, ReleaseSource,
     UpdateChecker, UpdateError, UpdateInstaller, UpdateSettings, UrlOpener,
 };
-use tokenmon_platform::secrets::{APP_FALLBACK_POLICY, FakeEncryptor};
+use tokenmon_platform::secrets::FakeEncryptor;
 use tokenmon_platform::shell::{DesktopVerb, MemoryRegistry, RunKeyLoginItem};
 use tokenmon_platform::webauth::FakeWebAuthHost;
 use tokenmon_provider_grok::models::WeeklyUsageSnapshot;
@@ -71,7 +71,6 @@ fn fixture_with(updates: Option<Arc<UpdateService>>) -> Fixture {
         AppInputs {
             paths: AppPaths::new(dir.path()),
             encryptor: Arc::new(FakeEncryptor::default()),
-            fallback: APP_FALLBACK_POLICY,
             web_host: Arc::new(FakeWebAuthHost::default()),
             notifier: Arc::new(RecordingNotifier::default()),
             clock: Arc::new(SystemClock),

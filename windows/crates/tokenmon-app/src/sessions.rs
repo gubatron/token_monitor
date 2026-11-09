@@ -12,7 +12,7 @@ use tokenmon_core::{
     AuthConfig, BrowserStateCleaner, Clock, CookieAuthSession, CredentialStore,
     ProviderAuthSession, ProviderId,
 };
-use tokenmon_platform::secrets::{FallbackPolicy, SecretRoutingCredentialStore, Vault};
+use tokenmon_platform::secrets::{SecretRoutingCredentialStore, Vault};
 use tokenmon_platform::webauth::WebAuthHost;
 use tokenmon_provider_openrouter::auth::OpenRouterAuthSession;
 
@@ -90,7 +90,6 @@ impl Sessions {
     pub fn open(
         dir: &Path,
         vault: &Arc<Vault>,
-        policy: FallbackPolicy,
         clock: &Arc<dyn Clock>,
         cleaner: &Arc<dyn BrowserStateCleaner>,
     ) -> Self {
@@ -99,7 +98,6 @@ impl Sessions {
                 Arc::clone(vault),
                 dir,
                 prefix,
-                policy,
             ))
         };
         let cookie = |provider: ProviderId| -> Arc<CookieAuthSession> {

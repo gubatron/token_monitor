@@ -26,8 +26,8 @@ use tokenmon_platform::install::handle_startup_args;
 use tokenmon_platform::notify::windows::WinRtToastBackend;
 use tokenmon_platform::notify::{AumidRegistration, ToastNotifier};
 use tokenmon_platform::power::{SystemEventSource, SystemWakeGate, windows::WindowsEventSource};
+use tokenmon_platform::secrets::DpapiEncryptor;
 use tokenmon_platform::secrets::register_owner_only_permissions;
-use tokenmon_platform::secrets::{APP_FALLBACK_POLICY, DpapiEncryptor};
 use tokenmon_platform::shell::windows::{
     MutexInstanceLock, PipeClient, PipeServer, WinRegistry, current_user_pipe_name,
 };
@@ -625,7 +625,6 @@ fn run_primary(pipe: &str, show_panel: bool, version: &str) -> ExitCode {
         AppInputs {
             paths,
             encryptor: Arc::new(DpapiEncryptor),
-            fallback: APP_FALLBACK_POLICY,
             web_host: Arc::new(WindowsWebAuthHost::new(dir.join("signin"))),
             notifier,
             clock: Arc::new(SystemClock),

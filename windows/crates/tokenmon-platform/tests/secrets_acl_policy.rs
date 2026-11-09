@@ -1,5 +1,5 @@
 #![allow(clippy::unwrap_used)]
-//! Owner-only creation of secrets files and the plaintext-fallback policy.
+//! Owner-only creation of secrets files and the no-plaintext refusal path.
 
 use std::fs;
 use std::sync::Arc;
@@ -7,9 +7,8 @@ use std::sync::Arc;
 use tempfile::TempDir;
 use tokenmon_core::{CredentialKey, CredentialStore};
 use tokenmon_platform::secrets::{
-    APP_FALLBACK_POLICY, FakeEncryptor, FallbackPolicy, SecretRoutingCredentialStore,
-    SecretStoreError, VAULT_UNAVAILABLE_REASON, Vault, create_new_owner_only,
-    owner_only_directory_sddl, owner_only_sddl,
+    FakeEncryptor, SecretRoutingCredentialStore, SecretStoreError, VAULT_UNAVAILABLE_REASON, Vault,
+    create_new_owner_only, owner_only_directory_sddl, owner_only_sddl,
 };
 
 #[test]
@@ -47,28 +46,20 @@ fn every_secrets_file_is_created_0600() {
     }
 }
 
-#[test]
-fn the_app_policy_refuses_plaintext_fallback() {
-    assert_eq!(APP_FALLBACK_POLICY, FallbackPolicy::Refuse);
-}
-
-fn broken_vault_store(
-    dir: &TempDir,
-    policy: FallbackPolicy,
-) -> (SecretRoutingCredentialStore, Arc<FakeEncryptor>) {
+fn broken_vault_store(dir: &TempDir) -> (SecretRoutingCredentialStore, Arc<FakeEncryptor>) {
     let enc = Arc::new(FakeEncryptor::default());
     let vault = Arc::new(Vault::new(dir.path(), enc.clone()));
     enc.set_fail_protect(true);
     (
-        SecretRoutingCredentialStore::new(vault, dir.path(), "a_", policy),
+        SecretRoutingCredentialStore::new(vault, dir.path(), "a_"),
         enc,
     )
 }
 
 #[test]
-fn refuse_policy_surfaces_a_typed_vault_unavailable_error() {
+fn failed_vault_write_surfaces_a_typed_vault_unavailable_error() {
     let dir = TempDir::new().unwrap();
-    let (store, _) = broken_vault_store(&dir, FallbackPolicy::Refuse);
+    let (store, _) = broken_vault_store(&dir);
     let err = store.set(CredentialKey::Session, "cookie").unwrap_err();
     assert_eq!(
         err.to_string(),
@@ -79,15 +70,6 @@ fn refuse_policy_surfaces_a_typed_vault_unavailable_error() {
     assert!(ui.to_string().contains("vault is unavailable"));
     assert!(!dir.path().join("a_session.dat").exists(), "no plaintext");
     assert_eq!(store.get(CredentialKey::Session), None);
-}
-
-#[test]
-fn plain_file_policy_still_stores_and_reports_success() {
-    let dir = TempDir::new().unwrap();
-    let (store, _) = broken_vault_store(&dir, FallbackPolicy::PlainFile);
-    store.set(CredentialKey::Session, "cookie").unwrap();
-    assert_eq!(store.get(CredentialKey::Session).as_deref(), Some("cookie"));
-    assert!(dir.path().join("a_session.dat").exists());
 }
 
 #[test]

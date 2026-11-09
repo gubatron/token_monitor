@@ -11,9 +11,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use tempfile::TempDir;
 use tokenmon_core::{CredentialKey, CredentialStore};
 use tokenmon_platform::secrets::{
-    CryptError, Encryptor, FakeEncryptor, FallbackPolicy, FileBackedCredentialStore,
-    PENDING_FILE_NAME, PayloadError, SecretRoutingCredentialStore, VAULT_FILE_NAME, Vault,
-    VaultPayload, decode_payload, decode_pending, encode_payload,
+    CryptError, Encryptor, FakeEncryptor, FileBackedCredentialStore, PENDING_FILE_NAME,
+    PayloadError, SecretRoutingCredentialStore, VAULT_FILE_NAME, Vault, VaultPayload,
+    decode_payload, decode_pending, encode_payload,
 };
 use zeroize::Zeroizing;
 
@@ -24,7 +24,7 @@ fn vault_in(dir: &Path, enc: &Arc<FakeEncryptor>) -> Arc<Vault> {
 }
 
 fn store(dir: &Path, vault: &Arc<Vault>, prefix: &str) -> SecretRoutingCredentialStore {
-    SecretRoutingCredentialStore::new(vault.clone(), dir, prefix, FallbackPolicy::PlainFile)
+    SecretRoutingCredentialStore::new(vault.clone(), dir, prefix)
 }
 
 fn names(dir: &Path) -> Vec<String> {
@@ -93,19 +93,6 @@ fn migration_moves_secret_file_into_vault_and_email_stays() {
     assert!(!plain.path(CredentialKey::Session).exists());
     assert!(plain.path(CredentialKey::Email).exists());
     assert!(dir.path().join(VAULT_FILE_NAME).exists());
-}
-
-#[test]
-fn migration_failure_keeps_file_and_keeps_working() {
-    let dir = TempDir::new().unwrap();
-    let enc = Arc::new(FakeEncryptor::default());
-    let plain = FileBackedCredentialStore::new(dir.path(), "claude_auth_");
-    plain.set(CredentialKey::Session, SECRET).unwrap();
-    enc.set_fail_protect(true);
-
-    let s = store(dir.path(), &vault_in(dir.path(), &enc), "claude_auth_");
-    assert!(plain.path(CredentialKey::Session).exists());
-    assert_eq!(s.get(CredentialKey::Session).as_deref(), Some(SECRET));
 }
 
 #[test]
@@ -287,26 +274,10 @@ fn failed_write_is_reported() {
     let vault = vault_in(dir.path(), &enc);
     enc.set_fail_protect(true);
     assert!(!vault.set("x", "a_session"));
-    let refuse =
-        SecretRoutingCredentialStore::new(vault.clone(), dir.path(), "a_", FallbackPolicy::Refuse);
+    let refuse = SecretRoutingCredentialStore::new(vault.clone(), dir.path(), "a_");
     assert!(refuse.set(CredentialKey::Session, "x").is_err());
     assert_eq!(refuse.get(CredentialKey::Session), None);
     assert!(!dir.path().join("a_session.dat").exists());
-}
-
-#[test]
-fn failed_vault_write_falls_back_to_plain_file_then_migrates() {
-    let dir = TempDir::new().unwrap();
-    let enc = Arc::new(FakeEncryptor::default());
-    enc.set_fail_protect(true);
-    let s = store(dir.path(), &vault_in(dir.path(), &enc), "a_");
-    s.set(CredentialKey::Session, "x").unwrap();
-    assert!(dir.path().join("a_session.dat").exists());
-
-    enc.set_fail_protect(false);
-    let s2 = store(dir.path(), &vault_in(dir.path(), &enc), "a_");
-    assert!(!dir.path().join("a_session.dat").exists());
-    assert_eq!(s2.get(CredentialKey::Session).as_deref(), Some("x"));
 }
 
 /// Encrypts to something that decrypts to different content.
@@ -322,14 +293,15 @@ impl Encryptor for Corrupting {
 }
 
 #[test]
-fn vault_verifies_write_by_reading_back_and_keeps_file_on_corruption() {
+fn vault_verifies_write_by_reading_back_and_refuses_on_corruption() {
     let dir = TempDir::new().unwrap();
     let vault = Arc::new(Vault::new(dir.path(), Arc::new(Corrupting)));
     let s = store(dir.path(), &vault, "a_");
-    // The write "succeeds" but reads back different: report failure, fall back.
-    s.set(CredentialKey::Session, "x").unwrap();
-    assert!(dir.path().join("a_session.dat").exists());
-    assert_eq!(s.get(CredentialKey::Session).as_deref(), Some("x"));
+    // The write "succeeds" but reads back different: the save fails and no
+    // plain file is written.
+    assert!(s.set(CredentialKey::Session, "x").is_err());
+    assert!(!dir.path().join("a_session.dat").exists());
+    assert_eq!(s.get(CredentialKey::Session), None);
 }
 
 #[test]

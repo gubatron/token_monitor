@@ -6,7 +6,7 @@ use tokenmon_app::app::{App, AppInputs};
 use tokenmon_core::SystemClock;
 use tokenmon_core::alerts::RecordingNotifier;
 use tokenmon_core::storage::AppPaths;
-use tokenmon_platform::secrets::{APP_FALLBACK_POLICY, FakeEncryptor};
+use tokenmon_platform::secrets::FakeEncryptor;
 use tokenmon_platform::webauth::FakeWebAuthHost;
 use tokenmon_provider_opencode::db::DataDirEnv;
 
@@ -15,7 +15,6 @@ fn build(dir: &std::path::Path) -> App {
         AppInputs {
             paths: AppPaths::new(dir),
             encryptor: Arc::new(FakeEncryptor::default()),
-            fallback: APP_FALLBACK_POLICY,
             web_host: Arc::new(FakeWebAuthHost::default()),
             notifier: Arc::new(RecordingNotifier::default()),
             clock: Arc::new(SystemClock),

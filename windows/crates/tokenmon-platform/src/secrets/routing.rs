@@ -18,30 +18,15 @@ const ALL_KEYS: [CredentialKey; 5] = [
     CredentialKey::ApiKey,
 ];
 
-/// What `set` does for a secret when the vault refuses the write.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum FallbackPolicy {
-    /// Spec 1.6.2: keep the app working by writing the secret to its plain
-    /// owner-only file; it migrates into the vault on the next start.
-    #[default]
-    PlainFile,
-    /// Fail the write instead; the secret never touches disk unencrypted.
-    Refuse,
-}
-
-/// The policy the app builds its stores with. Maintainer decision #38: never
-/// store a credential unencrypted, so a failed vault write fails the save.
-pub const APP_FALLBACK_POLICY: FallbackPolicy = FallbackPolicy::Refuse;
-
-/// The `WriteFailed` reason a [`FallbackPolicy::Refuse`] store reports when the
-/// vault refuses a secret. Classify it with [`SecretStoreError::classify`].
+/// The `WriteFailed` reason the store reports when the vault refuses a secret
+/// (a secret is never written to a plain file, maintainer decision #38). Classify it with [`SecretStoreError::classify`].
 pub const VAULT_UNAVAILABLE_REASON: &str = "vault unavailable";
 
 /// A credential write failure, classified for the sign-in UI.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum SecretStoreError {
-    /// The encrypted vault could not take the secret and policy forbids a
-    /// plaintext file, so nothing was stored and the user is not signed in.
+    /// The encrypted vault could not take the secret and a plaintext file is
+    /// never an option, so nothing was stored and the user is not signed in.
     #[error(
         "Could not save your sign-in securely: the encrypted credential vault is unavailable. \
          Nothing was stored. Restart TokenMon or sign in again."
@@ -70,24 +55,17 @@ pub struct SecretRoutingCredentialStore {
     vault: Arc<Vault>,
     files: FileBackedCredentialStore,
     prefix: String,
-    policy: FallbackPolicy,
 }
 
 impl SecretRoutingCredentialStore {
     /// Builds the store and migrates any secret still sitting in a plain file
     /// into the vault (the file is deleted only after a verified read-back).
-    pub fn new(
-        vault: Arc<Vault>,
-        dir: impl Into<PathBuf>,
-        prefix: impl Into<String>,
-        policy: FallbackPolicy,
-    ) -> Self {
+    pub fn new(vault: Arc<Vault>, dir: impl Into<PathBuf>, prefix: impl Into<String>) -> Self {
         let prefix = prefix.into();
         let store = Self {
             vault,
             files: FileBackedCredentialStore::new(dir, prefix.clone()),
             prefix,
-            policy,
         };
         store.migrate();
         store
@@ -121,11 +99,7 @@ impl CredentialStore for SecretRoutingCredentialStore {
     fn get(&self, key: CredentialKey) -> Option<String> {
         match key.kind() {
             CredentialKind::Plain => self.files.get(key),
-            // A file wins: it exists only if the vault migration failed.
-            CredentialKind::Secret => self
-                .files
-                .get(key)
-                .or_else(|| self.vault.value(&self.account(key))),
+            CredentialKind::Secret => self.vault.value(&self.account(key)),
         }
     }
 
@@ -137,15 +111,9 @@ impl CredentialStore for SecretRoutingCredentialStore {
             self.files.remove(key);
             return Ok(());
         }
-        match self.policy {
-            FallbackPolicy::PlainFile => {
-                tracing::warn!(key = key.as_str(), "vault write failed, using plain file");
-                self.files.set(key, value)
-            }
-            FallbackPolicy::Refuse => Err(CredentialStoreError::WriteFailed(
-                VAULT_UNAVAILABLE_REASON.into(),
-            )),
-        }
+        Err(CredentialStoreError::WriteFailed(
+            VAULT_UNAVAILABLE_REASON.into(),
+        ))
     }
 
     fn remove(&self, key: CredentialKey) {

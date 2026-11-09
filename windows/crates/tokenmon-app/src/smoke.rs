@@ -58,7 +58,7 @@ pub fn run_headless(version: &str) -> bool {
     use tokenmon_core::SystemClock;
     use tokenmon_core::alerts::RecordingNotifier;
     use tokenmon_core::storage::AppPaths;
-    use tokenmon_platform::secrets::{APP_FALLBACK_POLICY, FakeEncryptor};
+    use tokenmon_platform::secrets::FakeEncryptor;
     use tokenmon_platform::webauth::FakeWebAuthHost;
     use tokenmon_provider_opencode::db::DataDirEnv;
 
@@ -90,7 +90,6 @@ pub fn run_headless(version: &str) -> bool {
         let inputs = AppInputs {
             paths: AppPaths::new(dir.path()),
             encryptor: Arc::new(FakeEncryptor::default()),
-            fallback: APP_FALLBACK_POLICY,
             web_host: Arc::new(FakeWebAuthHost::default()),
             notifier: Arc::new(RecordingNotifier::default()),
             clock: Arc::new(SystemClock),

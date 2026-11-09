@@ -10,7 +10,7 @@ use tokenmon_core::settings::{AppSettings, SettingsFile};
 use tokenmon_core::storage::AppPaths;
 use tokenmon_core::{BrowserStateCleaner, Clock};
 use tokenmon_platform::power::GateCallbacks;
-use tokenmon_platform::secrets::{APP_FALLBACK_POLICY, Encryptor, FallbackPolicy, Vault};
+use tokenmon_platform::secrets::{Encryptor, Vault};
 use tokenmon_platform::webauth::WebAuthHost;
 use tokenmon_provider_opencode::db::DataDirEnv;
 use tokio::runtime::Handle;
@@ -30,8 +30,6 @@ pub struct AppInputs {
     pub paths: AppPaths,
     /// DPAPI on Windows, a fake in tests.
     pub encryptor: Arc<dyn Encryptor>,
-    /// Plaintext-fallback policy for the vault.
-    pub fallback: FallbackPolicy,
     /// The embedded sign-in browser.
     pub web_host: Arc<dyn WebAuthHost>,
     /// Delivers threshold alerts (toasts).
@@ -44,11 +42,6 @@ pub struct AppInputs {
     pub home: Option<PathBuf>,
     /// Where OpenCode's database is looked up.
     pub opencode_env: DataDirEnv,
-}
-
-impl AppInputs {
-    /// Default policy constant used by production wiring.
-    pub const DEFAULT_FALLBACK: FallbackPolicy = APP_FALLBACK_POLICY;
 }
 
 /// The assembled application.
@@ -83,13 +76,7 @@ impl App {
         let vault = Arc::new(Vault::new(dir.clone(), inputs.encryptor));
         let cleaner: Arc<dyn BrowserStateCleaner> =
             Arc::new(HostBrowserCleaner::new(Arc::clone(&inputs.web_host)));
-        let sessions = Arc::new(Sessions::open(
-            &dir,
-            &vault,
-            inputs.fallback,
-            &inputs.clock,
-            &cleaner,
-        ));
+        let sessions = Arc::new(Sessions::open(&dir, &vault, &inputs.clock, &cleaner));
 
         let registry = build_registry(&ProviderDeps {
             settings: &settings,
