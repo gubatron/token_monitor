@@ -29,11 +29,9 @@ pub enum FallbackPolicy {
     Refuse,
 }
 
-/// The plaintext-fallback policy the app builds its stores with. This is the
-/// single place to change it: the maintainer decision is pending (the
-/// coordinator recommends [`FallbackPolicy::Refuse`] on Windows); the default
-/// follows the spec until then.
-pub const APP_FALLBACK_POLICY: FallbackPolicy = FallbackPolicy::PlainFile;
+/// The policy the app builds its stores with. Maintainer decision #38: never
+/// store a credential unencrypted, so a failed vault write fails the save.
+pub const APP_FALLBACK_POLICY: FallbackPolicy = FallbackPolicy::Refuse;
 
 /// The `WriteFailed` reason a [`FallbackPolicy::Refuse`] store reports when the
 /// vault refuses a secret. Classify it with [`SecretStoreError::classify`].

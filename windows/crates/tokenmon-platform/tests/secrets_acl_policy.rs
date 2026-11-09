@@ -48,8 +48,8 @@ fn every_secrets_file_is_created_0600() {
 }
 
 #[test]
-fn the_app_default_policy_is_the_spec_plain_file_fallback() {
-    assert_eq!(APP_FALLBACK_POLICY, FallbackPolicy::PlainFile);
+fn the_app_policy_refuses_plaintext_fallback() {
+    assert_eq!(APP_FALLBACK_POLICY, FallbackPolicy::Refuse);
 }
 
 fn broken_vault_store(
