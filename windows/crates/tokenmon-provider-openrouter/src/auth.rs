@@ -67,7 +67,8 @@ pub enum SaveKeyError {
     Empty,
     /// Not `sk-or-...`.
     NotKeyShaped,
-    /// The credential store rejected the write.
+    /// The credential store rejected the write (the key only ever goes to the
+    /// encrypted vault, so this means the vault is unavailable).
     StoreFailed,
 }
 
@@ -76,7 +77,7 @@ impl fmt::Display for SaveKeyError {
         f.write_str(match self {
             Self::Empty => "Enter an OpenRouter API key.",
             Self::NotKeyShaped => "That doesn't look like an OpenRouter key (expected sk-or-…).",
-            Self::StoreFailed => "Could not store the API key.",
+            Self::StoreFailed => tokenmon_core::VAULT_UNAVAILABLE_MESSAGE,
         })
     }
 }

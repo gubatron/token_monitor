@@ -67,7 +67,7 @@ fn failed_vault_write_surfaces_a_typed_vault_unavailable_error() {
     );
     let ui = SecretStoreError::classify(&err);
     assert_eq!(ui, SecretStoreError::VaultUnavailable);
-    assert!(ui.to_string().contains("vault is unavailable"));
+    assert_eq!(ui.to_string(), tokenmon_core::VAULT_UNAVAILABLE_MESSAGE);
     assert!(!dir.path().join("a_session.dat").exists(), "no plaintext");
     assert_eq!(store.get(CredentialKey::Session), None);
 }

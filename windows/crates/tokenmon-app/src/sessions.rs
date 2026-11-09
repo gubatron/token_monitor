@@ -10,9 +10,11 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use tokenmon_core::{
     AuthConfig, BrowserStateCleaner, Clock, CookieAuthSession, CredentialStore,
-    ProviderAuthSession, ProviderId,
+    CredentialStoreError, ProviderAuthSession, ProviderId,
 };
-use tokenmon_platform::secrets::{SecretRoutingCredentialStore, Vault};
+use tokenmon_platform::secrets::{
+    SecretRoutingCredentialStore, SecretStoreError, VAULT_UNAVAILABLE_REASON, Vault,
+};
 use tokenmon_platform::webauth::WebAuthHost;
 use tokenmon_provider_openrouter::auth::OpenRouterAuthSession;
 
@@ -62,6 +64,18 @@ pub fn auth_config_of(provider: ProviderId) -> Option<AuthConfig> {
         ProviderId::ChatGpt => Some(tokenmon_provider_chatgpt::auth::chatgpt_auth_config()),
         ProviderId::OpenCode => Some(tokenmon_provider_opencode::auth::auth_config()),
         ProviderId::Overview | ProviderId::OpenRouter | ProviderId::Grokbot => None,
+    }
+}
+
+/// Rewrites the session's raw "vault unavailable" write error into the message
+/// the user sees (the one [`SecretStoreError::classify`] gives for it); any
+/// other error is returned unchanged.
+pub fn friendly_store_error(raw: &str) -> String {
+    let vault_down = CredentialStoreError::WriteFailed(VAULT_UNAVAILABLE_REASON.into());
+    if raw == vault_down.to_string() {
+        SecretStoreError::classify(&vault_down).to_string()
+    } else {
+        raw.to_owned()
     }
 }
 
@@ -158,6 +172,12 @@ impl Sessions {
     /// The auth state of the session `provider` authenticates with (Grokbot
     /// reports Cursor's).
     pub fn auth_state(&self, provider: ProviderId) -> tokenmon_core::AuthSessionState {
+        let mut state = self.raw_auth_state(provider);
+        state.last_auth_error = state.last_auth_error.map(|e| friendly_store_error(&e));
+        state
+    }
+
+    fn raw_auth_state(&self, provider: ProviderId) -> tokenmon_core::AuthSessionState {
         use tokenmon_core::AuthSession;
         match provider.sign_in_provider() {
             ProviderId::Grok => self.grok.state(),

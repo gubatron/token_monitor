@@ -16,6 +16,11 @@ use thiserror::Error;
 /// Consecutive auth rejections tolerated before the session is invalidated.
 pub const AUTH_FAILURE_THRESHOLD: u32 = 3;
 
+/// What the user is told when a sign-in cannot be saved because the encrypted
+/// credential vault is unavailable (decision #38: credentials are never stored
+/// unencrypted, so the save fails instead).
+pub const VAULT_UNAVAILABLE_MESSAGE: &str = "Couldn't save your sign-in securely. TokenMon never stores credentials unencrypted. Check that your Windows account can use Data Protection, then try again.";
+
 /// Whether a stored value is a secret (encrypted vault) or plain (file).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CredentialKind {

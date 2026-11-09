@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use tokenmon_core::net::Domain;
 use tokenmon_core::{AuthConfig, CapturedSession, ProviderAuthSession, ProviderId};
+use tokenmon_platform::secrets::SecretStoreError;
 use tokenmon_platform::webauth::gate::{AuthHostFn, ReturnPageFn};
 use tokenmon_platform::webauth::{
     CapturePolicy, CapturedCookies, SignInConfig, SignInDelegate, WebAuthError, WebAuthHost,
@@ -182,7 +183,7 @@ impl SignInDelegate for SessionDelegate {
                 cookie_header: captured.cookie_header,
                 email: email.clone(),
             })
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| SecretStoreError::classify(&e).to_string())?;
         Ok(email)
     }
 

@@ -289,6 +289,29 @@ fn test_accounts_rows_order_and_errors() {
     assert_eq!(a.rows[0].subtitle, "Not signed in");
 }
 
+/// A sign-in the vault could not save shows the clear message on the row, and
+/// the OpenRouter key form shows it too (decision #38).
+#[test]
+fn test_accounts_show_the_vault_unavailable_message() {
+    let f = fixture(None);
+    f.host.status.lock().unwrap().accounts = vec![AccountStatus {
+        provider: ProviderId::Claude,
+        signed_in: false,
+        email: None,
+        last_error: Some(tokenmon_core::VAULT_UNAVAILABLE_MESSAGE.into()),
+    }];
+    f.host.status.lock().unwrap().openrouter.last_error =
+        Some(tokenmon_core::VAULT_UNAVAILABLE_MESSAGE.into());
+    let a = f.vm.screen().accounts;
+    assert_eq!(a.rows[1].error, tokenmon_core::VAULT_UNAVAILABLE_MESSAGE);
+    assert!(
+        a.rows[1]
+            .error
+            .contains("never stores credentials unencrypted")
+    );
+    assert_eq!(a.openrouter_error, tokenmon_core::VAULT_UNAVAILABLE_MESSAGE);
+}
+
 /// Sign in / re-authenticate / sign out reach the host; OpenRouter has no window.
 #[test]
 fn test_sign_in_out_callbacks() {

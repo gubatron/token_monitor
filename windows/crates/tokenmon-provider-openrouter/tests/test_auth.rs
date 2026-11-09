@@ -107,5 +107,6 @@ fn test_store_failure_is_reported_without_the_key() {
     let err = s.save_api_key("sk-or-v1-topsecret").unwrap_err();
     assert_eq!(err, SaveKeyError::StoreFailed);
     assert!(!err.to_string().contains("topsecret"));
+    assert_eq!(err.to_string(), tokenmon_core::VAULT_UNAVAILABLE_MESSAGE);
     assert!(!s.state().is_signed_in);
 }

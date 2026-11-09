@@ -29,7 +29,7 @@ pub mod util;
 pub use auth::{
     AUTH_FAILURE_THRESHOLD, AuthConfig, AuthEvent, AuthEventListener, AuthSession,
     AuthSessionState, CredentialKey, CredentialKind, CredentialStore, CredentialStoreError,
-    InMemoryCredentialStore, SessionGeneration,
+    InMemoryCredentialStore, SessionGeneration, VAULT_UNAVAILABLE_MESSAGE,
 };
 pub use auth_session::{
     BrowserStateCleaner, CapturedSession, CookieAuthSession, ProviderAuthSession,

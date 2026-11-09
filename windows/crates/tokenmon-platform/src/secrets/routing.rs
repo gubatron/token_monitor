@@ -28,10 +28,7 @@ pub const VAULT_UNAVAILABLE_REASON: &str = "vault unavailable";
 pub enum SecretStoreError {
     /// The encrypted vault could not take the secret and a plaintext file is
     /// never an option, so nothing was stored and the user is not signed in.
-    #[error(
-        "Could not save your sign-in securely: the encrypted credential vault is unavailable. \
-         Nothing was stored. Restart TokenMon or sign in again."
-    )]
+    #[error("{}", tokenmon_core::VAULT_UNAVAILABLE_MESSAGE)]
     VaultUnavailable,
     /// Any other write failure (disk full, access denied, ...).
     #[error("Could not save your sign-in: {0}")]
