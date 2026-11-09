@@ -147,6 +147,17 @@ final class AppModel {
         }
     }
 
+    /// Whether any provider holds a stored session, or OpenRouter an API key.
+    /// Grokbot is not listed: it uses Cursor's session.
+    var isAnyProviderSignedIn: Bool {
+        grokAuth.isSignedIn
+            || claudeAuth.isSignedIn
+            || chatGPTAuth.isSignedIn
+            || cursorAuth.isSignedIn
+            || openCodeAuth.isSignedIn
+            || openRouterAuth.isSignedIn
+    }
+
     /// Loads a provider's data right after its sign-in window succeeds, even
     /// when its tab is not selected, together with every provider that shares
     /// the session (Grokbot shares Cursor's).

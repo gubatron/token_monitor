@@ -36,6 +36,7 @@
 		215018C10200FC2BE020BEEB /* OpenCodeLimitBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F826866FE2EA90C9D208DA2 /* OpenCodeLimitBar.swift */; };
 		21788484CA7B515D9741324D /* GrokSignIn.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF28EC0DA6B02E7E5121AE7F /* GrokSignIn.swift */; };
 		21A4AFC7363077FA40FF9EB5 /* DayKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F31151B54ECEEE84B43FDD8 /* DayKey.swift */; };
+		22374D61B31053158A30ADC4 /* SettingsTabTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4A1E4CFA6BCF18D33DB9553 /* SettingsTabTests.swift */; };
 		22DD3F58F039128692D42543 /* SignInBrowserNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = F430FF7C5A3558077DD46EA1 /* SignInBrowserNavigation.swift */; };
 		26404D26FAD27814ACCFBBBB /* GrokDailyUsageBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69DF42E1E35463C382C71A1D /* GrokDailyUsageBuilder.swift */; };
 		27708FE67616DF783006606C /* ChatGPTPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80C9BA690FBDE2552436BE62 /* ChatGPTPanelView.swift */; };
@@ -114,6 +115,7 @@
 		84BFC01E6CF2930C9FFCC68D /* GrokUsageResponseParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8794708C8F0BD43BC2A311C7 /* GrokUsageResponseParser.swift */; };
 		854D6FD3E4343A20A836B109 /* MetricStat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 951B842C4CF5D532CA0C9799 /* MetricStat.swift */; };
 		857BC9EA81C00B2F3A11B8BF /* OpenCodeLocalScanCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = B120FC67BCDAED48BACF8482 /* OpenCodeLocalScanCache.swift */; };
+		862D6115D4EB1077B362F8A7 /* SettingsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = B241A8BA6A9968EAF244B7A8 /* SettingsTab.swift */; };
 		8798885586C8BCE9944ED118 /* SegmentedUsageBarTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9786F9913C1B736A61D9F14 /* SegmentedUsageBarTests.swift */; };
 		88E878D7CD7644109F28D841 /* OpenRouterUsagePoller.swift in Sources */ = {isa = PBXBuildFile; fileRef = B850B5AF074C93AC1E04E5F9 /* OpenRouterUsagePoller.swift */; };
 		8912C6BCAE59FFC5DE91E3EA /* OverviewHourlyHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 641E7FE251A152C818C0ED8E /* OverviewHourlyHistory.swift */; };
@@ -370,6 +372,7 @@
 		B120FC67BCDAED48BACF8482 /* OpenCodeLocalScanCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeLocalScanCache.swift; sourceTree = "<group>"; };
 		B161EEE25050CED17FBFC98B /* ProviderHourlyUsage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderHourlyUsage.swift; sourceTree = "<group>"; };
 		B1A920451DAC4B9DB75153AA /* ObservationLoopTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObservationLoopTests.swift; sourceTree = "<group>"; };
+		B241A8BA6A9968EAF244B7A8 /* SettingsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsTab.swift; sourceTree = "<group>"; };
 		B449EDDB7717A5E25E7818E9 /* SegmentedUsageBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SegmentedUsageBar.swift; sourceTree = "<group>"; };
 		B850B5AF074C93AC1E04E5F9 /* OpenRouterUsagePoller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenRouterUsagePoller.swift; sourceTree = "<group>"; };
 		BD98517BAED301412E21B91A /* BillingPeriodWindowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BillingPeriodWindowTests.swift; sourceTree = "<group>"; };
@@ -395,6 +398,7 @@
 		D4180D20B69224C21DF403BB /* ProviderAuthSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderAuthSession.swift; sourceTree = "<group>"; };
 		D43CC15D24492EB03CA2FF7D /* OpenRouterUsageClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenRouterUsageClientTests.swift; sourceTree = "<group>"; };
 		D482FA604A9BABA24A0C8A30 /* ClaudeCodeLocalStatsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeCodeLocalStatsTests.swift; sourceTree = "<group>"; };
+		D4A1E4CFA6BCF18D33DB9553 /* SettingsTabTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsTabTests.swift; sourceTree = "<group>"; };
 		D78FE8D9B9D2534DD07FB991 /* TokenMonApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenMonApp.swift; sourceTree = "<group>"; };
 		D83D9AF627830BDAB0DD6EFA /* OpenCodeLocalScanTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeLocalScanTests.swift; sourceTree = "<group>"; };
 		DB537762C8DFD0F0A4108A10 /* UpdateCheckerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateCheckerTests.swift; sourceTree = "<group>"; };
@@ -520,6 +524,7 @@
 			children = (
 				24166148544CA5C059FC8F1F /* AppSettings.swift */,
 				DDE9B2E5E834AAC33179D1D0 /* PreferencesView.swift */,
+				B241A8BA6A9968EAF244B7A8 /* SettingsTab.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -967,6 +972,7 @@
 			isa = PBXGroup;
 			children = (
 				257FA737834B257FD6A46E6B /* AppSettingsTests.swift */,
+				D4A1E4CFA6BCF18D33DB9553 /* SettingsTabTests.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -1251,6 +1257,7 @@
 				0F4B29F57DC82A008117C9B1 /* ProviderSwitcherLayoutTests.swift in Sources */,
 				5F0FE8FE1C530E55D4CE6B70 /* ReleaseFeedTests.swift in Sources */,
 				8798885586C8BCE9944ED118 /* SegmentedUsageBarTests.swift in Sources */,
+				22374D61B31053158A30ADC4 /* SettingsTabTests.swift in Sources */,
 				E67B01BEBBE9F134B1AE09F0 /* SignInBrowserNavigationTests.swift in Sources */,
 				A7B20EAE780B59211A64BD75 /* SystemWakeGateTests.swift in Sources */,
 				FC09C3592BD99FAFACBCBDA9 /* ThresholdNotifierTests.swift in Sources */,
@@ -1381,6 +1388,7 @@
 				5FB87589309A3202EFC80C5F /* ProviderUsagePoller.swift in Sources */,
 				F2CF6110673988888DE51EE0 /* ReleaseFeed.swift in Sources */,
 				128EEA35787A2F2B6948304E /* SegmentedUsageBar.swift in Sources */,
+				862D6115D4EB1077B362F8A7 /* SettingsTab.swift in Sources */,
 				22DD3F58F039128692D42543 /* SignInBrowserNavigation.swift in Sources */,
 				CDDB7A05567585BA22633DD1 /* SignInBrowserView.swift in Sources */,
 				6721DD2A2B05624762BB2AAA /* SlimUsageTrack.swift in Sources */,
