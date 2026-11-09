@@ -140,6 +140,25 @@ final class CredentialStoreTests: XCTestCase {
         XCTAssertNil(secure.values["key"])
     }
 
+    /// Removing a secret clears both stores, so signing out deletes a session
+    /// that fell back to the file because the Keychain refused it (the
+    /// Accounts privacy note promises this).
+    func testRemoveClearsSecretFromBothStores() {
+        let files = InMemoryStore()
+        let secure = InMemoryStore()
+        secure.values = ["session": "sid=keychain"]
+        secure.failsWrites = true
+        let store = SecretRoutingCredentialStore(secure: secure, files: files, secretKeys: ["session"])
+        XCTAssertTrue(store.set("sid=fallback", forKey: "session"))
+        XCTAssertEqual(files.values["session"], "sid=fallback")
+
+        store.remove(forKey: "session")
+
+        XCTAssertNil(store.value(forKey: "session"))
+        XCTAssertNil(files.values["session"])
+        XCTAssertNil(secure.values["session"])
+    }
+
     // MARK: - Keychain store (fake backend)
 
     private final class FakeKeychain: KeychainBackend {
