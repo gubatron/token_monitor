@@ -13,7 +13,8 @@ struct DailyBudgetDay: Identifiable, Hashable, Sendable {
     /// It is history only: pace and elapsed days count the new window's days alone.
     var isPriorWindow = false
     /// Tokens used that day, for providers that can count them (Claude Code's
-    /// local transcripts); `nil` when unknown.
+    /// transcripts, OpenCode's database, Cursor's usage events), with where
+    /// they were counted; `nil` when unknown.
     var tokens: DailyTokenUsage?
 
     var percentOfBudget: Double {

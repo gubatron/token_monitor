@@ -59,18 +59,21 @@ struct HoverLabelDivider: View {
 }
 
 /// A large token total, with its API-rate value ("≈ $12.40") on the right
-/// when there is one.
+/// when there is one. A total counted on this computer reads "44M tokens on
+/// this Mac".
 struct HoverLabelTokenTotal: View {
     let tokens: Int64
     /// The value text, already prefixed ("≈ $12.40"); nil leaves it out.
     var valueText: String?
+    /// Where the tokens were counted; sets the unit's wording.
+    let source: UsageSource
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 4) {
             Text(Format.tokens(tokens))
                 .font(PanelTypography.title.monospacedDigit())
                 .foregroundStyle(.primary)
-            Text("tokens")
+            Text(source.tokensUnit)
                 .font(PanelTypography.caption)
                 .foregroundStyle(.secondary)
             if let valueText {

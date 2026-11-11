@@ -1,8 +1,9 @@
 import SwiftUI
 
 /// What the hover label, and the row's accessibility label, say about one of
-/// this month's Claude models: its month total and breakdown, and how it
-/// compares with last month.
+/// this month's Claude models: its month total ("tokens on this Mac", since
+/// the counts are this Mac's) and breakdown, and how it compares with last
+/// month.
 ///
 /// Last month is compared only as far as the ledger covers it (see
 /// ``ClaudeMonthCoverage``): a partly recorded month is named by the days it
@@ -42,7 +43,7 @@ struct ClaudeModelHoverDetail: Hashable, Sendable {
         let value = model.isUnpriced ? "no listed price" : "about " + Self.usd(model.costUSD)
         let rows = breakdown.map { "\($0.label) \($0.value)" }.joined(separator: ", ")
         accessibilityLabel = [
-            "\(name), \(month): \(Format.tokens(tokens)) tokens, \(value)",
+            "\(name), \(month): \(Format.tokens(tokens)) \(ClaudeCodeUsageSummary.source.tokensUnit), \(value)",
             rows,
             comparison.spokenPrevious,
             comparison.spokenChange
@@ -128,7 +129,7 @@ struct ClaudeModelHoverLabel: View {
         HoverLabelCard {
             HoverLabelTitle(text: detail.title)
             HoverLabelDivider()
-            HoverLabelTokenTotal(tokens: detail.tokens, valueText: detail.valueText)
+            HoverLabelTokenTotal(tokens: detail.tokens, valueText: detail.valueText, source: ClaudeCodeUsageSummary.source)
             HoverLabelRows(rows: detail.breakdown)
             HoverLabelDivider()
             if let previousLine = detail.previousLine {

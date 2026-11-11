@@ -85,7 +85,7 @@ final class HoverLabelTests: XCTestCase {
     // MARK: - Daily label value
 
     func testDailyValueTextMarksUnpricedUsage() {
-        var tokens = DailyTokenUsage()
+        var tokens = DailyTokenUsage(source: .thisComputer)
         tokens.add(model: "Opus 5.5", output: 10, costUSD: 12.4)
         XCTAssertEqual(DailyBudgetHoverLabel.valueText(tokens), "≈ $12.40")
         tokens.add(model: "Mystery", output: 10, costUSD: nil)
@@ -93,9 +93,9 @@ final class HoverLabelTests: XCTestCase {
     }
 
     func testDailyValueTextIsHiddenWithoutSpend() {
-        var tokens = DailyTokenUsage()
+        var tokens = DailyTokenUsage(source: .thisComputer)
         tokens.add(model: "Mystery", output: 10, costUSD: nil)
         XCTAssertNil(DailyBudgetHoverLabel.valueText(tokens))
-        XCTAssertNil(DailyBudgetHoverLabel.valueText(DailyTokenUsage()))
+        XCTAssertNil(DailyBudgetHoverLabel.valueText(DailyTokenUsage(source: .thisComputer)))
     }
 }

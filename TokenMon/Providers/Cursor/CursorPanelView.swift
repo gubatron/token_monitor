@@ -87,7 +87,7 @@ struct CursorStatsGrid: View {
     let stats: CursorCostStats
 
     var body: some View {
-        MetricStatGrid([
+        MetricStatGrid(source: .account, [
             MetricStat(title: "Monthly spend", value: Format.usd(stats.meteredCycleUSD)),
             MetricStat(title: "Total tokens", value: Format.tokens(stats.cycleTokens)),
             MetricStat(title: "Input tokens", value: Format.tokens(stats.cycleInputTokens)),

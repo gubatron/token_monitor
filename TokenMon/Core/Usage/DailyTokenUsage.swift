@@ -13,6 +13,9 @@ struct DailyTokenUsage: Hashable, Sendable {
         var tokens: Int64
     }
 
+    /// Whether the counts come from this computer's logs or the provider's
+    /// account; the hover label marks local counts "on this Mac".
+    let source: UsageSource
     var inputTokens: Int64 = 0
     var outputTokens: Int64 = 0
     var cacheReadTokens: Int64 = 0
@@ -23,6 +26,12 @@ struct DailyTokenUsage: Hashable, Sendable {
     var hasUnpriced = false
     /// Models by tokens, most first.
     var models: [Model] = []
+
+    /// An empty day counted from `source`. There is no default source, so a
+    /// new provider must say where its counts come from.
+    init(source: UsageSource) {
+        self.source = source
+    }
 
     var totalTokens: Int64 {
         inputTokens + outputTokens + cacheReadTokens + cacheWriteTokens
@@ -65,10 +74,15 @@ struct DailyTokenUsage: Hashable, Sendable {
 /// ``DailyTokenUsage`` per local day (``DayKey`` in `calendar`), built one
 /// request at a time.
 struct DailyTokenUsageTally {
+    let source: UsageSource
     let calendar: Calendar
     private(set) var days: [String: DailyTokenUsage] = [:]
 
-    init(calendar: Calendar = .current) {
+    /// - Parameters:
+    ///   - source: Where the requests were counted; every day built carries it.
+    ///   - calendar: The calendar whose local days the usage is bucketed by.
+    init(source: UsageSource, calendar: Calendar = .current) {
+        self.source = source
         self.calendar = calendar
     }
 
@@ -82,7 +96,8 @@ struct DailyTokenUsageTally {
         cacheWrite: Int64 = 0,
         costUSD: Double?
     ) {
-        days[DayKey.key(for: date, calendar: calendar), default: DailyTokenUsage()].add(
+        let empty = DailyTokenUsage(source: source)
+        days[DayKey.key(for: date, calendar: calendar), default: empty].add(
             model: model,
             input: input,
             output: output,
