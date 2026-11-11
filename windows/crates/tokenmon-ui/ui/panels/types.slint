@@ -2,8 +2,8 @@
 // The .slint panels only lay out these values; every string is decided in Rust.
 // The kit structs are re-exported so the bridge builds them from this compile
 // unit (generated Slint structs are per compile unit).
-import { DayBar } from "../components/kit.slint";
-export { DayBar, BarSegment, CategoryItem, MetricItem, LabelValue } from "../components/kit.slint";
+import { DayBar, HoverCardData } from "../components/kit.slint";
+export { DayBar, BarSegment, CategoryItem, MetricItem, LabelValue, HoverCardData } from "../components/kit.slint";
 
 export struct TrackData {
     label: string,
@@ -21,6 +21,8 @@ export struct ModelRowData {
     tag: string,
     share: float,
     color: color,
+    /// Floating label while the row is hovered (empty title: none).
+    hover: HoverCardData,
 }
 
 export struct ModelsData {

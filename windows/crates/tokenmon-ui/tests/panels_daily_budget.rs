@@ -224,6 +224,7 @@ fn test_models_card_truncation_and_collapse() {
             tag: None,
             share_fraction: 0.2,
             color: tokenmon_core::Srgb::rgb(0.0, 0.0, 0.0),
+            hover: None,
         })
         .collect();
     let c = ModelsCardVm::new("T", true, true, rows.clone(), false);

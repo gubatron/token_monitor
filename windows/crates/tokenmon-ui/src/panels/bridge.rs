@@ -7,7 +7,8 @@ use tokenmon_core::{ProviderId, Srgb};
 
 use super::claude_chatgpt::{ChatGptUsage, ClaudePanelVm, ClaudeUsage};
 use super::common::{
-    DailyBudgetVm, DayBarVm, FooterVm, HeaderVm, MetricVm, ModelsCardVm, PanelVm, TrackVm, geometry,
+    DailyBudgetVm, DayBarVm, FooterVm, HeaderVm, HoverCardVm, HoverVm, MetricVm, ModelsCardVm,
+    PanelVm, TrackVm, geometry,
 };
 use super::grok::GrokUsage;
 use super::grokbot_cursor::{CursorUsage, GrokbotUsage};
@@ -73,21 +74,52 @@ fn metrics(v: &[MetricVm]) -> ModelRc<ui::MetricItem> {
     )
 }
 
+/// Label/value rows as a Slint model.
+fn rows(pairs: &[(String, String)]) -> ModelRc<ui::LabelValue> {
+    model(
+        pairs
+            .iter()
+            .map(|(l, v)| ui::LabelValue {
+                label: text(l),
+                value: text(v),
+            })
+            .collect(),
+    )
+}
+
+/// The shared hover label content (Slint `HoverCardData`).
+fn hover_card(c: &HoverCardVm) -> ui::HoverCardData {
+    ui::HoverCardData {
+        title: text(&c.title),
+        caption: opt(c.caption.as_deref()),
+        total: opt(c.total.as_deref()),
+        value: opt(c.value.as_deref()),
+        rows: rows(&c.rows),
+        extra_rows: rows(&c.extra_rows),
+        note: opt(c.note.as_deref()),
+        verdict: opt(c.verdict.as_deref()),
+    }
+}
+
+/// A day's hover as the shared card: title and usage line, then the token
+/// block (total, value, breakdown) and the top models.
+fn day_hover(h: &HoverVm) -> HoverCardVm {
+    let tokens = h.tokens.as_ref();
+    HoverCardVm {
+        title: h.title.clone(),
+        caption: h.usage_line.clone(),
+        total: tokens.map(|t| t.total_text.clone()),
+        value: tokens.and_then(|t| t.cost_text.clone()),
+        rows: tokens.map(|t| t.rows.clone()).unwrap_or_default(),
+        extra_rows: tokens.map(|t| t.models.clone()).unwrap_or_default(),
+        note: None,
+        verdict: None,
+    }
+}
+
 /// Kit `DayBar` for one rendered column: the percent is recovered from the
 /// fill height (`min(68, max(6, 68 * pct / 100))` is its own inverse).
 fn day_bar(b: &DayBarVm) -> ui::DayBar {
-    let rows = |pairs: &[(String, String)]| -> ModelRc<ui::LabelValue> {
-        model(
-            pairs
-                .iter()
-                .map(|(l, v)| ui::LabelValue {
-                    label: text(l),
-                    value: text(v),
-                })
-                .collect(),
-        )
-    };
-    let tokens = b.hover.tokens.as_ref();
     ui::DayBar {
         fill_percent: (b.fill_height / geometry::STEM_HEIGHT * 100.0) as f32,
         show_fill: b.fill_height > 0.0,
@@ -95,12 +127,7 @@ fn day_bar(b: &DayBarVm) -> ui::DayBar {
         future: b.label_opacity < 1.0,
         label_percent: text(&b.value_label),
         label_weekday: text(&b.weekday),
-        hover_title: text(&b.hover.title),
-        hover_usage: opt(b.hover.usage_line.as_deref()),
-        tokens_total: opt(tokens.map(|t| t.total_text.as_str())),
-        tokens_cost: opt(tokens.and_then(|t| t.cost_text.as_deref())),
-        token_rows: rows(tokens.map_or(&[][..], |t| &t.rows)),
-        model_rows: rows(tokens.map_or(&[][..], |t| &t.models)),
+        hover: hover_card(&day_hover(&b.hover)),
     }
 }
 
@@ -130,6 +157,7 @@ fn models(m: Option<&ModelsCardVm>) -> ui::ModelsData {
                     tag: opt(r.tag.as_deref()),
                     share: r.share_fraction as f32,
                     color: color(r.color),
+                    hover: hover_card(&r.hover.clone().unwrap_or_default()),
                 })
                 .collect(),
         ),

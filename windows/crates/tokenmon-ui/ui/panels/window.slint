@@ -2,7 +2,7 @@
 // provider switcher, then the selected provider's body. Switching tabs changes
 // `selected`; no second window is ever created.
 import { ProviderSwitcher } from "shell.slint";
-import { Theme, Typo } from "../components/kit.slint";
+import { Theme, Typo, HoverOverlayHost } from "../components/kit.slint";
 import { TabRowData } from "types.slint";
 import { OverviewBody } from "overview.slint";
 import { GrokBody } from "grok.slint";
@@ -77,4 +77,6 @@ export component PanelWindow inherits Window {
         if root.selected == ProviderTab.opencode: OpenCodeBody { }
         if root.selected == ProviderTab.openrouter: OpenRouterBody { }
     }
+    // Last child, so a hover label paints above every card of the body.
+    HoverOverlayHost { x: 0px; y: 0px; width: root.width; height: root.height; }
 }

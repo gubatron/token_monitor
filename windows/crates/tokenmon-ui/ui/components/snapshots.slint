@@ -4,7 +4,8 @@
 import {
     Theme, Typo, PanelCard, MetricStatGrid, SlimUsageTrack, SegmentedUsageBar, CategoryRow,
     StaleDataCaption, CollapsibleSectionHeader, ProviderHeaderRow, DailyBudgetBars,
-    DailyUsageChart, PanelSectionHeader, BarSegment, CategoryItem, DayBar, MetricItem, LabelValue
+    DailyUsageChart, PanelSectionHeader, BarSegment, CategoryItem, DayBar, MetricItem, LabelValue,
+    HoverOverlayHost
 } from "kit.slint";
 
 /// Window chrome shared by every host.
@@ -92,6 +93,7 @@ export component SnapDailyBudget inherits Host {
             }
         }
     }
+    HoverOverlayHost { x: 0px; y: 0px; width: root.width; height: root.height; }
 }
 
 export component SnapDailyUsage inherits Host {
@@ -148,6 +150,7 @@ export component SnapClaudeMock inherits Host {
             }
         }
     }
+    HoverOverlayHost { x: 0px; y: 0px; width: root.width; height: root.height; }
 }
 
 /// Demo / gallery window: every component on one scrolling-free sheet.

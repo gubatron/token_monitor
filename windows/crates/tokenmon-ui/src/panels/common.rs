@@ -5,7 +5,7 @@
 //! provider crates' snapshot types are added once those land.
 
 use chrono::{DateTime, NaiveDate, Utc};
-use tokenmon_core::usage::{Calendar, DailyBudget, PaceHeadroom};
+use tokenmon_core::usage::{Calendar, DailyBudget, PaceHeadroom, api_value_text};
 use tokenmon_core::{ProviderId, Srgb};
 
 use crate::kit::week::WeekOffset;
@@ -368,6 +368,30 @@ pub struct ModelRowVm {
     pub share_fraction: f64,
     /// Share bar color.
     pub color: Srgb,
+    /// Floating label shown while the row is hovered (Claude's models).
+    pub hover: Option<HoverCardVm>,
+}
+
+/// A floating hover label's text: the daily bars and the Claude model rows
+/// both fill it, so every label looks the same (Swift `HoverLabelCard`).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct HoverCardVm {
+    /// First line naming what it describes.
+    pub title: String,
+    /// Secondary one-line summary under the title.
+    pub caption: Option<String>,
+    /// Large token total; `None` hides the token block.
+    pub total: Option<String>,
+    /// Value beside the total (`≈ $12.40`).
+    pub value: Option<String>,
+    /// Breakdown rows under the total.
+    pub rows: Vec<(String, String)>,
+    /// A second grid under a rule (the day's top models).
+    pub extra_rows: Vec<(String, String)>,
+    /// Caption under a rule (last month's totals).
+    pub note: Option<String>,
+    /// Semibold closing line (the change against last month).
+    pub verdict: Option<String>,
 }
 
 /// A models card: collapsible or not, with an optional `View all` toggle.
@@ -600,13 +624,7 @@ pub fn usage_line(day: &DayInput, noun: AllowanceNoun) -> String {
 fn hover_tokens(t: &TokensInput) -> Option<HoverTokensVm> {
     (t.total > 0).then(|| HoverTokensVm {
         total_text: format::tokens(t.total),
-        cost_text: (t.cost_usd > 0.0).then(|| {
-            format!(
-                "≈ {}{}",
-                format::usd(t.cost_usd),
-                if t.has_unpriced { "+" } else { "" }
-            )
-        }),
+        cost_text: api_value_text(Some(t.cost_usd), t.has_unpriced),
         rows: vec![
             ("Input".to_owned(), format::tokens(t.input)),
             ("Output".to_owned(), format::tokens(t.output)),

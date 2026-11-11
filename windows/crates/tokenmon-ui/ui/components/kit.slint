@@ -1,7 +1,7 @@
 // Public surface of the UI kit. Panels and settings import from this file:
 //   import { PanelCard, DailyBudgetBars, Theme } from "../components/kit.slint";
 export { Theme, Typo, PanelMetrics } from "theme.slint";
-export { LabelValue, BarSegment, CategoryItem, MetricItem, DayBar } from "types.slint";
+export { LabelValue, BarSegment, CategoryItem, MetricItem, DayBar, HoverCardData } from "types.slint";
 export { Logos } from "logos.slint";
 export {
     PanelSectionHeader, PanelMetaLabel, DigitText, ResetCaption, PanelCard,
@@ -9,5 +9,6 @@ export {
     StaleDataCaption, CollapsibleSectionHeader, ProviderHeaderRow
 } from "basics.slint";
 export {
-    HoverMath, WeekChartNavigation, DailyBudgetHoverLabel, DailyBudgetBars, DailyUsageChart
+    HoverMath, HoverOverlay, HoverOverlayHost, HoverLabelCard, WeekChartNavigation,
+    DailyBudgetBars, DailyUsageChart
 } from "charts.slint";

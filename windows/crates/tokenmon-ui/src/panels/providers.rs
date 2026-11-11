@@ -10,6 +10,7 @@ use std::collections::HashSet;
 use tokenmon_core::Srgb;
 use tokenmon_core::usage::Calendar;
 use tokenmon_provider_chatgpt::{ChatGptSnapshot, UsageWindow};
+use tokenmon_provider_claude::hover::ClaudeModelHoverDetail;
 use tokenmon_provider_claude::{
     ClaudeCodeUsageSummary, ClaudeSnapshot, ClaudeUsageWindow, UsageTotals,
 };
@@ -203,6 +204,7 @@ impl ClaudeCodeInput {
                     is_unpriced: m.is_unpriced,
                     cost_usd: m.cost_usd,
                     share_percent: m.share_percent,
+                    hover: Some(ClaudeModelHoverDetail::new(m, s)),
                 })
                 .collect(),
             models_expanded,

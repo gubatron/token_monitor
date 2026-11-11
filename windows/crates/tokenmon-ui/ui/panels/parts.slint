@@ -1,6 +1,6 @@
 // Panel building blocks composed from the ws-ui-kit components. Every string
 // is decided in Rust (src/panels); these only lay out what they are given.
-import { Theme, Typo, PanelCard, PanelSectionHeader, DigitText, SlimUsageTrack, MetricStatGrid, ProviderHeaderRow, StaleDataCaption, CollapsibleSectionHeader, DailyBudgetBars } from "../components/kit.slint";
+import { Theme, Typo, PanelCard, PanelSectionHeader, DigitText, SlimUsageTrack, MetricStatGrid, ProviderHeaderRow, StaleDataCaption, CollapsibleSectionHeader, DailyBudgetBars, HoverOverlay } from "../components/kit.slint";
 import { TrackData, ModelsData, DailyData, FooterData, HeaderData } from "types.slint";
 
 /// Plain 12pt caption (secondary, or warning orange).
@@ -87,7 +87,39 @@ export component ModelsCard inherits PanelCard {
         toggled => { root.toggle-expanded(); }
     }
     if !root.data.collapsible: PanelSectionHeader { title: root.data.title; }
-    for row in root.data.rows: VerticalLayout {
+    rows-box := VerticalLayout {
+    spacing: 8px;
+    for row in root.data.rows: Rectangle {
+        height: row-body.preferred-height;
+        // Hover tint behind the row (Swift: primary at 6%, 6px outset).
+        Rectangle {
+            x: -6px;
+            width: parent.width + 12px;
+            border-radius: 6px;
+            background: Theme.primary.with-alpha(touch.has-hover && row.hover.title != "" ? 0.06 : 0);
+        }
+        // The hit area reaches into the gaps (half the 8px spacing each way)
+        // so the label does not drop between two rows.
+        touch := TouchArea {
+            x: 0px;
+            y: -4px;
+            width: parent.width;
+            height: parent.height + 8px;
+        }
+        private property <bool> shown: touch.has-hover && row.hover.title != "";
+        private property <length> pointer-x: touch.absolute-position.x + touch.mouse-x;
+        private property <length> pointer-y: touch.absolute-position.y + touch.mouse-y;
+        // The label is drawn by `HoverOverlayHost` at the window root; its
+        // bottom stays above the rows' bottom edge (Swift `staysAboveBottomEdge`).
+        function publish() {
+            HoverOverlay.show(self.shown, row.hover, self.pointer-x, self.pointer-y,
+                rows-box.absolute-position.x, rows-box.width,
+                rows-box.absolute-position.y + rows-box.height);
+        }
+        changed shown => { self.publish(); }
+        changed pointer-x => { self.publish(); }
+        changed pointer-y => { self.publish(); }
+    row-body := VerticalLayout {
         spacing: 4px;
         HorizontalLayout {
             spacing: 6px;
@@ -113,6 +145,8 @@ export component ModelsCard inherits PanelCard {
                 background: row.color;
             }
         }
+    }
+    }
     }
     if root.data.toggle != "": Rectangle {
         height: 16px;

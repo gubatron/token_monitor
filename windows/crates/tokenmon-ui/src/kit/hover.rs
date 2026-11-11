@@ -91,3 +91,73 @@ pub fn usage_line(day: DayUsage, noun: &str) -> String {
         )
     }
 }
+
+/// Like [`label_origin`], raised so the label's bottom edge does not pass
+/// `max_y` when one is given (a container near the panel's bottom, where a
+/// label hanging below it would be cut off). A label taller than its
+/// container may rise above the container's top.
+///
+/// # Examples
+///
+/// ```
+/// use tokenmon_ui::kit::hover::label_origin_within;
+/// let size = (100.0, 60.0);
+/// // Near the bottom edge the label ends at the edge.
+/// assert_eq!(label_origin_within((200.0, 90.0), size, 300.0, Some(100.0)).1, 40.0);
+/// // Without a limit it stays centered on the pointer.
+/// assert_eq!(label_origin_within((200.0, 90.0), size, 300.0, None).1, 60.0);
+/// ```
+pub fn label_origin_within(
+    pointer: (f64, f64),
+    label: (f64, f64),
+    container_width: f64,
+    max_y: Option<f64>,
+) -> (f64, f64) {
+    let (x, centered) = label_origin(pointer, label, container_width);
+    let y = max_y.map_or(centered, |max| centered.min(max - label.1));
+    (x, y)
+}
+
+/// A row's vertical span: its top and height.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RowFrame {
+    /// Top edge.
+    pub min_y: f64,
+    /// Height.
+    pub height: f64,
+}
+
+impl RowFrame {
+    /// Vertical distance from `y` to the row; 0 inside it.
+    fn distance(self, y: f64) -> f64 {
+        if y < self.min_y {
+            self.min_y - y
+        } else if y > self.min_y + self.height {
+            y - (self.min_y + self.height)
+        } else {
+            0.0
+        }
+    }
+}
+
+/// The row whose vertical span is nearest `y` (the one containing it, when
+/// any does), so the gaps between rows keep the label up; `None` without rows.
+///
+/// # Examples
+///
+/// ```
+/// use tokenmon_ui::kit::hover::{nearest_row_index, RowFrame};
+/// let rows = [
+///     RowFrame { min_y: 20.0, height: 30.0 },
+///     RowFrame { min_y: 60.0, height: 30.0 },
+/// ];
+/// assert_eq!(nearest_row_index(52.0, &rows), Some(0));
+/// assert_eq!(nearest_row_index(58.0, &rows), Some(1));
+/// assert_eq!(nearest_row_index(10.0, &[]), None);
+/// ```
+pub fn nearest_row_index(y: f64, rows: &[RowFrame]) -> Option<usize> {
+    rows.iter()
+        .enumerate()
+        .min_by(|(_, a), (_, b)| a.distance(y).total_cmp(&b.distance(y)))
+        .map(|(i, _)| i)
+}

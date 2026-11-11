@@ -3,10 +3,11 @@
 
 use chrono::{DateTime, Utc};
 use tokenmon_core::ProviderId;
+use tokenmon_provider_claude::hover::ClaudeModelHoverDetail;
 
 use super::common::{
-    DailyBudgetInput, DailyBudgetVm, FooterVm, HeaderVm, MetricVm, ModelRowVm, ModelsCardVm,
-    PanelContext, PanelVm, ProviderStatus, SignInAction, TrackVm, build_daily_budget,
+    DailyBudgetInput, DailyBudgetVm, FooterVm, HeaderVm, HoverCardVm, MetricVm, ModelRowVm,
+    ModelsCardVm, PanelContext, PanelVm, ProviderStatus, SignInAction, TrackVm, build_daily_budget,
     standard_frame,
 };
 use super::format;
@@ -35,6 +36,8 @@ pub struct CodeModelInput {
     pub cost_usd: f64,
     /// Share of month spend, percent.
     pub share_percent: f64,
+    /// What the row's hover label says; `None` shows no label.
+    pub hover: Option<ClaudeModelHoverDetail>,
 }
 
 /// Token+spend totals for one period.
@@ -128,6 +131,26 @@ fn spend(t: &CodeTotalsInput) -> String {
     )
 }
 
+/// The floating label of a model row (Swift `ClaudeModelHoverLabel`): title,
+/// token total with its API-rate value, the breakdown, then last month's
+/// totals and the change against it.
+pub fn model_hover(d: &ClaudeModelHoverDetail) -> HoverCardVm {
+    HoverCardVm {
+        title: d.title.clone(),
+        caption: None,
+        total: Some(format::tokens(u64::try_from(d.tokens).unwrap_or(0))),
+        value: Some(d.value_text.clone()),
+        rows: d
+            .breakdown
+            .iter()
+            .map(|r| (r.label.clone(), r.value.clone()))
+            .collect(),
+        extra_rows: Vec::new(),
+        note: d.previous_line.clone(),
+        verdict: Some(d.change_line.clone()),
+    }
+}
+
 /// Builds the Claude Code section.
 pub fn build_code_section(c: &ClaudeCodeInput) -> ClaudeCodeVm {
     let accent = ProviderId::Claude.panel_accent();
@@ -144,6 +167,7 @@ pub fn build_code_section(c: &ClaudeCodeInput) -> ClaudeCodeVm {
             tag: None,
             share_fraction: format::clamp_percent(m.share_percent) / 100.0,
             color: accent,
+            hover: m.hover.as_ref().map(model_hover),
         })
         .collect();
     ClaudeCodeVm {

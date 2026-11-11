@@ -185,7 +185,7 @@ fn test_header_and_labels() {
     assert_eq!(header_percent(0.0), "");
     assert_eq!(weekday_label(d(10, 13)), "Mo");
     let bar = day_bar(&day(d(10, 14), 31.0, 100.0 / 7.0), d(10, 16), "weekly");
-    assert_eq!(bar.hover_title.as_str(), "Tuesday, Oct 14");
+    assert_eq!(bar.hover.title.as_str(), "Tuesday, Oct 14");
     assert_eq!(bar.label_percent.as_str(), "31%");
     assert_eq!(bar.label_weekday.as_str(), "Tu");
     assert!(bar.show_fill && !bar.future);
@@ -197,7 +197,7 @@ fn test_future_and_tiny_days_draw_no_fill() {
     let today = d(10, 16);
     let future = day_bar(&day(d(10, 18), 5.0, 14.3), today, "weekly");
     assert!(future.future && !future.show_fill);
-    assert_eq!(future.hover_usage.as_str(), "");
+    assert_eq!(future.hover.caption.as_str(), "");
     let tiny = day_bar(&day(today, 0.01, 14.3), today, "weekly");
     assert!(!tiny.show_fill);
 }
@@ -217,11 +217,11 @@ fn test_hover_tokens_and_model_cap() {
         models: (0..5).map(|i| (format!("m{i}"), "1K".into())).collect(),
     });
     let bar = day_bar(&dd, d(10, 16), "weekly");
-    assert_eq!(bar.tokens_total.as_str(), "1.2M");
-    assert_eq!(bar.token_rows.row_count(), 4);
-    assert_eq!(bar.model_rows.row_count(), 3);
+    assert_eq!(bar.hover.total.as_str(), "1.2M");
+    assert_eq!(bar.hover.rows.row_count(), 4);
+    assert_eq!(bar.hover.extra_rows.row_count(), 3);
     let none = day_bar(&day(d(10, 14), 10.0, 14.3), d(10, 16), "weekly");
-    assert_eq!(none.tokens_total.as_str(), "");
+    assert_eq!(none.hover.total.as_str(), "");
 }
 
 /// Footer selection: pace caption wins, then "no usage", then over-budget.

@@ -190,6 +190,7 @@ pub fn build_opencode(input: &OpenCodeInput, ctx: &PanelContext) -> PanelVm<Open
             tag: None,
             share_fraction: format::clamp_percent(m.percent_of_window) / 100.0,
             color: m.color,
+            hover: None,
         })
         .collect();
     PanelVm::with_usage(
@@ -443,6 +444,7 @@ pub fn build_openrouter(input: &OpenRouterInput, ctx: &PanelContext) -> OpenRout
             tag: m.is_revealed.then(|| "revealed".to_owned()),
             share_fraction: format::clamp_percent(m.percent_of_window) / 100.0,
             color: accent,
+            hover: None,
         })
         .collect();
     let show_entry = input.is_replacing || s.needs_sign_in;

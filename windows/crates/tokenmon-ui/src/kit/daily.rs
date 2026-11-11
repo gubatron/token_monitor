@@ -5,7 +5,7 @@ use chrono::{Datelike, NaiveDate};
 use slint::{ModelRc, SharedString, VecModel};
 
 use crate::kit::hover::{DayUsage, usage_line};
-use crate::kit::ui::{DayBar, LabelValue};
+use crate::kit::ui::{DayBar, HoverCardData, LabelValue};
 
 /// Share of a day's allowance below which no fill is drawn.
 const MIN_FILL_FRACTION: f64 = 0.005;
@@ -73,14 +73,7 @@ pub fn day_bar(day: &DailyBudgetDay, today: NaiveDate, noun: &str) -> DayBar {
     };
     let tokens = day.tokens.clone().unwrap_or_default();
     let rows = |pairs: Vec<(&str, String)>| -> ModelRc<LabelValue> {
-        let items: Vec<LabelValue> = pairs
-            .into_iter()
-            .map(|(l, v)| LabelValue {
-                label: l.into(),
-                value: v.into(),
-            })
-            .collect();
-        ModelRc::new(VecModel::from(items))
+        label_values(pairs.into_iter().map(|(l, v)| (l.to_owned(), v)))
     };
     DayBar {
         fill_percent: day.percent_of_budget as f32,
@@ -89,29 +82,33 @@ pub fn day_bar(day: &DailyBudgetDay, today: NaiveDate, noun: &str) -> DayBar {
         future,
         label_percent: SharedString::from(format!("{}%", (day.spent.round() as i64).max(0))),
         label_weekday: weekday_label(day.date).into(),
-        hover_title: day.date.format("%A, %b %-d").to_string().into(),
-        hover_usage: usage.into(),
-        tokens_total: tokens.total.clone().into(),
-        tokens_cost: tokens.cost.clone().into(),
-        token_rows: rows(vec![
-            ("Input", tokens.input),
-            ("Output", tokens.output),
-            ("Cache read", tokens.cache_read),
-            ("Cache write", tokens.cache_write),
-        ]),
-        model_rows: {
-            let items: Vec<LabelValue> = tokens
-                .models
-                .into_iter()
-                .take(3)
-                .map(|(l, v)| LabelValue {
-                    label: l.into(),
-                    value: v.into(),
-                })
-                .collect();
-            ModelRc::new(VecModel::from(items))
+        hover: HoverCardData {
+            title: day.date.format("%A, %b %-d").to_string().into(),
+            caption: usage.into(),
+            total: tokens.total.clone().into(),
+            value: tokens.cost.clone().into(),
+            rows: rows(vec![
+                ("Input", tokens.input),
+                ("Output", tokens.output),
+                ("Cache read", tokens.cache_read),
+                ("Cache write", tokens.cache_write),
+            ]),
+            extra_rows: label_values(tokens.models.into_iter().take(3)),
+            note: SharedString::new(),
+            verdict: SharedString::new(),
         },
     }
+}
+
+/// A model of label/value rows.
+fn label_values(pairs: impl Iterator<Item = (String, String)>) -> ModelRc<LabelValue> {
+    let items: Vec<LabelValue> = pairs
+        .map(|(l, v)| LabelValue {
+            label: l.into(),
+            value: v.into(),
+        })
+        .collect();
+    ModelRc::new(VecModel::from(items))
 }
 
 /// Builds every column of a chart.

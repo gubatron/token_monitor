@@ -31,6 +31,29 @@ export struct MetricItem {
     value: string,
 }
 
+/// Content of a floating hover label. Daily bars and the Claude model rows
+/// both fill it, so every hover label looks the same (`HoverLabelCard`).
+/// Sections hide when their text is empty: the token block without `total`,
+/// the lower block without `extra-rows`, `note` and `verdict`.
+export struct HoverCardData {
+    /// First line naming what it describes, e.g. "Tuesday, Oct 14".
+    title: string,
+    /// Secondary one-line summary under the title (the day's usage line).
+    caption: string,
+    /// Large token total, e.g. "1.2M" (empty hides the token block).
+    total: string,
+    /// Value beside the total, e.g. "≈ $4.20+" (empty hides it).
+    value: string,
+    /// Input / Output / Cache read / Cache write rows.
+    rows: [LabelValue],
+    /// Second grid under a rule, e.g. the day's top models.
+    extra-rows: [LabelValue],
+    /// Caption under a rule, e.g. last month's totals.
+    note: string,
+    /// Semibold closing line, e.g. "↑ 14% · +$212.40 vs October".
+    verdict: string,
+}
+
 /// One day column of the daily bar charts.
 export struct DayBar {
     /// Fill height as a percentage of the day's allowance (can exceed 100;
@@ -46,16 +69,7 @@ export struct DayBar {
     label-percent: string,
     /// Bottom label, e.g. "Mo".
     label-weekday: string,
-    /// Hover title, e.g. "Tuesday, Oct 14".
-    hover-title: string,
-    /// Hover usage line (empty for future days).
-    hover-usage: string,
-    /// Token total, e.g. "1.2M" (empty hides the token section).
-    tokens-total: string,
-    /// Cost, e.g. "≈ $4.20+" (empty hides it).
-    tokens-cost: string,
-    /// Input / Output / Cache read / Cache write rows.
-    token-rows: [LabelValue],
-    /// Up to three model rows.
-    model-rows: [LabelValue],
+    /// The floating label for this column (title "Tuesday, Oct 14", the
+    /// usage line, the token block and the top models).
+    hover: HoverCardData,
 }

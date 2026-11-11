@@ -380,6 +380,7 @@ fn test_every_panel_state_renders_offscreen() {
             is_unpriced: false,
             cost_usd: 10.0,
             share_percent: 80.0,
+            hover: None,
         }],
         models_expanded: true,
     };

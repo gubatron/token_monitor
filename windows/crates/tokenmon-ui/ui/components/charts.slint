@@ -1,6 +1,6 @@
 // Daily bar charts, week paging and the hover label (spec 04 section 3.4).
 import { Theme, Typo, PanelMetrics } from "theme.slint";
-import { DayBar, LabelValue } from "types.slint";
+import { DayBar, LabelValue, HoverCardData } from "types.slint";
 import { PanelSectionHeader, DigitText } from "basics.slint";
 
 /// Pointer-to-chart geometry, mirrored by `tokenmon_ui::kit::hover`
@@ -27,6 +27,16 @@ export global HoverMath {
         } else {
             max(0px, min(pointer-x - PanelMetrics.hover-gap - label-width, container-width - label-width))
         }
+    }
+
+    /// Stands for "no bottom limit" in `label-y`.
+    out property <length> no-limit: 100000px;
+
+    /// Top edge of the floating label: centered on the pointer, raised so its
+    /// bottom stays above `max-y` (a container near the panel's bottom), then
+    /// kept inside the window of height `window-height`.
+    pure public function label-y(pointer-y: length, label-height: length, max-y: length, window-height: length) -> length {
+        max(0px, min(min(pointer-y - label-height / 2, max-y - label-height), window-height - label-height))
     }
 }
 
@@ -87,9 +97,37 @@ component HoverDivider inherits Rectangle {
     opacity: 0.4;
 }
 
-/// The floating card shown above a hovered day (date, usage line, tokens).
-export component DailyBudgetHoverLabel inherits Rectangle {
-    in property <DayBar> day;
+/// Label/value rows in two columns, values right-aligned.
+component HoverRows inherits VerticalLayout {
+    in property <[LabelValue]> rows;
+    in property <bool> elide-labels: false;
+    spacing: 1px;
+    for row in root.rows: HorizontalLayout {
+        spacing: 12px;
+        Text {
+            text: row.label;
+            font-family: Typo.family;
+            font-size: Typo.caption-size;
+            color: Theme.secondary;
+            horizontal-stretch: 1;
+            overflow: root.elide-labels ? TextOverflow.elide : TextOverflow.clip;
+        }
+        Text {
+            text: row.value;
+            font-family: Typo.family;
+            font-size: Typo.micro-size;
+            font-weight: Typo.semibold;
+            color: Theme.primary;
+            horizontal-alignment: right;
+        }
+    }
+}
+
+/// The floating card of every hover label: title, optional caption, token
+/// total with its value, breakdown rows, then a lower block (extra rows,
+/// note, verdict). Mirrors Swift's `HoverLabelCard` and its parts.
+export component HoverLabelCard inherits Rectangle {
+    in property <HoverCardData> card;
     width: content.preferred-width;
     height: content.preferred-height;
     background: Theme.window-background;
@@ -106,23 +144,23 @@ export component DailyBudgetHoverLabel inherits Rectangle {
         padding-bottom: 8px;
         spacing: 4px;
         Text {
-            text: root.day.hover-title;
+            text: root.card.title;
             font-family: Typo.family;
             font-size: Typo.caption-size;
             font-weight: Typo.semibold;
             color: Theme.primary;
         }
-        if root.day.hover-usage != "": Text {
-            text: root.day.hover-usage;
+        if root.card.caption != "": Text {
+            text: root.card.caption;
             font-family: Typo.family;
             font-size: Typo.caption-size;
             color: Theme.secondary;
         }
-        if root.day.tokens-total != "": HoverDivider { }
-        if root.day.tokens-total != "": HorizontalLayout {
+        if root.card.total != "": HoverDivider { }
+        if root.card.total != "": HorizontalLayout {
             spacing: 4px;
             Text {
-                text: root.day.tokens-total;
+                text: root.card.total;
                 font-family: Typo.family;
                 font-size: Typo.title-size;
                 font-weight: Typo.semibold;
@@ -135,9 +173,9 @@ export component DailyBudgetHoverLabel inherits Rectangle {
                 color: Theme.secondary;
                 vertical-alignment: bottom;
             }
-            Rectangle { min-width: root.day.tokens-cost != "" ? 10px : 0px; horizontal-stretch: 1; }
+            Rectangle { min-width: root.card.value != "" ? 10px : 0px; horizontal-stretch: 1; }
             Text {
-                text: root.day.tokens-cost;
+                text: root.card.value;
                 font-family: Typo.family;
                 font-size: Typo.body-size;
                 font-weight: Typo.semibold;
@@ -145,50 +183,61 @@ export component DailyBudgetHoverLabel inherits Rectangle {
                 vertical-alignment: bottom;
             }
         }
-        if root.day.tokens-total != "": VerticalLayout {
-            spacing: 1px;
-            for row in root.day.token-rows: HorizontalLayout {
-                spacing: 12px;
-                Text {
-                    text: row.label;
-                    font-family: Typo.family;
-                    font-size: Typo.caption-size;
-                    color: Theme.secondary;
-                    horizontal-stretch: 1;
-                }
-                Text {
-                    text: row.value;
-                    font-family: Typo.family;
-                    font-size: Typo.micro-size;
-                    font-weight: Typo.semibold;
-                    color: Theme.primary;
-                    horizontal-alignment: right;
-                }
-            }
+        if root.card.total != "": HoverRows { rows: root.card.rows; }
+        if root.card.total != "" && (root.card.extra-rows.length > 0 || root.card.note != "" || root.card.verdict != ""): HoverDivider { }
+        if root.card.extra-rows.length > 0: HoverRows { rows: root.card.extra-rows; elide-labels: true; }
+        if root.card.note != "": Text {
+            text: root.card.note;
+            font-family: Typo.family;
+            font-size: Typo.caption-size;
+            color: Theme.secondary;
         }
-        if root.day.tokens-total != "" && root.day.model-rows.length > 0: HoverDivider { }
-        if root.day.tokens-total != "" && root.day.model-rows.length > 0: VerticalLayout {
-            spacing: 1px;
-            for row in root.day.model-rows: HorizontalLayout {
-                spacing: 12px;
-                Text {
-                    text: row.label;
-                    font-family: Typo.family;
-                    font-size: Typo.caption-size;
-                    color: Theme.secondary;
-                    horizontal-stretch: 1;
-                    overflow: elide;
-                }
-                Text {
-                    text: row.value;
-                    font-family: Typo.family;
-                    font-size: Typo.micro-size;
-                    font-weight: Typo.semibold;
-                    color: Theme.primary;
-                    horizontal-alignment: right;
-                }
-            }
+        if root.card.verdict != "": Text {
+            text: root.card.verdict;
+            font-family: Typo.family;
+            font-size: Typo.caption-size;
+            font-weight: Typo.semibold;
+            color: Theme.primary;
         }
+    }
+}
+
+/// The one floating hover label's state. Charts and model rows publish the
+/// hovered item here (window coordinates) and `HoverOverlayHost`, a direct
+/// child of the window, draws it above every card. A label drawn inside its
+/// own card is painted over by the cards after it, which hid the token block
+/// of a daily bar hovered above other cards.
+export global HoverOverlay {
+    in-out property <bool> active;
+    in-out property <HoverCardData> card;
+    /// Pointer position in window coordinates.
+    in-out property <length> pointer-x;
+    in-out property <length> pointer-y;
+    /// Left edge and width of the hovered container, window coordinates.
+    in-out property <length> region-x;
+    in-out property <length> region-width;
+    /// Window y the label's bottom may not pass (`HoverMath.no-limit` for none).
+    in-out property <length> region-bottom;
+
+    /// Publishes (or, with `active` false, hides) the label.
+    public function show(active: bool, card: HoverCardData, pointer-x: length, pointer-y: length, region-x: length, region-width: length, region-bottom: length) {
+        self.active = active;
+        self.card = card;
+        self.pointer-x = pointer-x;
+        self.pointer-y = pointer-y;
+        self.region-x = region-x;
+        self.region-width = region-width;
+        self.region-bottom = region-bottom;
+    }
+}
+
+/// Draws the floating hover label. Place it as the last child of the window,
+/// sized to fill it, so it paints above everything.
+export component HoverOverlayHost inherits Rectangle {
+    if HoverOverlay.active && HoverOverlay.card.title != "": HoverLabelCard {
+        card: HoverOverlay.card;
+        x: HoverOverlay.region-x + HoverMath.label-x(HoverOverlay.pointer-x - HoverOverlay.region-x, self.width, HoverOverlay.region-width);
+        y: HoverMath.label-y(HoverOverlay.pointer-y, self.height, HoverOverlay.region-bottom, root.height);
     }
 }
 
@@ -287,13 +336,21 @@ component DailyChartBody inherits VerticalLayout {
                 hovered: i == bars.hovered;
             }
         }
+        private property <length> pointer-x: touch.absolute-position.x + touch.mouse-x;
+        private property <length> pointer-y: touch.absolute-position.y + touch.mouse-y;
         touch := TouchArea { }
-        if bars.hovered >= 0 && bars.hovered < root.days.length: DailyBudgetHoverLabel {
-            z: 100;
-            day: root.days[bars.hovered];
-            x: HoverMath.label-x(touch.mouse-x, self.width, bars.width);
-            y: touch.mouse-y - self.height / 2;
+        // The label is drawn by `HoverOverlayHost` at the window root, above
+        // every card; this only publishes what is hovered and where.
+        function publish() {
+            HoverOverlay.show(
+                self.hovered >= 0 && self.hovered < root.days.length,
+                root.days[max(0, self.hovered)].hover,
+                self.pointer-x, self.pointer-y,
+                self.absolute-position.x, self.width, HoverMath.no-limit);
         }
+        changed hovered => { self.publish(); }
+        changed pointer-x => { self.publish(); }
+        changed pointer-y => { self.publish(); }
     }
     if root.footer != "": Text {
         text: root.footer;
