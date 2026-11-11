@@ -157,7 +157,7 @@ final class ClaudeModelHoverDetailTests: XCTestCase {
         ])
         XCTAssertEqual(
             detail.accessibilityLabel,
-            "Opus 5.5, November: 50M tokens, about $1,000.00. "
+            "Opus 5.5, November: 50M tokens on this Mac, about $1,000.00. "
                 + "Input 0, Output 50M, Cache read 0, Cache write 0. "
                 + "October: 40M tokens, about $800.00. "
                 + "Up 25%, $200.00 more than October"
@@ -169,7 +169,7 @@ final class ClaudeModelHoverDetailTests: XCTestCase {
         let detail = try detail(unknown, days: ["2026-11-04": [unknown: ClaudeModelTokens(outputTokens: 1_000)]])
         XCTAssertEqual(
             detail.accessibilityLabel,
-            "Unknown 9, November: 1K tokens, no listed price. "
+            "Unknown 9, November: 1K tokens on this Mac, no listed price. "
                 + "Input 0, Output 1K, Cache read 0, Cache write 0. "
                 + "No October history (recorded since Nov 4)"
         )

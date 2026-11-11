@@ -88,6 +88,16 @@ struct OverviewHourlyUsageChart: View {
             }
         }
 
+        /// Where ``tokenCount(for:)`` is counted. OpenCode's hourly tokens are
+        /// read from this computer's `opencode.db`, and Claude's would come
+        /// from this Mac's transcripts; Grok's and Cursor's are the account's.
+        var tokenSource: UsageSource {
+            switch self {
+            case .grok, .grokbot, .cursor: return .account
+            case .claude, .openCodeGo, .openCodeZen: return .thisComputer
+            }
+        }
+
         /// Unit label for the hover tooltip: Grok and Grokbot report a weekly
         /// pool, Claude its 5-hour window (which counts every model), and
         /// Cursor and OpenCode a weekly share of their monthly plan.
@@ -258,6 +268,7 @@ struct OverviewHourlyUsageChart: View {
                 title: provider.title,
                 activity: activity,
                 tokens: provider.tokenCount(for: hour),
+                tokenSource: provider.tokenSource,
                 color: provider.color,
                 quotaLabel: provider.quotaLabel
             )
@@ -270,6 +281,8 @@ struct OverviewHourlyUsageChart: View {
         let title: String
         let activity: Double
         let tokens: Int64?
+        /// Where `tokens` was counted; local counts read "on this Mac".
+        let tokenSource: UsageSource
         let color: Color
         let quotaLabel: String
     }
@@ -284,13 +297,17 @@ struct OverviewHourlyUsageChart: View {
 
     private func hourHelp(_ hour: ProviderHourUsage, segments: [HourBarSegment]) -> String {
         guard !segments.isEmpty else { return "" }
-        let parts = segments.map { segment -> String in
-            let quota = String(format: "%.2f%% %@", segment.activity, segment.quotaLabel)
-            if let tokens = segment.tokens, tokens > 0 {
-                return "\(segment.title) \(quota) · \(Format.tokens(tokens))"
-            }
-            return "\(segment.title) \(quota)"
-        }
+        let parts = segments.map(Self.segmentHelp)
         return "\(hour.hourLabel): \(parts.joined(separator: " · "))"
+    }
+
+    /// One slice of the hour's tooltip: "Cursor 1.20% of weekly share · 3.4M",
+    /// or "… · 3.4M tokens on this Mac" when the tokens are this computer's.
+    static func segmentHelp(_ segment: HourBarSegment) -> String {
+        let quota = String(format: "%.2f%% %@", segment.activity, segment.quotaLabel)
+        guard let tokens = segment.tokens, tokens > 0 else { return "\(segment.title) \(quota)" }
+        let count = Format.tokens(tokens)
+        let located = segment.tokenSource.locationPhrase.map { "\(count) tokens \($0)" } ?? count
+        return "\(segment.title) \(quota) · \(located)"
     }
 }

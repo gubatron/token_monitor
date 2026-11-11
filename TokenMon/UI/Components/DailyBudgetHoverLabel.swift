@@ -22,7 +22,8 @@ enum DailyBudgetHover {
 }
 
 /// Floating detail for one day: date, budget use, and the day's tokens when
-/// the provider counts them.
+/// the provider counts them ("on this Mac" when counted from local logs; the
+/// budget line is the account's and stays unlabelled).
 struct DailyBudgetHoverLabel: View {
     let day: DailyBudgetDay
     var allowanceNoun: String
@@ -46,7 +47,7 @@ struct DailyBudgetHoverLabel: View {
     @ViewBuilder
     private func tokenDetail(_ tokens: DailyTokenUsage) -> some View {
         HoverLabelDivider()
-        HoverLabelTokenTotal(tokens: tokens.totalTokens, valueText: Self.valueText(tokens))
+        HoverLabelTokenTotal(tokens: tokens.totalTokens, valueText: Self.valueText(tokens), source: tokens.source)
         HoverLabelRows(
             rows: HoverLabelRow.breakdown(
                 input: tokens.inputTokens,
