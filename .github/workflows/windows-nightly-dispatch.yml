@@ -1,0 +1,24 @@
+name: Windows nightly dispatch
+
+# GitHub fires `schedule:` triggers only from the default branch, but the
+# Windows port (and its nightly fuzz workflow) lives on `windows-port` until it
+# merges. This tiny workflow on master starts the long fuzz run there each night.
+# Delete it once windows-port is merged into master.
+
+on:
+  schedule:
+    - cron: "41 6 * * *" # daily, 06:41 UTC
+  workflow_dispatch:
+
+permissions:
+  actions: write
+
+jobs:
+  dispatch:
+    if: github.repository == 'gubatron/token_monitor'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch windows-fuzz-nightly.yml on windows-port
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run windows-fuzz-nightly.yml -R "$GITHUB_REPOSITORY" --ref windows-port
