@@ -23,6 +23,7 @@ export global OpenCodeVm {
     in property <ModelsData> models;
     in property <bool> has-metrics;
     in property <[MetricItem]> metrics;
+    in property <string> metrics-tag;
     in property <string> sign-in-label;
     in property <FooterData> footer;
 }
@@ -48,7 +49,7 @@ export component OpenCodeBody inherits VerticalLayout {
         toggle-expanded => { OpenCodeVm.toggle-models(); }
         toggle-show-all => { OpenCodeVm.toggle-show-all-models(); }
     }
-    if OpenCodeVm.has-usage && OpenCodeVm.has-metrics: MetricStatGrid { items: OpenCodeVm.metrics; }
+    if OpenCodeVm.has-usage && OpenCodeVm.has-metrics: MetricStatGrid { items: OpenCodeVm.metrics; source-tag: OpenCodeVm.metrics-tag; }
     if OpenCodeVm.has-usage && OpenCodeVm.sign-in-label != "": ActionButton {
         text: OpenCodeVm.sign-in-label;
         width: 160px;

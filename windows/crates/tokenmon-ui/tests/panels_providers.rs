@@ -355,6 +355,7 @@ fn test_cursor_usage() {
     let m: Vec<(String, String)> = u
         .metrics
         .unwrap()
+        .stats
         .into_iter()
         .map(|m| (m.title, m.value))
         .collect();
@@ -447,9 +448,19 @@ fn test_claude_main() {
         Some("Resets Sun 30 August 12:00am")
     );
     let code = v.code.unwrap();
-    let m: Vec<&str> = code.metrics.iter().map(|m| m.value.as_str()).collect();
+    let m: Vec<&str> = code
+        .metrics
+        .stats
+        .iter()
+        .map(|m| m.value.as_str())
+        .collect();
     assert_eq!(m, ["1.5M", "$12.50+", "2.0B", "$1,234.00"]);
-    let titles: Vec<&str> = code.metrics.iter().map(|m| m.title.as_str()).collect();
+    let titles: Vec<&str> = code
+        .metrics
+        .stats
+        .iter()
+        .map(|m| m.title.as_str())
+        .collect();
     assert_eq!(
         titles,
         [
@@ -723,7 +734,13 @@ fn test_opencode_windows() {
         u.estimate_note,
         Some("Estimated from local sessions — sign in for console accuracy.")
     );
-    let l: Vec<String> = u.metrics.unwrap().into_iter().map(|m| m.value).collect();
+    let l: Vec<String> = u
+        .metrics
+        .unwrap()
+        .stats
+        .into_iter()
+        .map(|m| m.value)
+        .collect();
     assert_eq!(l, ["$3.00", "3K", "1K", "2K"]);
 }
 
@@ -878,7 +895,12 @@ fn test_openrouter_main() {
         t.caption.as_deref(),
         Some("$42.40 of $100.00 · $57.60 left")
     );
-    let stats: Vec<(String, String)> = u.stats.into_iter().map(|m| (m.title, m.value)).collect();
+    let stats: Vec<(String, String)> = u
+        .stats
+        .stats
+        .into_iter()
+        .map(|m| (m.title, m.value))
+        .collect();
     assert_eq!(
         stats,
         [
@@ -914,10 +936,10 @@ fn test_openrouter_no_budget() {
         u.no_limit_text,
         Some("This key has no credit limit, so usage shows as spend only.")
     );
-    assert_eq!(u.stats[0].title, "Credit limit");
-    assert_eq!(u.stats[0].value, "None");
-    assert_eq!(u.stats[1].value, "$10.00", "falls back to key usage");
-    assert_eq!(u.stats[2].value, "$0.00");
+    assert_eq!(u.stats.stats[0].title, "Credit limit");
+    assert_eq!(u.stats.stats[0].value, "None");
+    assert_eq!(u.stats.stats[1].value, "$10.00", "falls back to key usage");
+    assert_eq!(u.stats.stats[2].value, "$0.00");
 }
 
 /// Key-limit budget stat title.
@@ -929,7 +951,7 @@ fn test_openrouter_key_limit_title() {
         .panel
         .usage
         .unwrap();
-    assert_eq!(u.stats[0].title, "Key spending limit");
+    assert_eq!(u.stats.stats[0].title, "Key spending limit");
 }
 
 /// Key entry: signed-out, replace mode, button enabling and error.

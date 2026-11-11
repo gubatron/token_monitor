@@ -21,6 +21,7 @@ export global ClaudeVm {
     in property <DailyData> daily;
     in property <bool> has-code;
     in property <[MetricItem]> code-metrics;
+    in property <string> code-metrics-tag;
     in property <ModelsData> code-models;
     in property <FooterData> footer;
 }
@@ -40,7 +41,7 @@ export component ClaudeBody inherits VerticalLayout {
         previous-week => { ClaudeVm.previous-week(); }
         next-week => { ClaudeVm.next-week(); }
     }
-    if ClaudeVm.has-code: MetricStatGrid { items: ClaudeVm.code-metrics; }
+    if ClaudeVm.has-code: MetricStatGrid { items: ClaudeVm.code-metrics; source-tag: ClaudeVm.code-metrics-tag; }
     if ClaudeVm.has-code && ClaudeVm.code-models.present: ModelsCard {
         data: ClaudeVm.code-models;
         toggle-expanded => { ClaudeVm.toggle-code-models(); }

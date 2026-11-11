@@ -2,11 +2,13 @@
 //! (`OpenRouterPanelView`, spec 03 section 4.6) panels.
 
 use chrono::{DateTime, Utc};
+use tokenmon_core::usage::UsageSource;
 use tokenmon_core::{ProviderId, Srgb};
+use tokenmon_provider_opencode::budget as opencode_budget;
 
 use super::common::{
-    DailyBudgetInput, DailyBudgetVm, FooterVm, HeaderVm, MetricVm, ModelRowVm, ModelsCardVm,
-    PanelContext, PanelKind, PanelVm, ProviderStatus, SignInAction, StaleVm, TrackVm,
+    DailyBudgetInput, DailyBudgetVm, FooterVm, HeaderVm, MetricGridVm, MetricVm, ModelRowVm,
+    ModelsCardVm, PanelContext, PanelKind, PanelVm, ProviderStatus, SignInAction, StaleVm, TrackVm,
     build_daily_budget, standard_frame, waiting_message,
 };
 use super::format;
@@ -125,7 +127,7 @@ pub struct OpenCodeUsage {
     /// Top models card.
     pub models: Option<ModelsCardVm>,
     /// 2x2 local stats.
-    pub metrics: Option<Vec<MetricVm>>,
+    pub metrics: Option<MetricGridVm>,
     /// Plain (non-stale) error caption.
     pub error_text: Option<String>,
     /// Sign-in button when the session needs it.
@@ -163,6 +165,13 @@ fn model_cost_text(m: &OpenCodeModelInput) -> String {
         format::usd(m.cost_usd)
     }
 }
+
+/// OpenCode's stats card is estimated from `opencode.db` on this PC, so it is
+/// tagged "This PC".
+pub const OPENCODE_STATS_SOURCE: UsageSource = opencode_budget::LOCAL_SOURCE;
+
+/// OpenCode's Top Models list is read from this PC's `opencode.db` too.
+pub const OPENCODE_MODELS_SOURCE: UsageSource = opencode_budget::LOCAL_SOURCE;
 
 /// Builds the OpenCode panel.
 pub fn build_opencode(input: &OpenCodeInput, ctx: &PanelContext) -> PanelVm<OpenCodeUsage> {
@@ -205,6 +214,7 @@ pub fn build_opencode(input: &OpenCodeInput, ctx: &PanelContext) -> PanelVm<Open
             models: (!rows.is_empty()).then(|| {
                 ModelsCardVm::new(
                     "Top Models by Spend",
+                    OPENCODE_MODELS_SOURCE,
                     true,
                     snap.models_expanded,
                     rows,
@@ -212,12 +222,15 @@ pub fn build_opencode(input: &OpenCodeInput, ctx: &PanelContext) -> PanelVm<Open
                 )
             }),
             metrics: snap.local_stats.as_ref().map(|l| {
-                vec![
-                    MetricVm::new("Monthly spend", format::usd(l.monthly_usd)),
-                    MetricVm::new("Total tokens", format::tokens(l.tokens)),
-                    MetricVm::new("Input tokens", format::tokens(l.input_tokens)),
-                    MetricVm::new("Output tokens", format::tokens(l.output_tokens)),
-                ]
+                MetricGridVm::new(
+                    OPENCODE_STATS_SOURCE,
+                    vec![
+                        MetricVm::new("Monthly spend", format::usd(l.monthly_usd)),
+                        MetricVm::new("Total tokens", format::tokens(l.tokens)),
+                        MetricVm::new("Input tokens", format::tokens(l.input_tokens)),
+                        MetricVm::new("Output tokens", format::tokens(l.output_tokens)),
+                    ],
+                )
             }),
             error_text: s.last_error.clone(),
             sign_in: s
@@ -340,7 +353,7 @@ pub struct OpenRouterUsage {
     /// Text when the key has no limit.
     pub no_limit_text: Option<&'static str>,
     /// `Stats` grid.
-    pub stats: Vec<MetricVm>,
+    pub stats: MetricGridVm,
     /// Models card.
     pub models: Option<ModelsCardVm>,
     /// Stale caption.
@@ -418,19 +431,22 @@ pub fn build_openrouter(input: &OpenRouterInput, ctx: &PanelContext) -> OpenRout
     let title = snap
         .budget_source
         .map_or("Credit limit", BudgetSource::stat_title);
-    let stats = vec![
-        MetricVm::new(
-            title,
-            snap.budget_usd
-                .map_or_else(|| "None".to_owned(), format::usd),
-        ),
-        MetricVm::new(
-            "Total spent",
-            format::usd(snap.account_used_usd.unwrap_or(snap.key_usage_usd)),
-        ),
-        MetricVm::new("Remaining", format::usd(snap.remaining_usd.unwrap_or(0.0))),
-        MetricVm::new("Spent today", format::usd(snap.key_usage_daily_usd)),
-    ];
+    let stats = MetricGridVm::new(
+        UsageSource::Account,
+        vec![
+            MetricVm::new(
+                title,
+                snap.budget_usd
+                    .map_or_else(|| "None".to_owned(), format::usd),
+            ),
+            MetricVm::new(
+                "Total spent",
+                format::usd(snap.account_used_usd.unwrap_or(snap.key_usage_usd)),
+            ),
+            MetricVm::new("Remaining", format::usd(snap.remaining_usd.unwrap_or(0.0))),
+            MetricVm::new("Spent today", format::usd(snap.key_usage_daily_usd)),
+        ],
+    );
     let rows: Vec<ModelRowVm> = snap
         .models
         .iter()
@@ -465,6 +481,7 @@ pub fn build_openrouter(input: &OpenRouterInput, ctx: &PanelContext) -> OpenRout
                 models: (!rows.is_empty()).then(|| {
                     ModelsCardVm::new(
                         "Top Models by Spend",
+                        UsageSource::Account,
                         false,
                         true,
                         rows,

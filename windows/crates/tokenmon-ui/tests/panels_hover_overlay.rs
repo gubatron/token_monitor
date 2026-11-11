@@ -251,7 +251,7 @@ fn test_hover_labels_on_the_real_panel() {
     assert!(card.total.is_empty() && card.value.is_empty());
 
     // Opus row of "Models This Month": month detail and the June comparison.
-    hover(&win, 100.0, 660.0);
+    hover(&win, 100.0, 678.0);
     let model_label = render(&win, height);
     save("win-hover-model", &model_label, height);
     let card = overlay.get_card();
@@ -271,7 +271,7 @@ fn test_hover_labels_on_the_real_panel() {
             (a.r, a.g, a.b) != (b.r, b.g, b.b)
         })
     };
-    assert!(differs(520, 600), "label hidden behind the stats card");
+    assert!(differs(538, 618), "label hidden behind the stats card");
     assert!(
         (0..WIDTH as usize).any(|x| {
             let i = 5 * WIDTH as usize + x;
@@ -282,7 +282,7 @@ fn test_hover_labels_on_the_real_panel() {
     );
 
     // The gap between two rows keeps the label up (Swift `nearestRowIndex`).
-    hover(&win, 100.0, 677.0);
+    hover(&win, 100.0, 695.0);
     assert!(overlay.get_active(), "label dropped in the row gap");
     assert_eq!(overlay.get_card().title, "Opus 5.5 · July");
 

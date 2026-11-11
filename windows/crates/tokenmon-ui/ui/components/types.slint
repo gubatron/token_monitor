@@ -29,6 +29,8 @@ export struct CategoryItem {
 export struct MetricItem {
     title: string,
     value: string,
+    /// The title as a screen reader says it, with "on this PC" when local.
+    spoken-title: string,
 }
 
 /// Content of a floating hover label. Daily bars and the Claude model rows

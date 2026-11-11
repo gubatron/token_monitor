@@ -3,11 +3,12 @@
 //! Kept mechanical on purpose: no strings or numbers are decided here.
 
 use slint::{Color, ModelRc, SharedString, VecModel};
+use tokenmon_core::usage::UsageSource;
 use tokenmon_core::{ProviderId, Srgb};
 
 use super::claude_chatgpt::{ChatGptUsage, ClaudePanelVm, ClaudeUsage};
 use super::common::{
-    DailyBudgetVm, DayBarVm, FooterVm, HeaderVm, HoverCardVm, HoverVm, MetricVm, ModelsCardVm,
+    DailyBudgetVm, DayBarVm, FooterVm, HeaderVm, HoverCardVm, HoverVm, MetricGridVm, ModelsCardVm,
     PanelVm, TrackVm, geometry,
 };
 use super::grok::GrokUsage;
@@ -63,15 +64,27 @@ fn tracks(v: &[TrackVm]) -> ModelRc<ui::TrackData> {
     model(v.iter().map(track).collect())
 }
 
-fn metrics(v: &[MetricVm]) -> ModelRc<ui::MetricItem> {
+fn metrics(g: &MetricGridVm) -> ModelRc<ui::MetricItem> {
     model(
-        v.iter()
+        g.stats
+            .iter()
             .map(|m| ui::MetricItem {
                 title: text(&m.title),
                 value: text(&m.value),
+                spoken_title: text(&g.spoken_title(m)),
             })
             .collect(),
     )
+}
+
+/// The grid's "This PC" tag; empty for account figures.
+fn metrics_tag(g: Option<&MetricGridVm>) -> SharedString {
+    opt(g.and_then(MetricGridVm::tag).as_deref())
+}
+
+/// A grid with no cells, for panels that have no stats yet.
+fn no_metrics() -> MetricGridVm {
+    MetricGridVm::new(UsageSource::Account, Vec::new())
 }
 
 /// Label/value rows as a Slint model.
@@ -139,6 +152,8 @@ fn models(m: Option<&ModelsCardVm>) -> ui::ModelsData {
             collapsible: false,
             expanded: false,
             toggle: SharedString::new(),
+            source_tag: SharedString::new(),
+            spoken_title: SharedString::new(),
             rows: model(Vec::new()),
         };
     };
@@ -148,6 +163,8 @@ fn models(m: Option<&ModelsCardVm>) -> ui::ModelsData {
         collapsible: m.collapsible,
         expanded: m.expanded,
         toggle: opt(m.toggle_label),
+        source_tag: opt(m.source.tag().as_deref()),
+        spoken_title: text(&m.spoken_title()),
         rows: model(
             m.rows
                 .iter()
@@ -314,7 +331,7 @@ pub fn apply_cursor(w: &ui::CursorVm<'_>, p: &PanelVm<CursorUsage>) {
         w.set_tracks(tracks(&u.tracks));
         w.set_daily(daily(u.daily.as_ref()));
         w.set_has_metrics(u.metrics.is_some());
-        w.set_metrics(metrics(u.metrics.as_deref().unwrap_or(&[])));
+        w.set_metrics(metrics(u.metrics.as_ref().unwrap_or(&no_metrics())));
         w.set_footer(footer(&u.footer, None));
     }
 }
@@ -336,6 +353,7 @@ pub fn apply_claude(w: &ui::ClaudeVm<'_>, v: &ClaudePanelVm) {
     w.set_has_code(v.code.is_some());
     if let Some(c) = &v.code {
         w.set_code_metrics(metrics(&c.metrics));
+        w.set_code_metrics_tag(metrics_tag(Some(&c.metrics)));
         w.set_code_models(models(c.models.as_ref()));
     }
 }
@@ -369,7 +387,8 @@ pub fn apply_opencode(w: &ui::OpenCodeVm<'_>, p: &PanelVm<OpenCodeUsage>) {
         w.set_daily(daily(u.daily.as_ref()));
         w.set_models(models(u.models.as_ref()));
         w.set_has_metrics(u.metrics.is_some());
-        w.set_metrics(metrics(u.metrics.as_deref().unwrap_or(&[])));
+        w.set_metrics(metrics(u.metrics.as_ref().unwrap_or(&no_metrics())));
+        w.set_metrics_tag(metrics_tag(u.metrics.as_ref()));
         w.set_sign_in_label(opt(u.sign_in.as_ref().map(|a| a.label.as_str())));
         w.set_footer(footer(&u.footer, u.error_text.as_deref()));
     }

@@ -355,6 +355,36 @@ impl MetricVm {
     }
 }
 
+/// A 2x2 grid of stats and where its figures were counted. The source has no
+/// default: a grid of figures read from this PC's logs says "This PC" (a tag
+/// under the cells, and "on this PC" in each cell's spoken title), and a grid
+/// of account figures (Cursor, OpenRouter) says nothing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MetricGridVm {
+    /// Where the figures were counted.
+    pub source: UsageSource,
+    /// The cells, row-major.
+    pub stats: Vec<MetricVm>,
+}
+
+impl MetricGridVm {
+    /// A grid whose cells were counted at `source`.
+    pub fn new(source: UsageSource, stats: Vec<MetricVm>) -> Self {
+        Self { source, stats }
+    }
+
+    /// The small tag under the cells ("This PC"); `None` for account figures.
+    pub fn tag(&self) -> Option<String> {
+        self.source.tag()
+    }
+
+    /// What a screen reader says for a cell's title: "Tokens this month on
+    /// this PC" for local figures, the plain title for account figures.
+    pub fn spoken_title(&self, stat: &MetricVm) -> String {
+        self.source.qualifying(&stat.title)
+    }
+}
+
 /// One model row with a share bar.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ModelRowVm {
@@ -399,6 +429,9 @@ pub struct HoverCardVm {
 pub struct ModelsCardVm {
     /// Section title.
     pub title: String,
+    /// Where the rows' figures were counted; local lists carry the "This PC"
+    /// tag beside the header. Required so no list goes unlabelled by default.
+    pub source: UsageSource,
     /// Header is a collapsible button.
     pub collapsible: bool,
     /// Section is expanded (always true when not collapsible).
@@ -413,9 +446,16 @@ impl ModelsCardVm {
     /// Rows shown before `View all`.
     pub const COLLAPSED_ROWS: usize = 3;
 
+    /// What a screen reader says for the header: "Models This Month on this
+    /// PC" for local lists, the plain title otherwise.
+    pub fn spoken_title(&self) -> String {
+        self.source.qualifying(&self.title)
+    }
+
     /// Applies the 3-row truncation.
     pub fn new(
         title: &str,
+        source: UsageSource,
         collapsible: bool,
         expanded: bool,
         mut rows: Vec<ModelRowVm>,
@@ -435,6 +475,7 @@ impl ModelsCardVm {
         }
         Self {
             title: title.to_owned(),
+            source,
             collapsible,
             expanded,
             rows,

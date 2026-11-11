@@ -1,6 +1,6 @@
 // Panel building blocks composed from the ws-ui-kit components. Every string
 // is decided in Rust (src/panels); these only lay out what they are given.
-import { Theme, Typo, PanelCard, PanelSectionHeader, DigitText, SlimUsageTrack, MetricStatGrid, ProviderHeaderRow, StaleDataCaption, CollapsibleSectionHeader, DailyBudgetBars, HoverOverlay } from "../components/kit.slint";
+import { Theme, Typo, PanelCard, PanelSectionHeader, DigitText, SlimUsageTrack, MetricStatGrid, ProviderHeaderRow, StaleDataCaption, CollapsibleSectionHeader, SourceTag, DailyBudgetBars, HoverOverlay } from "../components/kit.slint";
 import { TrackData, ModelsData, DailyData, FooterData, HeaderData } from "types.slint";
 
 /// Plain 12pt caption (secondary, or warning orange).
@@ -83,10 +83,23 @@ export component ModelsCard inherits PanelCard {
     if root.data.collapsible: CollapsibleSectionHeader {
         title: root.data.title;
         expanded: root.data.expanded;
+        source-tag: root.data.source-tag;
+        spoken-title: root.data.spoken-title;
         height: 16px;
         toggled => { root.toggle-expanded(); }
     }
-    if !root.data.collapsible: PanelSectionHeader { title: root.data.title; }
+    if !root.data.collapsible: HorizontalLayout {
+        spacing: 8px;
+        height: 14px;
+        PanelSectionHeader {
+            title: root.data.title;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+            accessible-role: text;
+            accessible-label: root.data.spoken-title != "" ? root.data.spoken-title : root.data.title;
+        }
+        if root.data.source-tag != "": SourceTag { tag: root.data.source-tag; }
+    }
     rows-box := VerticalLayout {
     spacing: 8px;
     for row in root.data.rows: Rectangle {

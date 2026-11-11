@@ -31,6 +31,10 @@ export struct ModelsData {
     collapsible: bool,
     expanded: bool,
     toggle: string,
+    /// "This PC" for local figures; empty draws no tag.
+    source-tag: string,
+    /// The header as a screen reader says it, with the location when local.
+    spoken-title: string,
     rows: [ModelRowData],
 }
 

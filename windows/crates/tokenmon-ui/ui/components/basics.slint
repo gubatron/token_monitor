@@ -58,10 +58,41 @@ export component PanelCard inherits Rectangle {
     }
 }
 
+/// The quiet "This PC" tag on a section whose figures were counted from this
+/// computer's logs (monitor glyph, micro tertiary text); draws nothing when
+/// `tag` is empty (account-wide figures). Screen readers skip it: the section
+/// it marks speaks its own title with the location ("Tokens this month on
+/// this PC"), so the location is read once, with its figure.
+export component SourceTag inherits HorizontalLayout {
+    in property <string> tag;
+    spacing: 3px;
+    alignment: end;
+    visible: root.tag != "";
+    Image {
+        source: @image-url("../assets/icons/monitor.svg");
+        colorize: Theme.tertiary;
+        width: 10px;
+        height: 10px;
+        y: (parent.height - 10px) / 2;
+    }
+    Text {
+        text: root.tag;
+        font-family: Typo.family;
+        font-size: Typo.micro-size;
+        color: Theme.tertiary;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+}
+
 /// A title above a value (padding 14). Used alone or inside `MetricStatGrid`.
 export component MetricStat inherits Rectangle {
     in property <string> title;
     in property <string> value;
+    /// What a screen reader says for the title, with the location when local.
+    in property <string> spoken-title;
+    accessible-role: text;
+    accessible-label: (root.spoken-title != "" ? root.spoken-title : root.title) + ", " + root.value;
     VerticalLayout {
         padding: 14px;
         spacing: 6px;
@@ -73,32 +104,45 @@ export component MetricStat inherits Rectangle {
 
 /// 2x2 grid of four stats with hairline dividers, in a rounded card.
 /// `items` is read row-major (first two on top); extra items are ignored.
+/// A non-empty `source-tag` ("This PC") adds a quiet tag row under the cells.
 export component MetricStatGrid inherits Rectangle {
     in property <[MetricItem]> items;
+    in property <string> source-tag;
+    private property <length> tag-height: root.source-tag != "" ? 18px : 0px;
+    private property <length> cells-height: root.height - root.tag-height;
     background: Theme.control-background;
     border-radius: PanelMetrics.card-radius;
     border-width: 1px;
     border-color: Theme.separator;
     clip: true;
-    min-height: 2 * 70px;
+    min-height: 2 * 70px + root.tag-height;
     for item[i] in root.items: MetricStat {
         visible: i < 4;
         x: mod(i, 2) * root.width / 2;
-        y: floor(i / 2) * root.height / 2;
+        y: floor(i / 2) * root.cells-height / 2;
         width: root.width / 2;
-        height: root.height / 2;
+        height: root.cells-height / 2;
         title: item.title;
         value: item.value;
+        spoken-title: item.spoken-title;
     }
     Rectangle {
         x: root.width / 2 - 0.5px;
+        height: root.cells-height;
         width: 1px;
         background: Theme.separator;
     }
     Rectangle {
-        y: root.height / 2 - 0.5px;
+        y: root.cells-height / 2 - 0.5px;
         height: 1px;
         background: Theme.separator;
+    }
+    if root.source-tag != "": SourceTag {
+        x: 14px;
+        y: root.cells-height;
+        width: root.width - 28px;
+        height: root.tag-height - 4px;
+        tag: root.source-tag;
     }
 }
 
@@ -204,14 +248,19 @@ export component StaleDataCaption inherits VerticalLayout {
 export component CollapsibleSectionHeader inherits Rectangle {
     in property <string> title;
     in property <bool> expanded: true;
+    /// "This PC" for a section of local figures; empty draws no tag.
+    in property <string> source-tag;
+    /// What a screen reader says for the title, with the location when local.
+    in property <string> spoken-title;
     callback toggled();
     accessible-role: button;
-    accessible-label: root.title;
+    accessible-label: root.spoken-title != "" ? root.spoken-title : root.title;
     accessible-description: root.expanded ? "Expanded" : "Collapsed";
     accessible-action-default => { root.toggled(); }
     HorizontalLayout {
         spacing: 8px;
         PanelSectionHeader { title: root.title; vertical-alignment: center; horizontal-stretch: 1; }
+        if root.source-tag != "": SourceTag { tag: root.source-tag; }
         Image {
             source: @image-url("../assets/icons/chevron-down.svg");
             colorize: Theme.secondary;

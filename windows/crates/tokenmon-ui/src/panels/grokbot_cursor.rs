@@ -3,10 +3,11 @@
 
 use chrono::{DateTime, Utc};
 use tokenmon_core::ProviderId;
+use tokenmon_core::usage::UsageSource;
 
 use super::common::{
-    DailyBudgetInput, DailyBudgetVm, FooterVm, HeaderVm, MetricVm, PanelContext, PanelVm,
-    ProviderStatus, SignInAction, TrackVm, build_daily_budget, standard_frame,
+    DailyBudgetInput, DailyBudgetVm, FooterVm, HeaderVm, MetricGridVm, MetricVm, PanelContext,
+    PanelVm, ProviderStatus, SignInAction, TrackVm, build_daily_budget, standard_frame,
 };
 use super::format;
 
@@ -165,7 +166,7 @@ pub struct CursorUsage {
     /// Daily bars.
     pub daily: Option<DailyBudgetVm>,
     /// 2x2 grid.
-    pub metrics: Option<Vec<MetricVm>>,
+    pub metrics: Option<MetricGridVm>,
     /// Footer.
     pub footer: FooterVm,
 }
@@ -200,13 +201,17 @@ pub fn build_cursor(input: &CursorInput, ctx: &PanelContext) -> PanelVm<CursorUs
             )
         })
         .collect();
+    // Cursor's cycle figures come from its servers: account-wide, no tag.
     let metrics = snap.cost.as_ref().map(|c| {
-        vec![
-            MetricVm::new("Monthly spend", format::usd(c.metered_cycle_usd)),
-            MetricVm::new("Total tokens", format::tokens(c.cycle_tokens)),
-            MetricVm::new("Input tokens", format::tokens(c.cycle_input_tokens)),
-            MetricVm::new("Output tokens", format::tokens(c.cycle_output_tokens)),
-        ]
+        MetricGridVm::new(
+            UsageSource::Account,
+            vec![
+                MetricVm::new("Monthly spend", format::usd(c.metered_cycle_usd)),
+                MetricVm::new("Total tokens", format::tokens(c.cycle_tokens)),
+                MetricVm::new("Input tokens", format::tokens(c.cycle_input_tokens)),
+                MetricVm::new("Output tokens", format::tokens(c.cycle_output_tokens)),
+            ],
+        )
     });
     PanelVm::with_usage(
         header.with_meta(Some(snap.plan_name.clone())),

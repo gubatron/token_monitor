@@ -228,13 +228,20 @@ fn test_models_card_truncation_and_collapse() {
             hover: None,
         })
         .collect();
-    let c = ModelsCardVm::new("T", true, true, rows.clone(), false);
+    let c = ModelsCardVm::new("T", UsageSource::Account, true, true, rows.clone(), false);
     assert_eq!((c.rows.len(), c.toggle_label), (3, Some("View all")));
-    let c = ModelsCardVm::new("T", true, true, rows.clone(), true);
+    let c = ModelsCardVm::new("T", UsageSource::Account, true, true, rows.clone(), true);
     assert_eq!((c.rows.len(), c.toggle_label), (5, Some("Show less")));
-    let c = ModelsCardVm::new("T", true, false, rows.clone(), true);
+    let c = ModelsCardVm::new("T", UsageSource::Account, true, false, rows.clone(), true);
     assert!(c.rows.is_empty() && !c.expanded);
-    let c = ModelsCardVm::new("T", false, false, rows[..2].to_vec(), false);
+    let c = ModelsCardVm::new(
+        "T",
+        UsageSource::Account,
+        false,
+        false,
+        rows[..2].to_vec(),
+        false,
+    );
     assert!(c.expanded && c.toggle_label.is_none() && c.rows.len() == 2);
 }
 

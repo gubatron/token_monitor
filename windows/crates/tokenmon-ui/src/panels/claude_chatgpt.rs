@@ -3,12 +3,14 @@
 
 use chrono::{DateTime, Utc};
 use tokenmon_core::ProviderId;
+use tokenmon_core::usage::UsageSource;
+use tokenmon_provider_claude::ClaudeCodeUsageSummary;
 use tokenmon_provider_claude::hover::ClaudeModelHoverDetail;
 
 use super::common::{
-    DailyBudgetInput, DailyBudgetVm, FooterVm, HeaderVm, HoverCardVm, MetricVm, ModelRowVm,
-    ModelsCardVm, PanelContext, PanelVm, ProviderStatus, SignInAction, TrackVm, build_daily_budget,
-    standard_frame,
+    DailyBudgetInput, DailyBudgetVm, FooterVm, HeaderVm, HoverCardVm, MetricGridVm, MetricVm,
+    ModelRowVm, ModelsCardVm, PanelContext, PanelVm, ProviderStatus, SignInAction, TrackVm,
+    build_daily_budget, standard_frame,
 };
 use super::format;
 
@@ -96,7 +98,7 @@ pub struct ClaudeInput {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClaudeCodeVm {
     /// 2x2 grid.
-    pub metrics: Vec<MetricVm>,
+    pub metrics: MetricGridVm,
     /// `Models This Month` card.
     pub models: Option<ModelsCardVm>,
 }
@@ -122,6 +124,10 @@ pub struct ClaudePanelVm {
     /// Claude Code section (in every state when present).
     pub code: Option<ClaudeCodeVm>,
 }
+
+/// Claude Code's figures are read from this PC's transcripts, not from the
+/// account, so the stats card and "Models This Month" are tagged "This PC".
+pub const CLAUDE_CODE_SOURCE: UsageSource = ClaudeCodeUsageSummary::SOURCE;
 
 fn spend(t: &CodeTotalsInput) -> String {
     format!(
@@ -171,17 +177,27 @@ pub fn build_code_section(c: &ClaudeCodeInput) -> ClaudeCodeVm {
         })
         .collect();
     ClaudeCodeVm {
-        metrics: vec![
-            MetricVm::new("Tokens this month", format::tokens(c.month.tokens)),
-            MetricVm::new("Spend this month", spend(&c.month)),
-            MetricVm::new("Total tokens", format::tokens(c.all_time.tokens)),
-            MetricVm::new("Total spend", spend(&c.all_time)),
-        ],
+        metrics: MetricGridVm::new(
+            CLAUDE_CODE_SOURCE,
+            vec![
+                MetricVm::new("Tokens this month", format::tokens(c.month.tokens)),
+                MetricVm::new("Spend this month", spend(&c.month)),
+                MetricVm::new("Total tokens", format::tokens(c.all_time.tokens)),
+                MetricVm::new("Total spend", spend(&c.all_time)),
+            ],
+        ),
         // The Mac lists every model under a collapsible header, with no
         // "View all" / "Show less" toggle.
         models: (!rows.is_empty()).then(|| ModelsCardVm {
             toggle_label: None,
-            ..ModelsCardVm::new("Models This Month", true, c.models_expanded, rows, true)
+            ..ModelsCardVm::new(
+                "Models This Month",
+                CLAUDE_CODE_SOURCE,
+                true,
+                c.models_expanded,
+                rows,
+                true,
+            )
         }),
     }
 }
