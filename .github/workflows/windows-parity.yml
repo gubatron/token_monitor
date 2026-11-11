@@ -13,7 +13,7 @@ name: Windows parity
 #   change references (or that names its commit) covers both.
 #
 # Runs on every branch, master included, because macOS changes (including
-# upstream faulknerpearce/token_monitor merges) land there first.
+# upstream tokenmonitor/token_monitor merges) land there first.
 on:
   push:
   pull_request:
