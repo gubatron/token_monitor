@@ -94,7 +94,7 @@ struct ClaudePanelView: View {
 }
 
 /// Claude Code usage on this Mac: month and all-time totals, then this
-/// month's models ranked by API-rate value.
+/// month's models ranked by API-rate value. Both are tagged "This Mac".
 struct ClaudeCodeUsageSection: View {
     let usage: ClaudeCodeUsageSummary
     @Binding var modelsExpanded: Bool
@@ -105,14 +105,19 @@ struct ClaudeCodeUsageSection: View {
         Format.usd(totals.costUSD) + (totals.hasUnpriced ? "+" : "")
     }
 
+    /// The month and all-time totals, tagged "This Mac".
+    var stats: MetricStatGrid {
+        MetricStatGrid(source: ClaudeCodeUsageSummary.source, [
+            MetricStat(title: "Tokens this month", value: Format.tokens(usage.month.tokens)),
+            MetricStat(title: "Spend this month", value: Self.spend(usage.month)),
+            MetricStat(title: "Total tokens", value: Format.tokens(usage.allTime.tokens)),
+            MetricStat(title: "Total spend", value: Self.spend(usage.allTime))
+        ])
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            MetricStatGrid([
-                MetricStat(title: "Tokens this month", value: Format.tokens(usage.month.tokens)),
-                MetricStat(title: "Spend this month", value: Self.spend(usage.month)),
-                MetricStat(title: "Total tokens", value: Format.tokens(usage.allTime.tokens)),
-                MetricStat(title: "Total spend", value: Self.spend(usage.allTime))
-            ])
+            stats
             if !usage.monthModels.isEmpty {
                 PanelCard {
                     ClaudeModelsSection(usage: usage, isExpanded: $modelsExpanded)
@@ -140,9 +145,14 @@ struct ClaudeModelsSection: View {
     /// The rows' coordinate space, which row frames and the pointer share.
     private enum CoordinateSpaceName: Hashable { case rows }
 
+    /// The list's header, tagged "This Mac".
+    var header: CollapsibleSectionHeader {
+        CollapsibleSectionHeader(title: "Models This Month", source: ClaudeCodeUsageSummary.source, isExpanded: $isExpanded)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            CollapsibleSectionHeader(title: "Models This Month", isExpanded: $isExpanded)
+            header
 
             if isExpanded {
                 rows(usage.monthModels.map { ClaudeModelHoverDetail(model: $0, summary: usage) })

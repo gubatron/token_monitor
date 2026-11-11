@@ -98,24 +98,37 @@ struct OpenCodePanelView: View {
 
 /// Monthly spend, total tokens, input and output — all monthly.
 struct OpenCodeStatsRow: View {
+    /// These figures are estimated from this computer's `opencode.db`; the
+    /// console reports none of them.
+    static let source = UsageSource.thisComputer
+
     let monthlySpendUSD: Double
     let totalTokens: Int64
     let inputTokens: Int64
     let outputTokens: Int64
 
-    var body: some View {
-        MetricStatGrid([
+    /// The four figures, tagged "This Mac".
+    var grid: MetricStatGrid {
+        MetricStatGrid(source: Self.source, [
             MetricStat(title: "Monthly spend", value: Format.usd(monthlySpendUSD)),
             MetricStat(title: "Total tokens", value: Format.tokens(totalTokens)),
             MetricStat(title: "Input tokens", value: Format.tokens(inputTokens)),
             MetricStat(title: "Output tokens", value: Format.tokens(outputTokens))
         ])
     }
+
+    var body: some View {
+        grid
+    }
 }
 
 /// Compact ranked list of Go/Zen models with company logo + usage bar, under
 /// a header that opens and closes the list.
 struct OpenCodeModelsSection: View {
+    /// The models come from this computer's `opencode.db`: the console
+    /// snapshot carries none, and the poller merges the local list into it.
+    static let source = UsageSource.thisComputer
+
     let models: [OpenCodeModelUsage]
     @Binding var isExpanded: Bool
 
@@ -126,9 +139,14 @@ struct OpenCodeModelsSection: View {
         showAll ? models : Array(models.prefix(previewCount))
     }
 
+    /// The list's header, tagged "This Mac".
+    var header: CollapsibleSectionHeader {
+        CollapsibleSectionHeader(title: "Top Models by Spend", source: Self.source, isExpanded: $isExpanded)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            CollapsibleSectionHeader(title: "Top Models by Spend", isExpanded: $isExpanded)
+            header
 
             if isExpanded {
                 ForEach(Array(visible.enumerated()), id: \.element.id) { index, model in
