@@ -14,27 +14,39 @@ struct PreferencesView: View {
     let history: GrokHistoryStore
     let updateChecker: UpdateChecker
     let openWindow: (AppWindow) -> Void
+    @State private var selectedTab: SettingsTab = .general
 
     var body: some View {
-        TabView {
+        TabView(selection: $selectedTab) {
             GeneralSettingsTab(model: model, settings: settings, updateChecker: updateChecker)
-                .tabItem { Label("General", systemImage: "gearshape") }
+                .settingsTabItem(.general)
             ProvidersSettingsTab(settings: settings)
-                .tabItem { Label("Providers", systemImage: "square.stack.3d.up") }
+                .settingsTabItem(.providers)
             AccountsSettingsTab(model: model, openWindow: openWindow)
-                .tabItem { Label("Accounts", systemImage: "person.crop.circle") }
+                .settingsTabItem(.accounts)
             DataSettingsTab(settings: settings, history: history)
-                .tabItem { Label("Data", systemImage: "externaldrive") }
+                .settingsTabItem(.data)
         }
         .font(.system(size: 14))
         .padding()
         .frame(minWidth: 460, minHeight: 520)
         .onAppear {
+            // Each opening of the window: with nothing signed in, start where
+            // the user signs in.
+            selectedTab = SettingsTab.initial(isAnyProviderSignedIn: model.isAnyProviderSignedIn)
             settings.refreshLaunchAtLoginStatus()
         }
         .onDisappear {
             AppDelegate.hideDockIfNoWindows()
         }
+    }
+}
+
+private extension View {
+    /// Labels this view as `tab` in the Settings `TabView` and tags it for selection.
+    func settingsTabItem(_ tab: SettingsTab) -> some View {
+        tabItem { Label(tab.displayName, systemImage: tab.systemImage) }
+            .tag(tab)
     }
 }
 
@@ -244,6 +256,16 @@ private struct AccountsSettingsTab: View {
 
     var body: some View {
         Form {
+            Section {
+                Label {
+                    Text(AccountsPrivacyNote.text)
+                        .fixedSize(horizontal: false, vertical: true)
+                } icon: {
+                    Image(systemName: "lock.shield")
+                }
+                .foregroundStyle(.secondary)
+            }
+
             Section {
                 ProviderAccountRow(
                     provider: .grok,
