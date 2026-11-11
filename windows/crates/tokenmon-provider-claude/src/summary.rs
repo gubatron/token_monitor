@@ -4,8 +4,9 @@ use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
 use chrono::{DateTime, Utc};
-use tokenmon_core::usage::{Calendar, DayKey};
+use tokenmon_core::usage::Calendar;
 
+use crate::month::{ClaudeMonthCoverage, ClaudeUsageMonth};
 use crate::pricing::{cost, display_name};
 use crate::tokens::{DailyTokens, ModelTokens};
 
@@ -69,6 +70,8 @@ pub struct ModelUsageRow {
     pub is_unpriced: bool,
     /// Share of the month's cost (or tokens when there is no cost), 0-100.
     pub share_percent: f64,
+    /// The month's token counts by kind (the hover label's breakdown).
+    pub breakdown: ModelTokens,
 }
 
 impl ModelUsageRow {
@@ -87,6 +90,15 @@ pub struct ClaudeCodeUsageSummary {
     pub all_time: UsageTotals,
     /// Models used this month, ranked by cost then tokens then id.
     pub month_models: Vec<ModelUsageRow>,
+    /// The month `month` and `month_models` cover.
+    pub current_month: ClaudeUsageMonth,
+    /// The calendar month before `current_month`.
+    pub previous_month: ClaudeUsageMonth,
+    /// How much of `previous_month` the ledger has recorded.
+    pub previous_month_coverage: ClaudeMonthCoverage,
+    /// Last month's token counts per model id; a model unused last month is
+    /// absent.
+    pub previous_month_models: BTreeMap<String, ModelTokens>,
 }
 
 fn by_model<'a>(
@@ -127,6 +139,7 @@ fn ranked(models: &BTreeMap<String, ModelTokens>) -> Vec<ModelUsageRow> {
                 cost_usd: c.unwrap_or(0.0),
                 is_unpriced: c.is_none(),
                 share_percent: 0.0,
+                breakdown: *t,
             }
         })
         .collect();
@@ -155,21 +168,37 @@ impl ClaudeCodeUsageSummary {
     /// Builds the summary from the ledger's UTC `days`. The month turns over
     /// at 00:00 UTC.
     pub fn make(days: &DailyTokens, now: DateTime<Utc>) -> Self {
-        let month_prefix: String = DayKey::for_instant(now, &Calendar::utc())
-            .as_str()
-            .chars()
-            .take(7)
-            .collect();
-        let month_models = by_model(
-            days.iter()
-                .filter(|(k, _)| k.as_str().starts_with(&month_prefix))
-                .map(|(_, v)| v),
-        );
+        Self::make_in(days, now, &Calendar::utc())
+    }
+
+    /// Builds the summary for the calendar month containing `now` in
+    /// `calendar`. The ledger's calendar decides the month, not the local
+    /// zone: with the app's UTC ledger it turns over at midnight UTC.
+    pub fn make_in(days: &DailyTokens, now: DateTime<Utc>, calendar: &Calendar<'_>) -> Self {
+        let offset = calendar.offset_at(now);
+        let current = ClaudeUsageMonth::containing(now, offset);
+        let previous = current.previous();
+        let in_month = |month: ClaudeUsageMonth| {
+            by_model(
+                days.iter()
+                    .filter(move |(k, _)| month.contains_day_key(k))
+                    .map(|(_, v)| v),
+            )
+        };
+        let month_models = in_month(current);
         let all = by_model(days.values());
+        let previous_month_models: BTreeMap<String, ModelTokens> = in_month(previous)
+            .into_iter()
+            .filter(|(_, t)| t.total_tokens() > 0)
+            .collect();
         Self {
             month: totals(&month_models),
             all_time: totals(&all),
             month_models: ranked(&month_models),
+            current_month: current,
+            previous_month: previous,
+            previous_month_coverage: ClaudeMonthCoverage::of(previous, days.keys().next()),
+            previous_month_models,
         }
     }
 }

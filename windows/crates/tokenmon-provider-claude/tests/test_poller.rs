@@ -227,6 +227,10 @@ fn code_summary() -> ClaudeCodeUsageSummary {
             has_unpriced: false,
         },
         month_models: Vec::new(),
+        ..ClaudeCodeUsageSummary::make(
+            &std::collections::BTreeMap::default(),
+            DateTime::<Utc>::UNIX_EPOCH,
+        )
     }
 }
 

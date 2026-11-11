@@ -6,6 +6,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use super::{Calendar, DailyBudgetDay, DayKey};
+use crate::util::Format;
 
 /// One model's share of a day.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -112,6 +113,76 @@ impl DailyTokenUsage {
         }
         self.models
             .sort_by(|a, b| b.tokens.cmp(&a.tokens).then_with(|| a.name.cmp(&b.name)));
+    }
+}
+
+/// `≈ $12.40` for a hover label's value, with a trailing `+` when unpriced
+/// usage is left out; `None` when nothing was spent (Swift
+/// `DailyBudgetHoverLabel.valueText`).
+///
+/// # Examples
+///
+/// ```
+/// use tokenmon_core::usage::api_value_text;
+/// assert_eq!(api_value_text(Some(12.4), false).as_deref(), Some("≈ $12.40"));
+/// assert_eq!(api_value_text(Some(12.4), true).as_deref(), Some("≈ $12.40+"));
+/// assert_eq!(api_value_text(None, true), None);
+/// ```
+#[must_use]
+pub fn api_value_text(cost_usd: Option<f64>, has_unpriced: bool) -> Option<String> {
+    let cost = cost_usd.filter(|c| *c > 0.0)?;
+    Some(format!(
+        "≈ {}{}",
+        Format::usd(cost),
+        if has_unpriced { "+" } else { "" }
+    ))
+}
+
+impl DailyTokenUsage {
+    /// The hover label's value text; see [`api_value_text`].
+    #[must_use]
+    pub fn value_text(&self) -> Option<String> {
+        api_value_text(self.cost_usd, self.has_unpriced)
+    }
+}
+
+/// One label/value row of a hover label's grid.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct HoverLabelRow {
+    /// Left column, e.g. `Input`.
+    pub label: String,
+    /// Right column, e.g. `1.2M`.
+    pub value: String,
+}
+
+impl HoverLabelRow {
+    /// A row counting tokens, e.g. `Input` / `1.2M`.
+    #[must_use]
+    pub fn tokens(label: &str, count: i64) -> Self {
+        Self {
+            label: label.to_owned(),
+            value: Format::tokens(count),
+        }
+    }
+
+    /// Input, output, cache read and cache write rows, in that order.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tokenmon_core::usage::HoverLabelRow;
+    /// let rows = HoverLabelRow::breakdown(1_200, 3_400_000, 999, 0);
+    /// assert_eq!(rows[0], HoverLabelRow::tokens("Input", 1_200));
+    /// assert_eq!(rows[3].value, "0");
+    /// ```
+    #[must_use]
+    pub fn breakdown(input: i64, output: i64, cache_read: i64, cache_write: i64) -> Vec<Self> {
+        vec![
+            Self::tokens("Input", input),
+            Self::tokens("Output", output),
+            Self::tokens("Cache read", cache_read),
+            Self::tokens("Cache write", cache_write),
+        ]
     }
 }
 

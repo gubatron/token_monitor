@@ -71,7 +71,12 @@ fn test_claude_code_input_maps_totals_models_and_flag() {
             cost_usd: 3.25,
             is_unpriced: false,
             share_percent: 100.0,
+            breakdown: tokenmon_provider_claude::ModelTokens::default(),
         }],
+        ..ClaudeCodeUsageSummary::make(
+            &BTreeMap::default(),
+            Utc.with_ymd_and_hms(2026, 7, 1, 0, 0, 0).unwrap(),
+        )
     };
     let input = ClaudeCodeInput::from_summary(&summary, true);
     assert_eq!(input.month.tokens, 1_500);

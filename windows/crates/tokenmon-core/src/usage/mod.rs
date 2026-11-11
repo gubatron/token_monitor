@@ -9,6 +9,7 @@
 pub mod budget;
 pub mod calendar;
 pub mod day_key;
+pub mod monthly_change;
 pub mod pace;
 pub mod percent;
 pub mod pool;
@@ -18,11 +19,12 @@ pub mod week_offset;
 pub use budget::{DailyBudget, DailyBudgetDay, MonthBounds};
 pub use calendar::Calendar;
 pub use day_key::DayKey;
+pub use monthly_change::{ChangeUnit, MonthlyUsageChange, ParseChangeUnitError};
 pub use pace::{AllowancePeriod, PaceHeadroom, ParseAllowancePeriodError};
 pub use percent::Percent;
 pub use pool::{ParseUsagePoolError, UsagePool};
 pub use tokens::{
-    DailyTokenUsage, DailyTokenUsageTally, ModelTokens, TokenCounts, attaching_tokens,
-    attaching_tokens_map,
+    DailyTokenUsage, DailyTokenUsageTally, HoverLabelRow, ModelTokens, TokenCounts, api_value_text,
+    attaching_tokens, attaching_tokens_map,
 };
 pub use week_offset::WeekOffset;
