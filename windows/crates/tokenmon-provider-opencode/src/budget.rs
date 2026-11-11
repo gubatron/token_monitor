@@ -13,7 +13,7 @@ use tokenmon_core::usage::budget::SpentByDay;
 use tokenmon_core::usage::tokens::attaching_tokens_map;
 use tokenmon_core::usage::{
     Calendar, DailyBudget, DailyBudgetDay, DailyTokenUsage, DailyTokenUsageTally, DayKey,
-    MonthBounds, TokenCounts, WeekOffset,
+    MonthBounds, TokenCounts, UsageSource, WeekOffset,
 };
 
 use crate::bounds::{Bounds, monthly_bounds};
@@ -21,6 +21,10 @@ use crate::db::{DbError, MessageRow, Scan, scan_start};
 use crate::model_name::display_name;
 use crate::pricing::is_go_provider;
 use crate::stats::{scaled_spends_percent, spread_used_percent};
+
+/// Where OpenCode's token counts come from: `opencode.db` on this PC, not
+/// the account's usage.
+pub const LOCAL_SOURCE: UsageSource = UsageSource::ThisComputer;
 
 /// How far before the period start spends are read, as dimmed history bars.
 pub const PRIOR_WEEK_HISTORY_DAYS: i64 = 28;
@@ -302,7 +306,7 @@ pub fn daily_tokens(
     let Ok(scan) = load(since) else {
         return HashMap::new();
     };
-    let mut tally = DailyTokenUsageTally::new(*cal);
+    let mut tally = DailyTokenUsageTally::new(*cal, LOCAL_SOURCE);
     for row in scan.rows.iter().filter(|r| is_go_provider(&r.provider_id)) {
         let billable = row.billable();
         tally.add_at(

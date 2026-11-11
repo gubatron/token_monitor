@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use chrono::{DateTime, Days, NaiveDate, Timelike, Utc};
 use tokenmon_core::Clock;
-use tokenmon_core::usage::{Calendar, DailyBudget, DailyTokenUsage, TokenCounts};
+use tokenmon_core::usage::{Calendar, DailyBudget, DailyTokenUsage, TokenCounts, UsageSource};
 
 use crate::events::CursorUsageEvent;
 use crate::models::{CursorCostStats, CursorSnapshot};
@@ -179,6 +179,10 @@ pub fn token_hour_weights(
     out
 }
 
+/// Cursor's usage events come from its servers and cover the whole account,
+/// so its daily tokens are never labelled as this PC's.
+pub const CURSOR_SOURCE: UsageSource = UsageSource::Account;
+
 /// `dailyTokens`: per local day tokens, model split and cost.
 pub fn daily_tokens(
     clock: &dyn Clock,
@@ -193,11 +197,9 @@ pub fn daily_tokens(
             cache_read: event.cache_read_tokens,
             cache_write: event.cache_write_tokens,
         };
-        days.entry(cal.date_of(event.date)).or_default().add(
-            &event.model,
-            counts,
-            Some(event.charged_cents / 100.0),
-        );
+        days.entry(cal.date_of(event.date))
+            .or_insert_with(|| DailyTokenUsage::new(CURSOR_SOURCE))
+            .add(&event.model, counts, Some(event.charged_cents / 100.0));
     }
     // Hostile input could overflow a float sum to infinity.
     for day in days.values_mut() {

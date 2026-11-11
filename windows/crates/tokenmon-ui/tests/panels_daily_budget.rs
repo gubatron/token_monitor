@@ -5,7 +5,7 @@ mod panels_common;
 
 use panels_common::*;
 use tokenmon_core::ProviderId;
-use tokenmon_core::usage::PaceHeadroom;
+use tokenmon_core::usage::{PaceHeadroom, UsageSource};
 use tokenmon_ui::panels::common::*;
 
 /// Range label for one month and across months.
@@ -139,6 +139,7 @@ fn test_footer_rules() {
 fn test_hover_token_block() {
     let mut days = week([1.0; 7]);
     days[0].tokens = Some(TokensInput {
+        source: UsageSource::ThisComputer,
         total: 1_234_567,
         input: 1_000,
         output: 2_000_000,
@@ -153,7 +154,7 @@ fn test_hover_token_block() {
             ("D".into(), 1),
         ],
     });
-    days[1].tokens = Some(TokensInput::default());
+    days[1].tokens = Some(TokensInput::new(UsageSource::Account));
     let vm = build_daily_budget(&daily(days), &ctx()).unwrap();
     let t = vm.bars[0].hover.tokens.as_ref().unwrap();
     assert_eq!(t.total_text, "1.2M");

@@ -5,7 +5,8 @@
 #![allow(clippy::unwrap_used)]
 
 use tokenmon_core::usage::{
-    ChangeUnit, DailyTokenUsage, HoverLabelRow, MonthlyUsageChange, TokenCounts, api_value_text,
+    ChangeUnit, DailyTokenUsage, HoverLabelRow, MonthlyUsageChange, TokenCounts, UsageSource,
+    api_value_text,
 };
 
 fn usd(previous: Option<f64>, current: f64) -> MonthlyUsageChange {
@@ -238,7 +239,7 @@ fn test_breakdown_lists_input_output_and_both_cache_counts() {
 /// The daily value marks unpriced usage with a trailing `+`.
 #[test]
 fn test_daily_value_text_marks_unpriced_usage() {
-    let mut day = DailyTokenUsage::default();
+    let mut day = DailyTokenUsage::new(UsageSource::ThisComputer);
     day.add("Opus 5.5", counts(10), Some(12.4));
     assert_eq!(day.value_text().as_deref(), Some("≈ $12.40"));
     day.add("Mystery", counts(10), None);
@@ -248,9 +249,12 @@ fn test_daily_value_text_marks_unpriced_usage() {
 /// Without spend there is no value text.
 #[test]
 fn test_daily_value_text_is_hidden_without_spend() {
-    let mut day = DailyTokenUsage::default();
+    let mut day = DailyTokenUsage::new(UsageSource::ThisComputer);
     day.add("Mystery", counts(10), None);
     assert_eq!(day.value_text(), None);
-    assert_eq!(DailyTokenUsage::default().value_text(), None);
+    assert_eq!(
+        DailyTokenUsage::new(UsageSource::ThisComputer).value_text(),
+        None
+    );
     assert_eq!(api_value_text(Some(0.0), false), None);
 }

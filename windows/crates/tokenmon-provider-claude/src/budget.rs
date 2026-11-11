@@ -12,6 +12,8 @@ use tokenmon_core::usage::{
     attaching_tokens,
 };
 
+use crate::summary::ClaudeCodeUsageSummary;
+
 use crate::pricing::{cost, display_name};
 use crate::tokens::{DailyTokens, ModelTokens};
 use crate::usage::project_weekly_reset;
@@ -66,7 +68,7 @@ pub fn weekly_resets_at(
 /// merged by display name, cache writes summed over lifetimes, API cost
 /// accumulated for priced models.
 pub fn daily_token_usage(models: &BTreeMap<String, ModelTokens>) -> DailyTokenUsage {
-    let mut day = DailyTokenUsage::default();
+    let mut day = DailyTokenUsage::new(ClaudeCodeUsageSummary::SOURCE);
     for (id, t) in models {
         let counts = TokenCounts {
             input: t.input_tokens,

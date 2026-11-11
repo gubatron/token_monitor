@@ -32,6 +32,7 @@ use slint::platform::{Platform, WindowAdapter, WindowEvent};
 use slint::{ComponentHandle, LogicalPosition, PhysicalSize, Rgb8Pixel};
 use tokenmon_core::ProviderId;
 use tokenmon_core::usage::DayKey;
+use tokenmon_core::usage::UsageSource;
 use tokenmon_provider_claude::{ClaudeCodeUsageSummary, ModelTokens};
 use tokenmon_ui::kit::hover::label_origin_within;
 use tokenmon_ui::panels::bridge::{apply_claude, tab_rows};
@@ -93,6 +94,7 @@ fn save(name: &str, buf: &[Rgb8Pixel], height: u32) {
 fn tokens_of(total_m: f64, cost: f64) -> TokensInput {
     let total = (total_m * 1_000_000.0) as u64;
     TokensInput {
+        source: UsageSource::ThisComputer,
         total,
         input: total / 100,
         output: total / 40,

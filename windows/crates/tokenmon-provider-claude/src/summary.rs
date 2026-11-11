@@ -4,7 +4,7 @@ use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
 use chrono::{DateTime, Utc};
-use tokenmon_core::usage::Calendar;
+use tokenmon_core::usage::{Calendar, UsageSource};
 
 use crate::month::{ClaudeMonthCoverage, ClaudeUsageMonth};
 use crate::pricing::{cost, display_name};
@@ -165,6 +165,10 @@ fn ranked(models: &BTreeMap<String, ModelTokens>) -> Vec<ModelUsageRow> {
 }
 
 impl ClaudeCodeUsageSummary {
+    /// Where every figure of this summary was counted: Claude Code's
+    /// transcripts on this PC, not the account's usage.
+    pub const SOURCE: UsageSource = UsageSource::ThisComputer;
+
     /// Builds the summary from the ledger's UTC `days`. The month turns over
     /// at 00:00 UTC.
     pub fn make(days: &DailyTokens, now: DateTime<Utc>) -> Self {

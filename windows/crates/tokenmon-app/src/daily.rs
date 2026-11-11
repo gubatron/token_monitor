@@ -56,6 +56,7 @@ pub fn noun_for(provider: ProviderId) -> AllowanceNoun {
 fn tokens(t: &DailyTokenUsage) -> TokensInput {
     let count = |n: i64| u64::try_from(n).unwrap_or(0);
     TokensInput {
+        source: t.source,
         total: count(t.total_tokens()),
         input: count(t.input_tokens),
         output: count(t.output_tokens),
@@ -239,7 +240,7 @@ mod tests {
         days[0].tokens = Some(DailyTokenUsage {
             input_tokens: 10,
             output_tokens: -5,
-            ..DailyTokenUsage::default()
+            ..DailyTokenUsage::new(tokenmon_core::usage::UsageSource::Account)
         });
         let input = daily_input(&days, &ctx(&cal, 0)).unwrap();
         let t = input.days[0].tokens.as_ref().unwrap();

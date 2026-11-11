@@ -3,6 +3,7 @@
 //! and the token block (Swift "Daily label value").
 #![allow(missing_docs, clippy::unwrap_used)]
 
+use tokenmon_core::usage::UsageSource;
 use tokenmon_ui::kit::hover::{POINTER_GAP, RowFrame, label_origin_within, nearest_row_index};
 use tokenmon_ui::panels::common::{
     AllowanceNoun, DailyBudgetInput, DayInput, FooterKind, TokensInput, build_daily_budget,
@@ -107,7 +108,7 @@ fn test_daily_value_text_marks_unpriced_usage() {
         total: 20,
         output: 20,
         cost_usd: 12.4,
-        ..TokensInput::default()
+        ..TokensInput::new(UsageSource::Account)
     };
     assert_eq!(value_text(t.clone()).as_deref(), Some("≈ $12.40"));
     t.has_unpriced = true;
@@ -121,7 +122,7 @@ fn test_daily_value_text_is_hidden_without_spend() {
         total: 10,
         output: 10,
         has_unpriced: true,
-        ..TokensInput::default()
+        ..TokensInput::new(UsageSource::Account)
     };
     assert_eq!(value_text(t), None);
 }

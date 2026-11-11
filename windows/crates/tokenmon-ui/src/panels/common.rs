@@ -5,7 +5,7 @@
 //! provider crates' snapshot types are added once those land.
 
 use chrono::{DateTime, NaiveDate, Utc};
-use tokenmon_core::usage::{Calendar, DailyBudget, PaceHeadroom, api_value_text};
+use tokenmon_core::usage::{Calendar, DailyBudget, PaceHeadroom, UsageSource, api_value_text};
 use tokenmon_core::{ProviderId, Srgb};
 
 use crate::kit::week::WeekOffset;
@@ -448,8 +448,11 @@ impl ModelsCardVm {
 // ---------------------------------------------------------------------------
 
 /// Per-day token breakdown for the hover label.
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TokensInput {
+    /// Where the counts were taken; local counts read "on this PC". Required
+    /// so no provider's tokens go unlabelled by default.
+    pub source: UsageSource,
     /// Total tokens.
     pub total: u64,
     /// Input tokens.
@@ -466,6 +469,23 @@ pub struct TokensInput {
     pub has_unpriced: bool,
     /// `(model name, tokens)` sorted by the caller.
     pub models: Vec<(String, u64)>,
+}
+
+impl TokensInput {
+    /// A day with no tokens, counted from `source`.
+    pub fn new(source: UsageSource) -> Self {
+        Self {
+            source,
+            total: 0,
+            input: 0,
+            output: 0,
+            cache_read: 0,
+            cache_write: 0,
+            cost_usd: 0.0,
+            has_unpriced: false,
+            models: Vec::new(),
+        }
+    }
 }
 
 /// One bar of a daily-budget chart.

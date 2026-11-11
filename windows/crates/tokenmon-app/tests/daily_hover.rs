@@ -11,7 +11,8 @@ use chrono::{DateTime, TimeZone, Utc};
 use tokenmon_app::daily::{ChartContext, daily_input};
 use tokenmon_core::ProviderId;
 use tokenmon_core::usage::{
-    Calendar, DailyBudgetDay, DailyTokenUsageTally, DayKey, TokenCounts, attaching_tokens_map,
+    Calendar, DailyBudgetDay, DailyTokenUsageTally, DayKey, TokenCounts, UsageSource,
+    attaching_tokens_map,
 };
 use tokenmon_provider_claude::budget::attach_tokens;
 use tokenmon_provider_claude::{DailyTokens, ModelTokens};
@@ -128,7 +129,7 @@ fn test_claude_bar_hover_shows_tokens_dollars_and_top_models() {
 #[test]
 fn test_monthly_provider_bar_hover_shows_tokens_and_unpriced_marker() {
     let cal = Calendar::utc();
-    let mut tally = DailyTokenUsageTally::new(cal);
+    let mut tally = DailyTokenUsageTally::new(cal, UsageSource::ThisComputer);
     let counts = |input, output, cache_read, cache_write| TokenCounts {
         input,
         output,
@@ -173,7 +174,7 @@ fn test_monthly_provider_bar_hover_shows_tokens_and_unpriced_marker() {
 #[test]
 fn test_unpriced_only_day_shows_no_dollars() {
     let cal = Calendar::utc();
-    let mut tally = DailyTokenUsageTally::new(cal);
+    let mut tally = DailyTokenUsageTally::new(cal, UsageSource::ThisComputer);
     let at = Utc.with_ymd_and_hms(2026, 11, 3, 9, 0, 0).unwrap();
     tally.add_at(
         at,

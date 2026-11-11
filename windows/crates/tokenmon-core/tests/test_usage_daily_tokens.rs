@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use chrono::{DateTime, TimeZone, Utc};
 use tokenmon_core::usage::{
     Calendar, DailyBudgetDay, DailyTokenUsage, DailyTokenUsageTally, DayKey, ModelTokens,
-    TokenCounts, UsagePool, attaching_tokens_map,
+    TokenCounts, UsagePool, UsageSource, attaching_tokens_map,
 };
 
 fn t(s: &str) -> DateTime<Utc> {
@@ -30,7 +30,7 @@ fn input(n: i64) -> TokenCounts {
 /// Models merge by name and sort by tokens descending.
 #[test]
 fn test_add_merges_models_and_sorts_by_tokens() {
-    let mut u = DailyTokenUsage::default();
+    let mut u = DailyTokenUsage::new(UsageSource::ThisComputer);
     u.add(
         "A",
         TokenCounts {
@@ -77,7 +77,7 @@ fn test_add_merges_models_and_sorts_by_tokens() {
 /// Unpriced usage is flagged; an empty model name counts toward totals only.
 #[test]
 fn test_unpriced_usage_is_flagged() {
-    let mut u = DailyTokenUsage::default();
+    let mut u = DailyTokenUsage::new(UsageSource::ThisComputer);
     u.add(
         "X",
         TokenCounts {
@@ -99,7 +99,7 @@ fn test_unpriced_usage_is_flagged() {
 /// Equal token counts sort by name ascending.
 #[test]
 fn test_model_ties_sort_by_name() {
-    let mut u = DailyTokenUsage::default();
+    let mut u = DailyTokenUsage::new(UsageSource::ThisComputer);
     for name in ["b", "a"] {
         u.add(name, input(5), Some(0.0));
     }
@@ -110,7 +110,7 @@ fn test_model_ties_sort_by_name() {
 #[test]
 fn test_tally_groups_by_local_day_and_attaches_to_bars() {
     let utc = Calendar::utc();
-    let mut tally = DailyTokenUsageTally::new(utc);
+    let mut tally = DailyTokenUsageTally::new(utc, UsageSource::ThisComputer);
     tally.add_at(t("2026-11-03T23:59:00Z"), "A", input(1), None);
     tally.add_at(t("2026-11-04T00:01:00Z"), "A", input(2), None);
     assert_eq!(
@@ -138,7 +138,7 @@ fn test_tally_groups_by_local_day_and_attaches_to_bars() {
 #[test]
 fn test_tally_respects_injected_offset() {
     let tokyo = Calendar::fixed(chrono::FixedOffset::east_opt(9 * 3600).unwrap());
-    let mut tally = DailyTokenUsageTally::new(tokyo);
+    let mut tally = DailyTokenUsageTally::new(tokyo, UsageSource::ThisComputer);
     tally.add_at(
         Utc.with_ymd_and_hms(2026, 11, 3, 16, 0, 0).unwrap(),
         "A",

@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, HashMap};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use super::{Calendar, DailyBudgetDay, DayKey};
+use super::{Calendar, DailyBudgetDay, DayKey, UsageSource};
 use crate::util::Format;
 
 /// One model's share of a day.
@@ -46,16 +46,19 @@ impl TokenCounts {
 /// # Examples
 ///
 /// ```
-/// use tokenmon_core::usage::{DailyTokenUsage, TokenCounts};
-/// let mut day = DailyTokenUsage::default();
+/// use tokenmon_core::usage::{DailyTokenUsage, TokenCounts, UsageSource};
+/// let mut day = DailyTokenUsage::new(UsageSource::ThisComputer);
 /// day.add("A", TokenCounts { input: 10, output: 6, ..Default::default() }, Some(1.0));
 /// day.add("B", TokenCounts { input: 100, ..Default::default() }, Some(2.5));
 /// assert_eq!(day.total_tokens(), 116);
 /// assert_eq!(day.cost_usd, Some(3.5));
 /// assert_eq!(day.models[0].name, "B");
 /// ```
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DailyTokenUsage {
+    /// Where the counts were taken: this PC's logs or the provider's account.
+    /// Required, so a provider cannot leave its counts unlabelled by default.
+    pub source: UsageSource,
     /// Input tokens.
     pub input_tokens: i64,
     /// Output tokens.
@@ -73,6 +76,21 @@ pub struct DailyTokenUsage {
 }
 
 impl DailyTokenUsage {
+    /// An empty day whose counts come from `source`.
+    #[must_use]
+    pub fn new(source: UsageSource) -> Self {
+        Self {
+            source,
+            input_tokens: 0,
+            output_tokens: 0,
+            cache_read_tokens: 0,
+            cache_write_tokens: 0,
+            cost_usd: None,
+            has_unpriced: false,
+            models: Vec::new(),
+        }
+    }
+
     /// Sum of the four token counters (saturating).
     #[must_use]
     pub fn total_tokens(&self) -> i64 {
@@ -190,15 +208,17 @@ impl HoverLabelRow {
 #[derive(Debug, Clone)]
 pub struct DailyTokenUsageTally<'a> {
     calendar: Calendar<'a>,
+    source: UsageSource,
     days: BTreeMap<DayKey, DailyTokenUsage>,
 }
 
 impl<'a> DailyTokenUsageTally<'a> {
-    /// An empty tally bucketing by `calendar`.
+    /// An empty tally bucketing by `calendar`, whose days all carry `source`.
     #[must_use]
-    pub fn new(calendar: Calendar<'a>) -> Self {
+    pub fn new(calendar: Calendar<'a>, source: UsageSource) -> Self {
         Self {
             calendar,
+            source,
             days: BTreeMap::new(),
         }
     }
@@ -230,9 +250,10 @@ impl<'a> DailyTokenUsageTally<'a> {
         cost_usd: Option<f64>,
     ) {
         let key = DayKey::for_instant(at, &self.calendar);
+        let source = self.source;
         self.days
             .entry(key)
-            .or_default()
+            .or_insert_with(|| DailyTokenUsage::new(source))
             .add(model, counts, cost_usd);
     }
 }
