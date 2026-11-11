@@ -1,5 +1,5 @@
 //! Invariants: the events-page parser never panics; `page_count` covers every
-//! parsed event; timestamps are positive; counts saturate; and aggregating the
+//! parsed event; timestamps are not before the epoch; counts saturate; and aggregating the
 //! parsed events (cost, hourly, per-day) yields finite, non-negative figures.
 #![no_main]
 
@@ -16,8 +16,9 @@ fuzz_target!(|data: &[u8]| {
     };
     assert!(page.events.len() <= page.page_count);
     for e in &page.events {
-        // Strictly after the epoch: a sub-second value such as 0.5 s is valid.
-        assert!(e.date > chrono::DateTime::UNIX_EPOCH);
+        // Not before the epoch: sub-second values such as 0.5 s are valid, and
+        // a positive value under 1 ns ("770E-77") truncates to the epoch.
+        assert!(e.date >= chrono::DateTime::UNIX_EPOCH);
         assert!(e.requests_costs.is_finite() && e.requests_costs >= 0.0);
         assert!(e.charged_cents.is_finite() && e.charged_cents >= 0.0);
         assert!(e.weight().is_finite() && e.weight() > 0.0);

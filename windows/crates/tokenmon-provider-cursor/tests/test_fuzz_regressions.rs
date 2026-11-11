@@ -52,7 +52,7 @@ fn check_events(data: &[u8]) {
         return;
     };
     for e in &page.events {
-        assert!(e.date > DateTime::UNIX_EPOCH);
+        assert!(e.date >= DateTime::UNIX_EPOCH);
         assert!(e.weight().is_finite() && e.weight() > 0.0);
     }
     let stats = aggregate_cost_stats(&page.events, first.date);
@@ -152,6 +152,24 @@ fn test_regression_subsecond_timestamps_are_valid_events() {
     let page = parse_usage_events_page(body).unwrap();
     assert_eq!(page.events.len(), 2);
     check_events(body);
+}
+
+/// Fuzz regression (issue #86, `cursor_events_page`): a positive timestamp
+/// below one nanosecond (`"770E-77"`) is accepted like Swift's `Date` and
+/// truncates to exactly the epoch, so the invariant is "not before the epoch".
+/// The same input has a `-5` timestamp (skipped) and `inputTokens` of 1e30,
+/// which must saturate instead of overflowing.
+#[test]
+fn test_regression_sub_nanosecond_timestamp_is_epoch_event() {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/fuzz/cursor_events_page/sub-nanosecond-timestamp.json");
+    let body = std::fs::read(path).expect("fixture present");
+    let page = parse_usage_events_page(&body).unwrap();
+    assert_eq!(page.page_count, 3);
+    assert_eq!(page.events.len(), 2);
+    assert_eq!(page.events[0].date, DateTime::from_timestamp(8, 0).unwrap());
+    assert_eq!(page.events[1].date, DateTime::UNIX_EPOCH);
+    check_events(&body);
 }
 
 /// Binary garbage and non-UTF-8 prefixes are classified, never panicked on.
