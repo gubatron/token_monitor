@@ -141,9 +141,10 @@ extension CursorUsageClient {
         return safeInt64(JSON.number(tokenUsage[key]) ?? 0)
     }
 
-    /// Tokens per local day, with each event's charged cost.
+    /// Tokens per local day, with each event's charged cost. The events come
+    /// from Cursor's servers for the whole account, so each day is `.account`.
     static func dailyTokens(events: [CursorUsageEvent], calendar: Calendar = .current) -> [String: DailyTokenUsage] {
-        var tally = DailyTokenUsageTally(calendar: calendar)
+        var tally = DailyTokenUsageTally(source: .account, calendar: calendar)
         for event in events {
             tally.add(
                 at: event.date,

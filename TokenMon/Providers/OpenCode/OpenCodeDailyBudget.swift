@@ -56,9 +56,10 @@ extension OpenCodeLocalStats {
         return dailyTokens(rows: scan.rows.filter { goEligibleProvider($0.providerID) }, calendar: calendar)
     }
 
-    /// Tokens of `rows` per local day, valued at their billable cost.
+    /// Tokens of `rows` per local day, valued at their billable cost. They are
+    /// read from this computer's database, so each day is `.thisComputer`.
     static func dailyTokens(rows: [SessionRow], calendar: Calendar = .current) -> [String: DailyTokenUsage] {
-        var tally = DailyTokenUsageTally(calendar: calendar)
+        var tally = DailyTokenUsageTally(source: .thisComputer, calendar: calendar)
         for row in rows {
             let billable = row.billable
             tally.add(

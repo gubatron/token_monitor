@@ -116,6 +116,10 @@ struct ClaudeUsageTotals: Hashable, Sendable {
 /// per-model totals to compare it with. With the ledger's UTC days, the month
 /// turns over at midnight UTC.
 struct ClaudeCodeUsageSummary: Hashable, Sendable {
+    /// Every figure here is read from this Mac's Claude Code transcripts, not
+    /// the claude.ai account, so the panel labels it "This Mac".
+    static let source = UsageSource.thisComputer
+
     var month: ClaudeUsageTotals
     var allTime: ClaudeUsageTotals
     /// This month's models, highest value first.
@@ -213,9 +217,10 @@ struct ClaudeCodeUsageScan: Hashable, Sendable {
 }
 
 extension DailyTokenUsage {
-    /// One day's Claude Code counts, summed over `models` and valued at API rates.
+    /// One day's Claude Code counts, summed over `models` and valued at API
+    /// rates. They come from this Mac's transcripts, so the day is `.thisComputer`.
     init(claudeModels models: [String: ClaudeModelTokens]) {
-        self.init()
+        self.init(source: .thisComputer)
         for (modelID, counts) in models {
             add(
                 model: ClaudeModelName.display(modelID),
