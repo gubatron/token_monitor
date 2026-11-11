@@ -188,8 +188,9 @@ impl ClaudeModelHoverDetail {
             .join(", ");
         let accessibility_label = [
             Some(format!(
-                "{name}, {month}: {} tokens, {spoken_value}",
-                Format::tokens(model.tokens)
+                "{name}, {month}: {} {}, {spoken_value}",
+                Format::tokens(model.tokens),
+                ClaudeCodeUsageSummary::SOURCE.tokens_unit()
             )),
             Some(rows),
             comparison.spoken_previous,

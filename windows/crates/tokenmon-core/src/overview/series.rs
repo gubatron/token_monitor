@@ -10,6 +10,8 @@ use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::usage::UsageSource;
+
 /// Hours in a day; every per-hour array is normalized to this length.
 pub const HOURS: usize = 24;
 
@@ -83,6 +85,16 @@ impl OverviewSeries {
             Self::Claude => "claude",
             Self::OpenCodeGo => "openCodeGo",
             Self::OpenCodeZen => "openCodeZen",
+        }
+    }
+
+    /// Where this series' hourly token counts were taken. OpenCode's come
+    /// from `opencode.db` on this PC and Claude's from this PC's transcripts;
+    /// Grok's, Grokbot's and Cursor's are the account's.
+    pub const fn token_source(self) -> UsageSource {
+        match self {
+            Self::Grok | Self::Grokbot | Self::Cursor => UsageSource::Account,
+            Self::Claude | Self::OpenCodeGo | Self::OpenCodeZen => UsageSource::ThisComputer,
         }
     }
 

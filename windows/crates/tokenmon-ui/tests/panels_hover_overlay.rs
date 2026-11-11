@@ -215,6 +215,7 @@ fn test_hover_labels_on_the_real_panel() {
     let card = overlay.get_card();
     assert_eq!(card.title, "Saturday, Jul 11");
     assert_eq!(card.caption, "14.0% of weekly · 98% of daily allowance");
+    assert_eq!(card.unit, "tokens on this PC");
     assert_eq!(
         (card.total.as_str(), card.value.as_str()),
         ("44M", "≈ $61.90")
@@ -257,6 +258,7 @@ fn test_hover_labels_on_the_real_panel() {
     let card = overlay.get_card();
     assert!(overlay.get_active());
     assert_eq!(card.title, "Opus 5.5 · July");
+    assert_eq!(card.unit, "tokens on this PC");
     assert_eq!(
         (card.total.as_str(), card.value.as_str()),
         ("288M", "≈ $281.74")

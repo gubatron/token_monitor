@@ -196,6 +196,7 @@ fn week() -> (Vec<DailyBudgetDay>, NaiveDate) {
     let d = |n| NaiveDate::from_ymd_opt(2025, 10, n).expect("valid date");
     let tokens = DayTokensText {
         total: "1.2M".into(),
+        unit: "tokens".into(),
         cost: "≈ $4.20".into(),
         input: "820K".into(),
         output: "140K".into(),

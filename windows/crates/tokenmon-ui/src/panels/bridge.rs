@@ -8,8 +8,8 @@ use tokenmon_core::{ProviderId, Srgb};
 
 use super::claude_chatgpt::{ChatGptUsage, ClaudePanelVm, ClaudeUsage};
 use super::common::{
-    DailyBudgetVm, DayBarVm, FooterVm, HeaderVm, HoverCardVm, HoverVm, MetricGridVm, ModelsCardVm,
-    PanelVm, TrackVm, geometry,
+    DailyBudgetVm, DayBarVm, FooterVm, HeaderVm, HoverCardVm, HoverTotalVm, HoverVm, MetricGridVm,
+    ModelsCardVm, PanelVm, TrackVm, geometry,
 };
 use super::grok::GrokUsage;
 use super::grokbot_cursor::{CursorUsage, GrokbotUsage};
@@ -105,7 +105,8 @@ fn hover_card(c: &HoverCardVm) -> ui::HoverCardData {
     ui::HoverCardData {
         title: text(&c.title),
         caption: opt(c.caption.as_deref()),
-        total: opt(c.total.as_deref()),
+        total: opt(c.total.as_ref().map(|t| t.text.as_str())),
+        unit: text(&c.total.as_ref().map(HoverTotalVm::unit).unwrap_or_default()),
         value: opt(c.value.as_deref()),
         rows: rows(&c.rows),
         extra_rows: rows(&c.extra_rows),
@@ -121,7 +122,10 @@ fn day_hover(h: &HoverVm) -> HoverCardVm {
     HoverCardVm {
         title: h.title.clone(),
         caption: h.usage_line.clone(),
-        total: tokens.map(|t| t.total_text.clone()),
+        total: tokens.map(|t| HoverTotalVm {
+            text: t.total_text.clone(),
+            source: t.source,
+        }),
         value: tokens.and_then(|t| t.cost_text.clone()),
         rows: tokens.map(|t| t.rows.clone()).unwrap_or_default(),
         extra_rows: tokens.map(|t| t.models.clone()).unwrap_or_default(),

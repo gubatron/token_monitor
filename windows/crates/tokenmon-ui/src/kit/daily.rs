@@ -16,6 +16,9 @@ const MIN_FILL_FRACTION: f64 = 0.005;
 pub struct DayTokensText {
     /// Total tokens, e.g. `1.2M`. Empty means "no token section".
     pub total: String,
+    /// Words after the total (`tokens`, `tokens on this PC`); empty reads
+    /// `tokens`.
+    pub unit: String,
     /// Cost with prefix/suffix applied, e.g. `≈ $4.20+`; empty hides it.
     pub cost: String,
     /// Input tokens.
@@ -86,6 +89,7 @@ pub fn day_bar(day: &DailyBudgetDay, today: NaiveDate, noun: &str) -> DayBar {
             title: day.date.format("%A, %b %-d").to_string().into(),
             caption: usage.into(),
             total: tokens.total.clone().into(),
+            unit: tokens.unit.clone().into(),
             value: tokens.cost.clone().into(),
             rows: rows(vec![
                 ("Input", tokens.input),

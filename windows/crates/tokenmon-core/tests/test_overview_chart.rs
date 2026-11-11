@@ -281,3 +281,19 @@ fn test_segment_heights_never_go_negative_when_lifts_exceed_tallest() {
     assert!(h.iter().all(|v| *v >= 1.0 - 1e-9), "{h:?}");
     assert!((h.iter().sum::<f64>() - total).abs() < 1e-9, "{h:?}");
 }
+
+/// Tokens counted on this PC (OpenCode, Claude) say so in the tooltip; the
+/// account's (Cursor) stay plain.
+#[test]
+fn test_tooltip_labels_only_local_tokens() {
+    let s = OverviewDaySeries::default()
+        .with_weights(Cursor, at(&[(14, 2.0)]))
+        .with_weights(OpenCodeGo, at(&[(14, 3.0)]))
+        .with_tokens(Cursor, vec![3_400_000; 24])
+        .with_tokens(OpenCodeGo, vec![3_400_000; 24]);
+    assert_eq!(
+        tooltip_text(&usage(&s).hours[14]),
+        "2p: Cursor 2.00% of weekly share · 3.4M · \
+         OpenCode Go 3.00% of weekly share · 3.4M tokens on this PC"
+    );
+}

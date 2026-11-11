@@ -5,7 +5,7 @@ use std::ops::RangeInclusive;
 
 use chrono::{DateTime, Days, NaiveDate, NaiveTime, TimeZone, Utc};
 
-use super::format::{format_tokens, hour_label};
+use super::format::{format_tokens_at, hour_label};
 use super::series::OverviewSeries;
 use super::usage::{HourUsage, ProviderDayHourlyUsage};
 use crate::provider::{ProviderId, Srgb};
@@ -300,7 +300,7 @@ pub fn tooltip_text(hour: &HourUsage) -> String {
                 quota_label(s)
             );
             match hour.tokens[s.index()] {
-                Some(t) if t > 0 => format!("{base} · {}", format_tokens(t)),
+                Some(t) if t > 0 => format!("{base} · {}", format_tokens_at(t, s.token_source())),
                 _ => base,
             }
         })

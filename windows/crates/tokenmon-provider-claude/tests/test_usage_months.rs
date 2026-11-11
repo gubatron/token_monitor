@@ -487,7 +487,7 @@ fn test_accessibility_label_speaks_the_whole_label() {
     );
     assert_eq!(
         d.accessibility_label,
-        "Opus 5.5, November: 50M tokens, about $1,000.00. \
+        "Opus 5.5, November: 50M tokens on this PC, about $1,000.00. \
          Input 0, Output 50M, Cache read 0, Cache write 0. \
          October: 40M tokens, about $800.00. \
          Up 25%, $200.00 more than October"
@@ -504,7 +504,7 @@ fn test_accessibility_label_without_a_comparison() {
     );
     assert_eq!(
         d.accessibility_label,
-        "Unknown 9, November: 1K tokens, no listed price. \
+        "Unknown 9, November: 1K tokens on this PC, no listed price. \
          Input 0, Output 1K, Cache read 0, Cache write 0. \
          No October history (recorded since Nov 4)"
     );

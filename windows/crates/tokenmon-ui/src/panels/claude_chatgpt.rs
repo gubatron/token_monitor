@@ -8,9 +8,9 @@ use tokenmon_provider_claude::ClaudeCodeUsageSummary;
 use tokenmon_provider_claude::hover::ClaudeModelHoverDetail;
 
 use super::common::{
-    DailyBudgetInput, DailyBudgetVm, FooterVm, HeaderVm, HoverCardVm, MetricGridVm, MetricVm,
-    ModelRowVm, ModelsCardVm, PanelContext, PanelVm, ProviderStatus, SignInAction, TrackVm,
-    build_daily_budget, standard_frame,
+    DailyBudgetInput, DailyBudgetVm, FooterVm, HeaderVm, HoverCardVm, HoverTotalVm, MetricGridVm,
+    MetricVm, ModelRowVm, ModelsCardVm, PanelContext, PanelVm, ProviderStatus, SignInAction,
+    TrackVm, build_daily_budget, standard_frame,
 };
 use super::format;
 
@@ -144,7 +144,10 @@ pub fn model_hover(d: &ClaudeModelHoverDetail) -> HoverCardVm {
     HoverCardVm {
         title: d.title.clone(),
         caption: None,
-        total: Some(format::tokens(u64::try_from(d.tokens).unwrap_or(0))),
+        total: Some(HoverTotalVm {
+            text: format::tokens(u64::try_from(d.tokens).unwrap_or(0)),
+            source: CLAUDE_CODE_SOURCE,
+        }),
         value: Some(d.value_text.clone()),
         rows: d
             .breakdown

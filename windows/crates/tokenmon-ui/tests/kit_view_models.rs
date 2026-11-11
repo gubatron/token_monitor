@@ -209,6 +209,7 @@ fn test_hover_tokens_and_model_cap() {
     let mut dd = day(d(10, 14), 10.0, 14.3);
     dd.tokens = Some(DayTokensText {
         total: "1.2M".into(),
+        unit: "tokens on this PC".into(),
         cost: "≈ $4.20+".into(),
         input: "1M".into(),
         output: "100K".into(),
@@ -218,6 +219,7 @@ fn test_hover_tokens_and_model_cap() {
     });
     let bar = day_bar(&dd, d(10, 16), "weekly");
     assert_eq!(bar.hover.total.as_str(), "1.2M");
+    assert_eq!(bar.hover.unit.as_str(), "tokens on this PC");
     assert_eq!(bar.hover.rows.row_count(), 4);
     assert_eq!(bar.hover.extra_rows.row_count(), 3);
     let none = day_bar(&day(d(10, 14), 10.0, 14.3), d(10, 16), "weekly");

@@ -16,10 +16,12 @@ use panels_common::*;
 use tokenmon_core::Srgb;
 use tokenmon_core::usage::{DayKey, UsageSource};
 use tokenmon_provider_claude::budget::daily_token_usage;
+use tokenmon_provider_claude::hover::ClaudeModelHoverDetail;
 use tokenmon_provider_claude::{ClaudeCodeUsageSummary, ModelTokens};
 use tokenmon_ui::panels::claude_chatgpt::*;
 use tokenmon_ui::panels::common::*;
 use tokenmon_ui::panels::opencode_openrouter::*;
+use tokenmon_ui::panels::overview::{HourActivityInput, HourSeries, segment_help};
 
 const OPUS: &str = "claude-opus-5-5";
 
@@ -198,4 +200,85 @@ fn test_account_stats_are_not_labelled() {
     let header = ModelsCardVm::new("Models", UsageSource::Account, true, true, Vec::new(), true);
     assert_eq!(header.source.tag(), None);
     assert_eq!(header.spoken_title(), "Models");
+}
+
+// ------------------------------ Hover labels --------------------------------
+
+/// The Claude model row's hover and spoken label say "tokens on this PC".
+#[test]
+fn test_model_hover_says_tokens_on_this_pc() {
+    let days = BTreeMap::from([(
+        DayKey::from_raw("2026-11-02"),
+        BTreeMap::from([(
+            OPUS.to_owned(),
+            ModelTokens {
+                input_tokens: 1_200_000,
+                output_tokens: 2_000_000,
+                response_count: 3,
+                ..ModelTokens::default()
+            },
+        )]),
+    )]);
+    let now = Utc.with_ymd_and_hms(2026, 11, 9, 12, 0, 0).unwrap();
+    let summary = ClaudeCodeUsageSummary::make(&days, now);
+    let detail = ClaudeModelHoverDetail::new(&summary.month_models[0], &summary);
+    assert!(
+        detail
+            .accessibility_label
+            .starts_with("Opus 5.5, November: 3.2M tokens on this PC, about $"),
+        "{}",
+        detail.accessibility_label
+    );
+    let card = model_hover(&detail);
+    assert_eq!(card.total.unwrap().unit(), "tokens on this PC");
+    assert_eq!(
+        ClaudeCodeUsageSummary::SOURCE.tokens_unit(),
+        "tokens on this PC"
+    );
+}
+
+/// The bars' hover labels its local tokens; the budget line (the account's
+/// weekly pool) is left alone, and account tokens stay plain "tokens".
+#[test]
+fn test_daily_bar_tokens_are_labelled_but_not_the_budget_line() {
+    let mut local = TokensInput::new(UsageSource::ThisComputer);
+    local.total = 44_000_000;
+    local.output = 44_000_000;
+    let mut days = week([7.0; 7]);
+    days[0].tokens = Some(local);
+    let mut account = TokensInput::new(UsageSource::Account);
+    account.total = 5_000;
+    account.output = 5_000;
+    days[1].tokens = Some(account);
+    let vm = build_daily_budget(&daily(days), &ctx()).unwrap();
+    let local = &vm.bars[0].hover;
+    assert_eq!(
+        local.tokens.as_ref().unwrap().source.tokens_unit(),
+        "tokens on this PC"
+    );
+    assert!(!local.usage_line.as_deref().unwrap().contains("PC"));
+    let account = &vm.bars[1].hover;
+    assert_eq!(
+        account.tokens.as_ref().unwrap().source.tokens_unit(),
+        "tokens"
+    );
+}
+
+/// The Overview hourly tooltip labels only local tokens: OpenCode's (and
+/// Claude's) read "on this PC", Cursor's stay plain.
+#[test]
+fn test_overview_tooltip_labels_only_local_tokens() {
+    let segment = |series| HourActivityInput {
+        series,
+        quota_percent: 1.2,
+        tokens: Some(3_400_000),
+    };
+    assert_eq!(
+        segment_help(&segment(HourSeries::OpenCodeGo)),
+        "Go 1.20% of weekly share · 3.4M tokens on this PC"
+    );
+    assert_eq!(
+        segment_help(&segment(HourSeries::Cursor)),
+        "Cursor 1.20% of weekly share · 3.4M"
+    );
 }

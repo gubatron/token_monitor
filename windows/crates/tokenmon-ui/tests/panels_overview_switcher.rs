@@ -255,7 +255,7 @@ fn test_hourly_chart_columns_tooltip_legend() {
     assert!((col9.segments.iter().map(|s| s.height).sum::<f64>() - 68.0).abs() < 1e-9);
     assert_eq!(
         col9.tooltip,
-        "9a: Grok 1.00% of weekly · 500 · Grokbot 1.00% of weekly · Claude 2.00% of 5-hour window · 1.5M"
+        "9a: Grok 1.00% of weekly · 500 · Grokbot 1.00% of weekly · Claude 2.00% of 5-hour window · 1.5M tokens on this PC"
     );
     assert_eq!(col9.axis_label.as_deref(), Some("9"));
     let col10 = c.columns.iter().find(|c| c.hour == 10).unwrap();

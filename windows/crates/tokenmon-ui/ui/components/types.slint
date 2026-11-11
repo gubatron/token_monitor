@@ -44,6 +44,9 @@ export struct HoverCardData {
     caption: string,
     /// Large token total, e.g. "1.2M" (empty hides the token block).
     total: string,
+    /// Words after the total: "tokens", or "tokens on this PC" when the
+    /// tokens were counted on this computer (empty reads "tokens").
+    unit: string,
     /// Value beside the total, e.g. "≈ $4.20+" (empty hides it).
     value: string,
     /// Input / Output / Cache read / Cache write rows.

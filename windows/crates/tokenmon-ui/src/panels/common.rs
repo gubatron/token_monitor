@@ -402,6 +402,24 @@ pub struct ModelRowVm {
     pub hover: Option<HoverCardVm>,
 }
 
+/// The large token total of a hover label and where its tokens were counted,
+/// which sets the unit's wording ("tokens", or "tokens on this PC"). There is
+/// no default source, so every hover label's author decides.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HoverTotalVm {
+    /// `Format.tokens(total)`.
+    pub text: String,
+    /// Where the tokens were counted.
+    pub source: UsageSource,
+}
+
+impl HoverTotalVm {
+    /// The words after the total: `tokens`, or `tokens on this PC`.
+    pub fn unit(&self) -> String {
+        self.source.tokens_unit()
+    }
+}
+
 /// A floating hover label's text: the daily bars and the Claude model rows
 /// both fill it, so every label looks the same (Swift `HoverLabelCard`).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -410,8 +428,9 @@ pub struct HoverCardVm {
     pub title: String,
     /// Secondary one-line summary under the title.
     pub caption: Option<String>,
-    /// Large token total; `None` hides the token block.
-    pub total: Option<String>,
+    /// Large token total with where it was counted; `None` hides the token
+    /// block.
+    pub total: Option<HoverTotalVm>,
     /// Value beside the total (`≈ $12.40`).
     pub value: Option<String>,
     /// Breakdown rows under the total.
@@ -617,6 +636,8 @@ pub struct HoverVm {
 pub struct HoverTokensVm {
     /// `Format.tokens(total)`.
     pub total_text: String,
+    /// Where the tokens were counted ("on this PC" when local).
+    pub source: UsageSource,
     /// `≈ $X.XX[+]` when cost > 0.
     pub cost_text: Option<String>,
     /// Input/Output/Cache read/Cache write rows.
@@ -685,6 +706,7 @@ pub fn usage_line(day: &DayInput, noun: AllowanceNoun) -> String {
 fn hover_tokens(t: &TokensInput) -> Option<HoverTokensVm> {
     (t.total > 0).then(|| HoverTokensVm {
         total_text: format::tokens(t.total),
+        source: t.source,
         cost_text: api_value_text(Some(t.cost_usd), t.has_unpriced),
         rows: vec![
             ("Input".to_owned(), format::tokens(t.input)),

@@ -99,6 +99,8 @@ fn test_claude_bar_hover_shows_tokens_dollars_and_top_models() {
     );
     let t = tuesday.tokens.as_ref().expect("token block");
     assert_eq!(t.total_text, "41M");
+    assert_eq!(t.source, UsageSource::ThisComputer);
+    assert_eq!(t.source.tokens_unit(), "tokens on this PC");
     // API-rate value of both models; every model is priced, so no `+`.
     let cost = t.cost_text.as_deref().expect("dollars");
     assert!(cost.starts_with("≈ $") && !cost.ends_with('+'), "{cost}");
@@ -168,6 +170,29 @@ fn test_monthly_provider_bar_hover_shows_tokens_and_unpriced_marker() {
         );
         assert_eq!(t.models[0], pair("gpt-5", "3.0M"));
     }
+}
+
+/// Account-wide tokens (Cursor's server events) keep the plain "tokens" unit.
+#[test]
+fn test_account_tokens_stay_unlabelled() {
+    let cal = Calendar::utc();
+    let mut tally = DailyTokenUsageTally::new(cal, UsageSource::Account);
+    let at = Utc.with_ymd_and_hms(2026, 11, 3, 9, 0, 0).unwrap();
+    tally.add_at(
+        at,
+        "gpt-5",
+        TokenCounts {
+            output: 10_000,
+            ..TokenCounts::default()
+        },
+        Some(1.0),
+    );
+    let by_day: std::collections::HashMap<_, _> = tally.into_days().into_iter().collect();
+    let days = attaching_tokens_map(week_bars(), &by_day, &cal);
+    let vm = card(&days, ProviderId::Cursor, AllowanceNoun::Monthly);
+    let t = vm.bars[1].hover.tokens.as_ref().unwrap();
+    assert_eq!(t.source, UsageSource::Account);
+    assert_eq!(t.source.tokens_unit(), "tokens");
 }
 
 /// A fully unpriced day shows the total but no dollar amount.

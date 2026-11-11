@@ -2,9 +2,12 @@
 //! sections 4.4-4.5): provider cards and the hourly "Usage Today" chart.
 
 use chrono::{DateTime, Duration, FixedOffset, NaiveDate, Timelike, Utc};
+use tokenmon_core::usage::UsageSource;
 use tokenmon_core::{ProviderId, Srgb};
 
 use super::common::{PanelContext, geometry};
+use tokenmon_core::overview::format::format_tokens_at;
+
 use super::format;
 use super::opencode_openrouter::{ORANGE, PURPLE};
 
@@ -226,6 +229,16 @@ impl HourSeries {
         }
     }
 
+    /// Where this series' tokens were counted: OpenCode's from `opencode.db`
+    /// and Claude's from the transcripts, both on this PC; Grok's, Grokbot's
+    /// and Cursor's are the account's.
+    pub fn token_source(self) -> UsageSource {
+        match self {
+            Self::Grok | Self::Grokbot | Self::Cursor => UsageSource::Account,
+            Self::Claude | Self::OpenCodeGo | Self::OpenCodeZen => UsageSource::ThisComputer,
+        }
+    }
+
     /// Grokbot never shows tokens.
     pub fn shows_tokens(self) -> bool {
         self != Self::Grokbot
@@ -241,6 +254,28 @@ pub struct HourActivityInput {
     pub quota_percent: f64,
     /// Tokens, where known.
     pub tokens: Option<u64>,
+}
+
+/// One slice of the hour's tooltip: `Cursor 1.20% of weekly share · 3.4M`, or
+/// `Go 1.20% of weekly share · 3.4M tokens on this PC` when the tokens were
+/// counted on this computer.
+pub fn segment_help(a: &HourActivityInput) -> String {
+    let quota = format!(
+        "{} {:.2}% {}",
+        a.series.title(),
+        a.quota_percent,
+        a.series.quota_label()
+    );
+    match a.tokens.filter(|t| *t > 0 && a.series.shows_tokens()) {
+        Some(t) => {
+            let count = i64::try_from(t).unwrap_or(i64::MAX);
+            format!(
+                "{quota} · {}",
+                format_tokens_at(count, a.series.token_source())
+            )
+        }
+        None => quota,
+    }
 }
 
 /// Rendered stacked segment.
@@ -411,18 +446,7 @@ pub fn build_hourly_chart(hours: &[Vec<HourActivityInput>], is_today: bool) -> H
             );
             let tooltip = ordered
                 .iter()
-                .map(|a| {
-                    let tok = a
-                        .tokens
-                        .filter(|_| a.series.shows_tokens())
-                        .map_or_else(String::new, |t| format!(" · {}", format::tokens(t)));
-                    format!(
-                        "{} {:.2}% {}{tok}",
-                        a.series.title(),
-                        a.quota_percent,
-                        a.series.quota_label()
-                    )
-                })
+                .map(|a| segment_help(a))
                 .collect::<Vec<_>>()
                 .join(" · ");
             HourColumnVm {

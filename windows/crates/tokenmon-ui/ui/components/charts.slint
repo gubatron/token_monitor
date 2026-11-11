@@ -167,7 +167,7 @@ export component HoverLabelCard inherits Rectangle {
                 color: Theme.primary;
             }
             Text {
-                text: "tokens";
+                text: root.card.unit != "" ? root.card.unit : "tokens";
                 font-family: Typo.family;
                 font-size: Typo.caption-size;
                 color: Theme.secondary;
