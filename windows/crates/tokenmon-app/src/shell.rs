@@ -630,6 +630,7 @@ fn run_primary(pipe: &str, show_panel: bool, version: &str) -> ExitCode {
             clock: Arc::new(SystemClock),
             version: version.to_owned(),
             home: std::env::var_os("USERPROFILE").map(Into::into),
+            claude_config_dir: std::env::var("CLAUDE_CONFIG_DIR").ok(),
             opencode_env: DataDirEnv::from_process(),
         },
         runtime.handle().clone(),

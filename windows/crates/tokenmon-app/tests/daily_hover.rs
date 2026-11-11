@@ -191,3 +191,42 @@ fn test_unpriced_only_day_shows_no_dollars() {
     assert_eq!(t.total_text, "10K");
     assert_eq!(t.cost_text, None);
 }
+
+/// The label under a bar is the day's percent of the pool rounded, uncapped
+/// (Swift `DailyBudgetBarsView`: `max(0, Int(spentUSD.rounded()))%`), and the
+/// hover's first percent is the same number at one decimal.
+#[test]
+fn test_bar_label_is_rounded_pool_percent_uncapped() {
+    let days: Vec<DailyBudgetDay> = [(2, 95.4), (3, 180.5), (4, 0.4), (5, 33.5)]
+        .into_iter()
+        .map(|(d, spent)| DailyBudgetDay::new(utc(11, d), spent, 100.0 / 7.0))
+        .collect();
+    let vm = card(&days, ProviderId::Claude, AllowanceNoun::Weekly);
+    let labels: Vec<&str> = vm.bars.iter().map(|b| b.value_label.as_str()).collect();
+    assert_eq!(labels, ["95%", "181%", "0%", "34%"]);
+    assert_eq!(
+        vm.bars[0].hover.usage_line.as_deref(),
+        Some("95.4% of weekly · 668% of daily allowance")
+    );
+}
+
+/// `CLAUDE_CONFIG_DIR` (comma-separated) relocates the transcripts; without it
+/// both `.config\claude` and `.claude` under the home are scanned.
+#[test]
+fn test_claude_transcript_discovery_honours_config_dir() {
+    use std::path::PathBuf;
+    use tokenmon_app::providers::claude_environment;
+    use tokenmon_provider_claude::projects_directories;
+    let home = PathBuf::from("/home/me");
+    assert_eq!(
+        projects_directories(&claude_environment(home.clone(), None)),
+        [
+            home.join(".config").join("claude").join("projects"),
+            home.join(".claude").join("projects"),
+        ]
+    );
+    assert_eq!(
+        projects_directories(&claude_environment(home, Some("/a, /b"))),
+        [PathBuf::from("/a/projects"), PathBuf::from("/b/projects")]
+    );
+}

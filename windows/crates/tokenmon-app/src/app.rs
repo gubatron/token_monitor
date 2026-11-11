@@ -40,6 +40,8 @@ pub struct AppInputs {
     pub version: String,
     /// The user's home directory.
     pub home: Option<PathBuf>,
+    /// Raw `CLAUDE_CONFIG_DIR` (comma-separated config directories).
+    pub claude_config_dir: Option<String>,
     /// Where OpenCode's database is looked up.
     pub opencode_env: DataDirEnv,
 }
@@ -85,6 +87,7 @@ impl App {
             clock: &inputs.clock,
             version: Some(&inputs.version),
             home: inputs.home,
+            claude_config_dir: inputs.claude_config_dir,
             opencode_env: inputs.opencode_env,
         })?;
         let model = AppModel::new(registry, Arc::clone(&settings), handle.clone());

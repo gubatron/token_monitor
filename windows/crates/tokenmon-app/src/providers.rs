@@ -73,6 +73,8 @@ pub struct ProviderDeps<'a> {
     pub version: Option<&'a str>,
     /// The user's home directory (Claude Code transcripts).
     pub home: Option<PathBuf>,
+    /// Raw `CLAUDE_CONFIG_DIR`, which relocates Claude Code's `projects`.
+    pub claude_config_dir: Option<String>,
     /// Where OpenCode's local database is looked up.
     pub opencode_env: DataDirEnv,
 }
@@ -207,6 +209,27 @@ fn entry(provider: ProviderId, poller: SharedPoller, sessions: &Sessions) -> Pro
 /// Cursor's session.
 ///
 /// # Errors
+/// Where Claude Code's transcripts are looked up: `CLAUDE_CONFIG_DIR` (when
+/// set, comma-separated) else `<home>\.config\claude` and `<home>\.claude`.
+///
+/// # Examples
+///
+/// ```
+/// use tokenmon_app::providers::claude_environment;
+/// let env = claude_environment("C:/Users/me".into(), Some("D:/cc"));
+/// assert_eq!(env.config_dir.as_deref(), Some("D:/cc"));
+/// ```
+pub fn claude_environment(
+    home: PathBuf,
+    config_dir: Option<&str>,
+) -> tokenmon_provider_claude::discovery::ClaudeEnvironment {
+    let env = tokenmon_provider_claude::discovery::ClaudeEnvironment::new(home);
+    match config_dir {
+        Some(dir) => env.with_config_dir(dir),
+        None => env,
+    }
+}
+
 /// The data directory or an HTTP stack could not be prepared.
 pub fn build_registry(deps: &ProviderDeps<'_>) -> Result<ProviderRegistry, BuildError> {
     let ProviderDeps {
@@ -289,7 +312,7 @@ pub fn build_registry(deps: &ProviderDeps<'_>) -> Result<ProviderRegistry, Build
         fetch_usage: ClaudeUsageClient::new(claude_http, DEFAULT_BASE_URL)
             .into_fetch_fn(Arc::clone(clock)),
         load_code_usage: live_code_usage(
-            tokenmon_provider_claude::discovery::ClaudeEnvironment::new(home),
+            claude_environment(home, deps.claude_config_dir.as_deref()),
             &dir,
             Arc::clone(clock),
         ),

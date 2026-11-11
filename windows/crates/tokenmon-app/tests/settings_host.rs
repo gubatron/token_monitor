@@ -76,6 +76,7 @@ fn fixture_with(updates: Option<Arc<UpdateService>>) -> Fixture {
             clock: Arc::new(SystemClock),
             version: "1.2.3".to_owned(),
             home: Some(dir.path().to_path_buf()),
+            claude_config_dir: None,
             opencode_env: DataDirEnv::default(),
         },
         tokio::runtime::Handle::current(),

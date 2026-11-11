@@ -20,6 +20,7 @@ fn build(dir: &std::path::Path) -> App {
             clock: Arc::new(SystemClock),
             version: "0.0.0-test".to_owned(),
             home: Some(dir.to_path_buf()),
+            claude_config_dir: None,
             opencode_env: DataDirEnv::default(),
         },
         tokio::runtime::Handle::current(),

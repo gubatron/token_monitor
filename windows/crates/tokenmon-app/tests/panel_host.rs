@@ -111,6 +111,7 @@ async fn test_selected_tab_persists_in_app_settings() {
             clock: Arc::new(SystemClock),
             version: "0.0.0-test".to_owned(),
             home: Some(dir.path().to_path_buf()),
+            claude_config_dir: None,
             opencode_env: DataDirEnv::default(),
         },
         tokio::runtime::Handle::current(),

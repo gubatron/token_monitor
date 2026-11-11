@@ -95,6 +95,7 @@ pub fn run_headless(version: &str) -> bool {
             clock: Arc::new(SystemClock),
             version: version.to_owned(),
             home: Some(dir.path().to_path_buf()),
+            claude_config_dir: None,
             opencode_env: DataDirEnv::default(),
         };
         let app = match App::build(inputs, tokio::runtime::Handle::current()) {
