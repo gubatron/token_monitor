@@ -54,10 +54,12 @@ env:
   CARGO_FUZZ_VERSION: "0.13.2"
   CARGO_FUZZ_SHA256: "b5b704018b63e0f151c17a057ac53b5111e1db545d1b9f72fee79f08a545931c"
   # Total line coverage may drop at most this many points vs windows-port.
+  # Loosened from 0.5 to 2.0 for now (maintainer, 2026-11-13, #4); tighten
+  # back to 0.5 once the port settles.
   # What is not measured (test/bench/fuzz/example code and the Windows-only
   # glue in windows/.config/coverage-excludes.txt) is described at the
   # coverage job.
-  COVERAGE_MAX_DROP: "0.5"
+  COVERAGE_MAX_DROP: "2.0"
 
 defaults:
   run:
