@@ -44,6 +44,8 @@ Rust system-tray app for Windows 10 and 11 (x64). Behavior is specified in `docs
 
 The Makefile never runs `installer/smoke-test.ps1` (see below).
 
+**Runs standalone.** `TokenMon.exe` links the C runtime statically (`.cargo/config.toml`), so it needs no Visual C++ Redistributable; CI fails if it ever imports `vcruntime*`/`msvcp*` (`scripts/ci/pe_imports.py`). Don't set `RUSTFLAGS` when building releases: it replaces those flags. Only sign-in windows need the Microsoft Edge WebView2 Runtime, which ships with Windows 11 and current Windows 10.
+
 ## Layout
 
 | Crate | Role | Builds on macOS/Linux |

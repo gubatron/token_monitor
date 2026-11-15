@@ -1,0 +1,6 @@
+# Link the MSVC C runtime into TokenMon.exe so it runs on a clean Windows
+# install without the Visual C++ Redistributable (no VCRUNTIME140.dll).
+# skia-bindings sees crt-static and downloads its /MT prebuilt binaries.
+# Do not set RUSTFLAGS in the environment: it replaces these flags.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
