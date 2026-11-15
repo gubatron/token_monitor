@@ -555,6 +555,15 @@ jobs:
           # shellcheck disable=SC2086 # LOCKED is empty or one flag
           cargo build $LOCKED --release --workspace --target x86_64-pc-windows-msvc
 
+      - name: TokenMon.exe needs no VC++ Redistributable
+        # The C runtime is linked statically (windows/.cargo/config.toml) so the
+        # exe runs on a clean Windows install; fail if it imports vcruntime/msvcp.
+        run: |
+          set -euo pipefail
+          exe=target/x86_64-pc-windows-msvc/release/TokenMon.exe
+          python3 -I scripts/ci/pe_imports.py list "$exe"
+          python3 -I scripts/ci/pe_imports.py check "$exe"
+
       - name: TokenMon.exe --smoke
         # Starts the real binary headless against a temp data dir, runs one
         # refresh cycle (nothing is signed in, so no network) and must exit 0.
