@@ -450,6 +450,7 @@ fn create_window(ctx: &Rc<Ctx>, title: &str) -> windows::core::Result<HWND> {
             Some(param),
         )?;
         super::window_icon::set_app_icon(hwnd, hinst);
+        crate::appearance::set_dark_title_bar(hwnd.0 as isize, crate::appearance::apps_theme());
         Ok(hwnd)
     }
 }

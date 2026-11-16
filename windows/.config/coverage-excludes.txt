@@ -46,3 +46,4 @@ crates/tokenmon-platform/src/notify/windows\.rs  # WinRT ToastNotification calls
 crates/tokenmon-platform/src/power/windows\.rs  # hidden window for WM_POWERBROADCAST and connectivity hints; decoding and the gate are power::event and power::machine
 crates/tokenmon-platform/src/webauth/window_icon\.rs  # LoadImageW and WM_SETICON for the sign-in window; the icon is the exe's resource, checked by --smoke
 crates/tokenmon-platform/src/webauth/webview2\.rs  max-lines=1350  # Win32 window hosting WebView2; decisions are webauth::machine, gate, nav, cookies, layout
+crates/tokenmon-platform/src/appearance/windows\.rs  # RegGetValueW for AppsUseLightTheme and DwmSetWindowAttribute; the mapping and change detection are tokenmon-core's AppTheme and ThemeTracker

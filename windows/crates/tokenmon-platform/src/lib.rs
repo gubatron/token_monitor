@@ -4,6 +4,7 @@
 //! fake so the rest of the workspace tests on macOS and Linux. This is the only
 //! crate allowed to contain `unsafe` code.
 
+pub mod appearance;
 pub mod install;
 pub mod notify;
 pub mod power;
