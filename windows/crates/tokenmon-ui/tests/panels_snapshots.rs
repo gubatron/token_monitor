@@ -400,6 +400,7 @@ fn test_every_panel_state_renders_offscreen() {
         weekly_resets_at: Some(at(2026, 7, 20, 0, 0)),
         daily: days(),
     };
+    let clsnap_tall = clsnap.clone();
     let claude_cases = [
         (
             "claude_signed_out_with_code",
@@ -442,6 +443,40 @@ fn test_every_panel_state_renders_offscreen() {
         apply_claude(&w.global::<ui::ClaudeVm>(), &build_claude(&input, &c));
         let (buf, h) = render(&w, &last, |w| w.get_content_height());
         check_and_save(name, &buf, h);
+        count += 1;
+    }
+
+    // #87: a panel taller than the host's cap renders at the cap, scrollable,
+    // with a scroll bar; an uncapped one has none.
+    {
+        let input = ClaudeInput {
+            status: status(),
+            snapshot: Some(clsnap_tall.clone()),
+            code: None,
+        };
+        let w = ui::PanelWindow::new().unwrap();
+        w.set_selected(ui::ProviderTab::Claude);
+        font!(w);
+        w.set_tabs(tabs.clone());
+        apply_claude(&w.global::<ui::ClaudeVm>(), &build_claude(&input, &c));
+        let (_, full_h) = render(&w, &last, |w| w.get_content_height());
+        assert!(!w.get_clamped(), "uncapped panel must not scroll");
+        w.set_panel_max_height(400.0);
+        let (buf, h) = render(&w, &last, |w| w.get_content_height().min(400.0));
+        assert!(w.get_clamped(), "capped panel must scroll");
+        assert_eq!(h, 400, "window height is the cap");
+        assert!(full_h > 400, "content ({full_h}) is taller than the cap");
+        assert!(
+            w.get_content_height() > 400.0,
+            "content height still reports the full height"
+        );
+        let bg = buf[0];
+        let thumb = (4..396).any(|y| {
+            let p = buf[y * 420 + 414];
+            (p.r, p.g, p.b) != (bg.r, bg.g, bg.b)
+        });
+        assert!(thumb, "scroll bar is drawn while clamped");
+        check_and_save("claude_usage_clamped", &buf, h);
         count += 1;
     }
 

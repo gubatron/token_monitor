@@ -52,7 +52,9 @@ use crate::app::{App, AppInputs};
 use crate::overview::{OverviewStore, next_midnight, record_live};
 use crate::panel::{Action, PanelState, PanelView, ViewEnv, build_view, commit_api_key};
 use crate::panel_host::{SinglePanel, select_tab};
-use crate::placement::{PlacementInput, fallback_icon, place_panel, resolve_anchor};
+use crate::placement::{
+    PlacementInput, fallback_icon, max_panel_height_dip, place_panel, resolve_anchor,
+};
 use crate::settings_host::{AppHost, AppSettingsBackend, HostParts};
 use crate::startup::{PendingShow, StartupFailure, retry};
 use crate::tray::{
@@ -333,6 +335,10 @@ impl Ui {
     fn place(&self, window: &PanelWindow) {
         let anchor = self.anchor.get().unwrap_or_else(default_anchor);
         let facts = display::monitor_at(center(anchor).0, center(anchor).1);
+        // Cap the window first so a tall panel scrolls instead of running off
+        // the work area; `logical_size` is the full content height and
+        // `place_panel` clamps it the same way.
+        window.set_panel_max_height(max_panel_height_dip(facts.work.height, facts.dpi));
         let placement = place_panel(&PlacementInput {
             icon: anchor,
             monitor: facts.monitor,
@@ -355,6 +361,7 @@ impl Ui {
                 size = ?placement.size,
                 gap = placement.gap,
                 origin = ?placement.origin,
+                clamped = placement.clamped,
                 "panel: place"
             );
         }

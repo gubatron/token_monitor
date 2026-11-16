@@ -56,6 +56,12 @@ impl PanelWindow {
         (PANEL_WIDTH_DIP, self.window.get_content_height())
     }
 
+    /// Caps the window height (logical pixels); taller content scrolls
+    /// inside it (#87).
+    pub fn set_panel_max_height(&self, dip: f32) {
+        self.window.set_panel_max_height(dip);
+    }
+
     /// The native window handle, once the window exists.
     pub fn hwnd(&self) -> Option<isize> {
         use slint::winit_030::WinitWindowAccessor;

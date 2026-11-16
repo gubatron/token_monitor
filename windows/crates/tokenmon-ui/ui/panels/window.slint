@@ -33,15 +33,31 @@ export component PanelWindow inherits Window {
     // shows a close button (the host sets this; snapshots keep it off).
     in property <bool> closable: false;
     callback close-panel();
+    // The body's full height, whatever the window shows of it.
     out property <length> content-height: layout.preferred-height;
+    // The tallest the host lets the window be (work area minus margins). Taller
+    // content scrolls inside the window (#87), like the Mac's one ScrollView.
+    in property <length> panel-max-height: 100000px;
+    out property <bool> clamped: root.content-height > root.panel-max-height;
     // Undecorated: the panel is a popup, not a document window.
     no-frame: true;
     default-font-family: Typo.family;
     icon: @image-url("../assets/logos/tokenmon-app-icon.png");
     width: 420px;
-    height: layout.preferred-height;
+    height: min(root.content-height, root.panel-max-height);
     background: Theme.window-background;
+    // A new tab starts at the top, so the switcher never scrolls out of view.
+    changed selected => { scroller.content-y = 0px; }
+    scroller := Flickable {
+        x: 0px;
+        y: 0px;
+        width: root.width;
+        height: root.height;
+        content-width: root.width;
+        content-height: root.content-height;
+        interactive: root.clamped;
     layout := VerticalLayout {
+        width: root.width;
         padding: 12px;
         spacing: 0px;
         if root.closable: HorizontalLayout {
@@ -76,6 +92,16 @@ export component PanelWindow inherits Window {
         if root.selected == ProviderTab.chatgpt: ChatGptBody { }
         if root.selected == ProviderTab.opencode: OpenCodeBody { }
         if root.selected == ProviderTab.openrouter: OpenRouterBody { }
+    }
+    }
+    // Scroll bar: only while the screen cuts the panel short.
+    if root.clamped: Rectangle {
+        x: root.width - 7px;
+        y: 2px + (root.height - 4px) * (-scroller.content-y / root.content-height);
+        width: 4px;
+        height: (root.height - 4px) * (root.height / root.content-height);
+        border-radius: 2px;
+        background: Theme.secondary.with-alpha(0.45);
     }
     // Last child, so a hover label paints above every card of the body.
     HoverOverlayHost { x: 0px; y: 0px; width: root.width; height: root.height; }
