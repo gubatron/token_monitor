@@ -13,6 +13,7 @@
 //! `windows/docs/IMPLEMENTATION_PLAN.md`.
 
 pub mod alerts;
+pub mod appearance;
 pub mod auth;
 pub mod auth_session;
 pub mod clock;
@@ -26,6 +27,7 @@ pub mod update;
 pub mod usage;
 pub mod util;
 
+pub use appearance::{AppTheme, ThemeTracker};
 pub use auth::{
     AUTH_FAILURE_THRESHOLD, AuthConfig, AuthEvent, AuthEventListener, AuthSession,
     AuthSessionState, CredentialKey, CredentialKind, CredentialStore, CredentialStoreError,
