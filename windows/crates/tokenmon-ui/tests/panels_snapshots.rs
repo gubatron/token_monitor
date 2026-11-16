@@ -477,10 +477,10 @@ fn render_all_states(last: &Rc<RefCell<Option<Rc<MinimalSoftwareWindow>>>>) {
         font!(w);
         w.set_tabs(tabs.clone());
         apply_claude(&w.global::<ui::ClaudeVm>(), &build_claude(&input, &c));
-        let (_, full_h) = render(&w, &last, |w| w.get_content_height());
+        let (_, full_h) = render(&w, last, |w| w.get_content_height());
         assert!(!w.get_clamped(), "uncapped panel must not scroll");
         w.set_panel_max_height(400.0);
-        let (buf, h) = render(&w, &last, |w| w.get_content_height().min(400.0));
+        let (buf, h) = render(&w, last, |w| w.get_content_height().min(400.0));
         assert!(w.get_clamped(), "capped panel must scroll");
         assert_eq!(h, 400, "window height is the cap");
         assert!(full_h > 400, "content ({full_h}) is taller than the cap");
@@ -753,5 +753,5 @@ fn render_all_states(last: &Rc<RefCell<Option<Rc<MinimalSoftwareWindow>>>>) {
         count += 1;
     }
     win(&ui::PanelWindow::new().unwrap(), "unused");
-    assert!(count == 27, "expected the full scenario table, ran {count}");
+    assert!(count == 28, "expected the full scenario table, ran {count}");
 }
