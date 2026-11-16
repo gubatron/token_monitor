@@ -221,6 +221,8 @@ fn on_tick(ui: &Rc<Ui>, tick: &mut TickState) {
         theme::taskbar_theme(),
     );
 
+    ui.sync_theme();
+
     let entries = context_menu(&settings);
     if entries != tick.menu {
         tick.controller

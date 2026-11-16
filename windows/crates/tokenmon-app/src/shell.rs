@@ -21,7 +21,7 @@ use tokenmon_core::polling::TokioSleeper;
 use tokenmon_core::storage::AppPaths;
 use tokenmon_core::update::UrlOpener;
 use tokenmon_core::usage::Calendar;
-use tokenmon_core::{Clock, ProviderId, SystemClock};
+use tokenmon_core::{AppTheme, Clock, ProviderId, SystemClock, ThemeTracker};
 use tokenmon_platform::install::handle_startup_args;
 use tokenmon_platform::notify::windows::WinRtToastBackend;
 use tokenmon_platform::notify::{AumidRegistration, ToastNotifier};
@@ -41,7 +41,7 @@ use tokenmon_ui::panels::events::{PanelEvent, PanelHandler};
 use tokenmon_ui::panels::overview::OverviewCardVm;
 use tokenmon_ui::panels::switcher::{RowVm, build_switcher};
 use tokenmon_ui::settings::bind::{
-    SettingsWindow, create_settings_window, refresh, select_opening_tab,
+    SettingsWindow, apply_theme, create_settings_window, refresh, select_opening_tab,
 };
 use tokenmon_ui::settings::{NativeSaveDialog, SettingsViewModel};
 use tokenmon_ui::tray_icon::{MenuAction, MenuEntry, TrayBitmap};
@@ -118,6 +118,8 @@ struct Ui {
     handle: tokio::runtime::Handle,
     settings_vm: Arc<SettingsViewModel>,
     settings_window: RefCell<Option<Rc<SettingsWindow>>>,
+    /// The app theme last applied to the windows (`AppsUseLightTheme`).
+    theme: RefCell<ThemeTracker>,
     tick: slint::Timer,
     me: Rc<RefCell<Weak<Ui>>>,
 }
@@ -205,6 +207,8 @@ impl Ui {
             };
             match event {
                 WindowEvent::Focused(focused) => ui.note_focus(*focused),
+                // WM_SETTINGCHANGE: the app theme may have changed.
+                WindowEvent::ThemeChanged(_) => ui.sync_theme(),
                 WindowEvent::KeyboardInput { event, .. }
                     if event.state.is_pressed()
                         && event.logical_key == Key::Named(NamedKey::Escape) =>
@@ -215,6 +219,32 @@ impl Ui {
             }
             EventResult::Propagate
         });
+    }
+
+    /// The app theme windows created now should start with: the last one
+    /// applied, or the registry's when nothing was applied yet.
+    fn current_theme(&self) -> AppTheme {
+        let known = self.theme.borrow().current();
+        known.unwrap_or_else(|| {
+            let now = theme::app_theme();
+            self.theme.borrow_mut().update(now);
+            now
+        })
+    }
+
+    /// Re-reads the app theme and, when it changed, restyles the panel,
+    /// Settings and its title bar. Runs on the tick and on theme-change events.
+    fn sync_theme(&self) {
+        let Some(now) = self.theme.borrow_mut().update(theme::app_theme()) else {
+            return;
+        };
+        if let Some(panel) = self.panel.existing() {
+            panel.set_theme(now);
+        }
+        if let Some(settings) = self.settings_window.borrow().as_ref() {
+            apply_theme(settings, now);
+            theme::style_title_bar(settings.window(), now);
+        }
     }
 
     /// Records a focus change of the selected panel.
@@ -466,7 +496,11 @@ impl Ui {
         };
         refresh(&window, &self.settings_vm);
         select_opening_tab(&window, &self.settings_vm);
+        let theme = self.current_theme();
+        apply_theme(&window, theme);
         let _ = window.show();
+        // The native window exists only once shown.
+        theme::style_title_bar(window.window(), theme);
     }
 
     fn run_command(&self, command: MenuCommand) {
@@ -512,6 +546,7 @@ fn panel_factory(me: &Rc<RefCell<Weak<Ui>>>) -> crate::panel_host::WindowFactory
         });
         let window = PanelWindow::create(&ui.handler(), &on_close).map_err(|e| e.to_string())?;
         ui.wire_window_events(&window);
+        window.set_theme(ui.current_theme());
         Ok(Rc::new(window))
     })
 }
@@ -699,6 +734,7 @@ fn run_primary(pipe: &str, show_panel: bool, version: &str) -> ExitCode {
         handle: runtime.handle().clone(),
         settings_vm,
         settings_window: RefCell::new(None),
+        theme: RefCell::new(ThemeTracker::new()),
         tick: slint::Timer::default(),
         me: Rc::clone(&me),
     });

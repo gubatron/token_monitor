@@ -88,6 +88,18 @@ pub fn notification_area_rect() -> Option<Rect> {
     window_rect(hwnd)
 }
 
+/// The native window handle of a Slint window, once it exists.
+pub fn hwnd_of(window: &slint::Window) -> Option<isize> {
+    use slint::winit_030::WinitWindowAccessor;
+    use slint::winit_030::winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    window
+        .with_winit_window(|w| match w.window_handle().ok()?.as_raw() {
+            RawWindowHandle::Win32(h) => Some(h.hwnd.get()),
+            _ => None,
+        })
+        .flatten()
+}
+
 /// Makes the window a tool window: no taskbar button and no Alt+Tab entry.
 /// Deliberately not topmost, so other windows can cover the panel (#81).
 pub fn make_tool_window(hwnd: isize) {

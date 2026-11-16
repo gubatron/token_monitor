@@ -5,6 +5,7 @@
 use std::rc::Rc;
 
 use slint::ComponentHandle;
+use tokenmon_core::AppTheme;
 use tokenmon_ui::panels::switcher::RowVm;
 use tokenmon_ui::panels::{bridge, events, ui};
 
@@ -64,14 +65,12 @@ impl PanelWindow {
 
     /// The native window handle, once the window exists.
     pub fn hwnd(&self) -> Option<isize> {
-        use slint::winit_030::WinitWindowAccessor;
-        use slint::winit_030::winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
-        self.window()
-            .with_winit_window(|w| match w.window_handle().ok()?.as_raw() {
-                RawWindowHandle::Win32(h) => Some(h.hwnd.get()),
-                _ => None,
-            })
-            .flatten()
+        super::system::hwnd_of(self.window())
+    }
+
+    /// Renders the panel with the light or dark palette.
+    pub fn set_theme(&self, theme: AppTheme) {
+        bridge::apply_theme(&self.window, theme);
     }
 
     /// Hides it.
