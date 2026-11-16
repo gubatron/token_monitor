@@ -30,6 +30,13 @@ export struct AccountRowData {
     accent: color,
 }
 
+/// Colors the std-widgets palette does not provide.
+global SettingsColors {
+    /// Error text (failed sign-in, destructive actions): the Fluent red on
+    /// light, a lighter red that keeps contrast on the dark window.
+    out property <color> error: Palette.color-scheme == ColorScheme.dark ? #ff6b6b : #d13438;
+}
+
 component Section inherits VerticalLayout {
     in property <string> title;
     in property <string> footer;
@@ -135,6 +142,12 @@ component ProviderDot inherits Rectangle {
 }
 
 export component SettingsWindow inherits Window {
+    /// Dark app mode (`AppsUseLightTheme`); the host sets it and the Fluent
+    /// widgets and the window background follow through `Palette`.
+    in property <bool> dark: false;
+    changed dark => {
+        Palette.color-scheme = root.dark ? ColorScheme.dark : ColorScheme.light;
+    }
     title: "TokenMon";
     // Taskbar button and Alt+Tab: the TokenMon logo, not the generic icon.
     icon: @image-url("../assets/logos/tokenmon-app-icon.png");
@@ -291,7 +304,7 @@ export component SettingsWindow inherits Window {
                         }
                         if root.refresh-error != "": Caption {
                             text: root.refresh-error;
-                            color: #d13438;
+                            color: SettingsColors.error;
                         }
                     }
                     Section {
@@ -488,7 +501,7 @@ export component SettingsWindow inherits Window {
                             }
                             if row.error != "": Caption {
                                 text: row.error;
-                                color: #d13438;
+                                color: SettingsColors.error;
                             }
                         }
                     }
@@ -535,7 +548,7 @@ export component SettingsWindow inherits Window {
                         }
                         if root.openrouter-error != "": Caption {
                             text: root.openrouter-error;
-                            color: #d13438;
+                            color: SettingsColors.error;
                         }
                     }
                 }
@@ -585,7 +598,7 @@ export component SettingsWindow inherits Window {
                         }
                         if root.export-error != "": Caption {
                             text: root.export-error;
-                            color: #d13438;
+                            color: SettingsColors.error;
                         }
                         Button {
                             text: "Clear Local History";
@@ -595,7 +608,7 @@ export component SettingsWindow inherits Window {
                         }
                         if root.store-failed-text != "": Caption {
                             text: root.store-failed-text;
-                            color: #d13438;
+                            color: SettingsColors.error;
                         }
                     }
                 }

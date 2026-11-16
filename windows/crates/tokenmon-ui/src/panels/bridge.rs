@@ -4,7 +4,7 @@
 
 use slint::{Color, ModelRc, SharedString, VecModel};
 use tokenmon_core::usage::UsageSource;
-use tokenmon_core::{ProviderId, Srgb};
+use tokenmon_core::{AppTheme, ProviderId, Srgb};
 
 use super::claude_chatgpt::{ChatGptUsage, ClaudePanelVm, ClaudeUsage};
 use super::common::{
@@ -227,6 +227,12 @@ fn frame_text<U>(p: &PanelVm<U>) -> (SharedString, SharedString) {
         opt(p.message.as_deref()),
         opt(p.sign_in.as_ref().map(|a| a.label.as_str())),
     )
+}
+
+/// Renders the panel with the light or dark palette (`Theme.dark`).
+pub fn apply_theme(w: &ui::PanelWindow, theme: AppTheme) {
+    use slint::ComponentHandle;
+    w.global::<ui::Theme>().set_dark(theme.is_dark());
 }
 
 /// Converts switcher rows to Slint data.

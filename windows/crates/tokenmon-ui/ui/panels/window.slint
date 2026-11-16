@@ -1,6 +1,7 @@
 // The one panel window (issue #81): 420 wide, 12 padding, the 4-per-row
 // provider switcher, then the selected provider's body. Switching tabs changes
 // `selected`; no second window is ever created.
+import { Palette } from "std-widgets.slint";
 import { ProviderSwitcher } from "shell.slint";
 import { Theme, Typo, HoverOverlayHost } from "../components/kit.slint";
 import { TabRowData } from "types.slint";
@@ -33,6 +34,12 @@ export component PanelWindow inherits Window {
     // shows a close button (the host sets this; snapshots keep it off).
     in property <bool> closable: false;
     callback close-panel();
+    // Anything that falls back to the std-widgets palette (default text
+    // color) follows the panel theme.
+    property <bool> palette-dark: Theme.dark;
+    changed palette-dark => {
+        Palette.color-scheme = root.palette-dark ? ColorScheme.dark : ColorScheme.light;
+    }
     // The body's full height, whatever the window shows of it.
     out property <length> content-height: layout.preferred-height;
     // The tallest the host lets the window be (work area minus margins). Taller

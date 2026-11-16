@@ -151,6 +151,12 @@ pub fn create_settings_window(
     Ok(w)
 }
 
+/// Renders Settings (window background and Fluent widgets) with the light or
+/// dark palette.
+pub fn apply_theme(w: &SettingsWindow, theme: tokenmon_core::AppTheme) {
+    w.set_dark(theme.is_dark());
+}
+
 /// Re-reads the view model into `w` (call when the window is shown, and after
 /// external status changes such as a completed sign-in).
 pub fn refresh(w: &SettingsWindow, vm: &SettingsViewModel) {

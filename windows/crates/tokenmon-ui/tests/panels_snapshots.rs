@@ -28,7 +28,7 @@ use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferTyp
 use slint::platform::{Platform, WindowAdapter};
 use slint::{ComponentHandle, PhysicalSize, Rgb8Pixel};
 use tokenmon_core::usage::PaceHeadroom;
-use tokenmon_core::{ProviderId, Srgb};
+use tokenmon_core::{AppTheme, ProviderId, Srgb};
 use tokenmon_ui::panels::bridge::*;
 use tokenmon_ui::panels::claude_chatgpt::*;
 use tokenmon_ui::panels::common::*;
@@ -50,11 +50,19 @@ fn register_fonts() {
     }
 }
 
-/// Pins the font family of a panel window's `Typo` global.
+thread_local! {
+    /// The theme the scenario table currently renders with; dark snapshots
+    /// are saved as `<name>_dark.png`.
+    static THEME: std::cell::Cell<AppTheme> = const { std::cell::Cell::new(AppTheme::Light) };
+}
+
+/// Pins the font family of a panel window's `Typo` global and applies the
+/// theme of the current pass.
 macro_rules! font {
-    ($w:expr) => {
-        $w.global::<ui::Typo>().set_family("Inter".into())
-    };
+    ($w:expr) => {{
+        $w.global::<ui::Typo>().set_family("Inter".into());
+        tokenmon_ui::panels::bridge::apply_theme(&$w, THEME.get());
+    }};
 }
 
 struct TestPlatform {
@@ -107,7 +115,9 @@ fn check_and_save(name: &str, buf: &[Rgb8Pixel], h: u32) {
         tiny_skia::Pixmap::from_vec(rgba, tiny_skia::IntSize::from_wh(420, h).unwrap()).unwrap();
     let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("panel-snapshots");
     std::fs::create_dir_all(&dir).unwrap();
-    pix.save_png(dir.join(format!("{name}.png"))).unwrap();
+    let suffix = if THEME.get().is_dark() { "_dark" } else { "" };
+    pix.save_png(dir.join(format!("{name}{suffix}.png")))
+        .unwrap();
 }
 
 /// `testGridEdgesMatchCardEdgesForEveryProviderCount`: the switcher grid's
@@ -167,11 +177,19 @@ fn win(w: &impl ComponentHandle, name: &str) {
     let _ = (w, name);
 }
 
+/// Renders every panel state twice, with the light and the dark palette.
 #[test]
 fn test_every_panel_state_renders_offscreen() {
     let last = Rc::new(RefCell::new(None));
     slint::platform::set_platform(Box::new(TestPlatform { last: last.clone() })).unwrap();
     register_fonts();
+    for theme in [AppTheme::Light, AppTheme::Dark] {
+        THEME.set(theme);
+        render_all_states(&last);
+    }
+}
+
+fn render_all_states(last: &Rc<RefCell<Option<Rc<MinimalSoftwareWindow>>>>) {
     let c = ctx();
     let tabs = tab_rows(&build_switcher(
         &ProviderId::USAGE_PROVIDERS,
@@ -247,7 +265,7 @@ fn test_every_panel_state_renders_offscreen() {
         font!(w);
         w.set_tabs(tabs.clone());
         apply_grok(&w.global::<ui::GrokVm>(), &grok::build(&input, &c));
-        let (buf, h) = render(&w, &last, |w| w.get_content_height());
+        let (buf, h) = render(&w, last, |w| w.get_content_height());
         check_and_save(name, &buf, h);
         count += 1;
     }
@@ -300,7 +318,7 @@ fn test_every_panel_state_renders_offscreen() {
         font!(w);
         w.set_tabs(tabs.clone());
         apply_grokbot(&w.global::<ui::GrokbotVm>(), &build_grokbot(&input, &c));
-        let (buf, h) = render(&w, &last, |w| w.get_content_height());
+        let (buf, h) = render(&w, last, |w| w.get_content_height());
         check_and_save(name, &buf, h);
         count += 1;
     }
@@ -358,7 +376,7 @@ fn test_every_panel_state_renders_offscreen() {
         font!(w);
         w.set_tabs(tabs.clone());
         apply_cursor(&w.global::<ui::CursorVm>(), &build_cursor(&input, &c));
-        let (buf, h) = render(&w, &last, |w| w.get_content_height());
+        let (buf, h) = render(&w, last, |w| w.get_content_height());
         check_and_save(name, &buf, h);
         count += 1;
     }
@@ -441,7 +459,7 @@ fn test_every_panel_state_renders_offscreen() {
         font!(w);
         w.set_tabs(tabs.clone());
         apply_claude(&w.global::<ui::ClaudeVm>(), &build_claude(&input, &c));
-        let (buf, h) = render(&w, &last, |w| w.get_content_height());
+        let (buf, h) = render(&w, last, |w| w.get_content_height());
         check_and_save(name, &buf, h);
         count += 1;
     }
@@ -518,7 +536,7 @@ fn test_every_panel_state_renders_offscreen() {
         font!(w);
         w.set_tabs(tabs.clone());
         apply_chatgpt(&w.global::<ui::ChatGptVm>(), &build_chatgpt(&input, &c));
-        let (buf, h) = render(&w, &last, |w| w.get_content_height());
+        let (buf, h) = render(&w, last, |w| w.get_content_height());
         check_and_save(name, &buf, h);
         count += 1;
     }
@@ -599,7 +617,7 @@ fn test_every_panel_state_renders_offscreen() {
         font!(w);
         w.set_tabs(tabs.clone());
         apply_opencode(&w.global::<ui::OpenCodeVm>(), &build_opencode(&input, &c));
-        let (buf, h) = render(&w, &last, |w| w.get_content_height());
+        let (buf, h) = render(&w, last, |w| w.get_content_height());
         check_and_save(name, &buf, h);
         count += 1;
     }
@@ -667,7 +685,7 @@ fn test_every_panel_state_renders_offscreen() {
             &w.global::<ui::OpenRouterVm>(),
             &build_openrouter(&input, &c),
         );
-        let (buf, h) = render(&w, &last, |w| w.get_content_height());
+        let (buf, h) = render(&w, last, |w| w.get_content_height());
         check_and_save(name, &buf, h);
         count += 1;
     }
@@ -727,7 +745,7 @@ fn test_every_panel_state_renders_offscreen() {
         font!(w);
         w.set_tabs(overview_tabs.clone());
         apply_overview(&w.global::<ui::OverviewVm>(), &build_overview(&input, &c));
-        let (buf, h) = render(&w, &last, |w| w.get_content_height());
+        let (buf, h) = render(&w, last, |w| w.get_content_height());
         check_and_save(name, &buf, h);
         if name == "overview_populated" {
             assert_edges_match(&buf, 26, 150);

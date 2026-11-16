@@ -136,4 +136,38 @@ fn test_each_tab_renders_offscreen() {
             );
         }
     }
+
+    // Dark pass: same tabs, dark palette. Each must be clearly darker than its
+    // light twin (a light-on-light or unchanged render would fail here) and
+    // the PNGs are saved as `settings-<tab>-dark`.
+    tokenmon_ui::settings::bind::apply_theme(&win, tokenmon_core::AppTheme::Dark);
+    for (index, name) in ["general", "providers", "accounts", "data"]
+        .iter()
+        .enumerate()
+    {
+        win.set_current_tab(i32::try_from(index).expect("tab index fits"));
+        let buf = render(&window);
+        save_png(&format!("{name}-dark"), &buf);
+        let dark_mean = mean_luma(&buf);
+        let light_mean = mean_luma_of(&renders[index]);
+        assert!(
+            dark_mean + 60.0 < light_mean,
+            "{name}: dark render not darker (dark {dark_mean:.0}, light {light_mean:.0})"
+        );
+    }
+}
+
+fn luma(r: u8, g: u8, b: u8) -> f64 {
+    0.2126 * f64::from(r) + 0.7152 * f64::from(g) + 0.0722 * f64::from(b)
+}
+
+fn mean_luma(buf: &[PremultipliedRgbaColor]) -> f64 {
+    buf.iter()
+        .map(|p| luma(p.red, p.green, p.blue))
+        .sum::<f64>()
+        / buf.len() as f64
+}
+
+fn mean_luma_of(buf: &[(u8, u8, u8)]) -> f64 {
+    buf.iter().map(|&(r, g, b)| luma(r, g, b)).sum::<f64>() / buf.len() as f64
 }
