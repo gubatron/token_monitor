@@ -3,8 +3,8 @@
 //! work area.
 
 use tokenmon_app::placement::{
-    AnchorSource, PlacementInput, TaskbarEdge, fallback_icon, place_panel, resolve_anchor,
-    scale_px, taskbar_edge,
+    AnchorSource, PlacementInput, TaskbarEdge, fallback_icon, max_panel_height_dip, place_panel,
+    resolve_anchor, scale_px, taskbar_edge,
 };
 use tokenmon_app::tray::Rect;
 
@@ -135,17 +135,15 @@ fn test_panel_stays_inside_the_work_area_and_away_from_the_taskbar() {
                 });
                 let ctx = format!("{edge:?} {ox},{oy} {w}x{h} dpi {dpi}: {p:?}");
                 assert_eq!(p.edge, edge, "{ctx}");
-                assert_eq!(
-                    p.size,
-                    (scale_px(420.0, dpi), scale_px(620.0, dpi)),
-                    "{ctx}"
-                );
+                assert_eq!(p.size.0, scale_px(420.0, dpi), "{ctx}");
                 assert!(inside(p.origin, p.size, work), "{ctx}");
                 let (x, y) = p.origin;
-                if p.size.0 > work.width || p.size.1 > work.height {
-                    // Cannot fit (tall panel, 200%, 1080p): pinned, checked above.
+                if p.clamped {
+                    // Tall panel on a small work area: clamped, covered by
+                    // test_oversized_panel_is_clamped_inside_the_work_area.
                     continue;
                 }
+                assert_eq!(p.size.1, scale_px(620.0, dpi), "{ctx}");
                 match edge {
                     TaskbarEdge::Bottom => assert!(y + p.size.1 <= icon.y, "{ctx}"),
                     TaskbarEdge::Top => assert!(y >= icon.y + icon.height, "{ctx}"),
@@ -201,19 +199,63 @@ fn test_side_taskbars_open_sideways() {
     assert_eq!(p.origin, (1856 - 8 - 420, 512 - 300));
 }
 
-/// A panel taller than the work area pins to the top instead of going
-/// negative.
+/// A panel taller than the work area is clamped to the work area minus an
+/// 8 DIP inset on each side and kept inside it (#87), at every DPI scale and
+/// taskbar edge; a panel that fits is untouched.
 #[test]
-fn test_oversized_panel_pins_to_the_work_area_origin() {
-    let (monitor, work) = monitor_with_bar(-1366, 100, 1366, 768, TaskbarEdge::Bottom, 40);
+fn test_oversized_panel_is_clamped_inside_the_work_area() {
+    for (dpi, _) in SCALES {
+        for edge in EDGES {
+            let (monitor, work) = monitor_with_bar(-1366, 100, 1366, 768, edge, 40);
+            let p = place_panel(&PlacementInput {
+                icon: rect(-300, 830, 20, 20),
+                monitor,
+                work,
+                dpi,
+                logical_size: (420.0, 5000.0),
+            });
+            assert!(p.clamped, "dpi {dpi} {edge:?}");
+            let inset = scale_px(8.0, dpi);
+            assert!(p.size.1 <= work.height - 2 * inset + 1, "{dpi} {edge:?}");
+            assert!(p.origin.1 >= work.y + inset, "{dpi} {edge:?}");
+            assert!(
+                p.origin.1 + p.size.1 <= work.y + work.height - inset + 1,
+                "{dpi} {edge:?}"
+            );
+        }
+    }
+}
+
+/// The 1080p at 150% case from #87: the Claude panel (770 DIP) on a 690 DIP
+/// work area is clamped to 674 DIP and flagged so the scroll bar shows.
+#[test]
+fn test_claude_panel_on_1080p_at_150_percent_is_clamped() {
+    let (monitor, work) = monitor_with_bar(0, 0, 1920, 1080, TaskbarEdge::Bottom, 45);
     let p = place_panel(&PlacementInput {
-        icon: rect(-300, 830, 20, 20),
+        icon: rect(1800, 1040, 24, 24),
+        monitor,
+        work,
+        dpi: 144,
+        logical_size: (420.0, 770.0),
+    });
+    assert!(p.clamped);
+    assert_eq!(p.size.1, 1011);
+    assert_eq!(max_panel_height_dip(work.height, 144), 674.0);
+}
+
+/// A panel that fits is not clamped.
+#[test]
+fn test_fitting_panel_is_not_clamped() {
+    let (monitor, work) = monitor_with_bar(0, 0, 1920, 1080, TaskbarEdge::Bottom, 40);
+    let p = place_panel(&PlacementInput {
+        icon: rect(1800, 1048, 24, 24),
         monitor,
         work,
         dpi: 96,
-        logical_size: (420.0, 5000.0),
+        logical_size: (420.0, 600.0),
     });
-    assert_eq!(p.origin.1, work.y);
+    assert!(!p.clamped);
+    assert_eq!(p.size.1, 600);
 }
 
 /// Edge detection uses the work-area inset; an auto-hidden taskbar (no inset)

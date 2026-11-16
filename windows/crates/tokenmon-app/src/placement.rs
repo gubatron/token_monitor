@@ -20,6 +20,10 @@ pub const BASE_DPI: u32 = 96;
 /// Gap between the taskbar and the panel, in logical pixels.
 pub const PANEL_GAP_DIP: i32 = 8;
 
+/// Inset kept between a clamped panel and the work-area edges, in logical
+/// pixels (the Mac keeps 8 pt inside the visible frame).
+pub const PANEL_EDGE_INSET_DIP: f32 = 8.0;
+
 /// Side of the screen the taskbar is docked to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TaskbarEdge {
@@ -59,6 +63,8 @@ pub struct Placement {
     pub gap: i32,
     /// Top-left corner of the panel, physical pixels.
     pub origin: (i32, i32),
+    /// Whether the work area cut the panel short (its content scrolls).
+    pub clamped: bool,
 }
 
 /// `logical` pixels at `dpi`, rounded up so the panel never ends up smaller
@@ -158,6 +164,22 @@ pub fn fallback_icon(monitor: Rect, work: Rect, dpi: u32) -> Rect {
     }
 }
 
+/// The tallest panel that fits a work area `work_height_px` tall at `dpi`, in
+/// logical pixels: the work area minus an inset on both sides, like the Mac's
+/// `visibleFrame.height - 16`. Never below 1.
+///
+/// ```
+/// use tokenmon_app::placement::max_panel_height_dip;
+/// // 690 DIP of work area (1080p at 150% minus the taskbar).
+/// assert_eq!(max_panel_height_dip(1035, 144), 674.0);
+/// assert_eq!(max_panel_height_dip(1040, 96), 1024.0);
+/// ```
+pub fn max_panel_height_dip(work_height_px: i32, dpi: u32) -> f32 {
+    let dpi = if dpi == 0 { BASE_DPI } else { dpi };
+    let dip = work_height_px as f32 * BASE_DPI as f32 / dpi as f32;
+    (dip - 2.0 * PANEL_EDGE_INSET_DIP).max(1.0)
+}
+
 fn clamp_axis(start: i32, len: i32, lo: i32, extent: i32) -> i32 {
     start.clamp(lo, (lo + extent - len).max(lo))
 }
@@ -165,7 +187,8 @@ fn clamp_axis(start: i32, len: i32, lo: i32, extent: i32) -> i32 {
 /// The panel's top-left corner for `input`: opened away from the taskbar,
 /// centred on the icon along the taskbar, a DPI-scaled gap off the taskbar
 /// side of the work area, then clamped entirely inside the work area. A panel
-/// larger than the work area pins to its top left.
+/// taller than the work area is clamped to [`max_panel_height_dip`] (its body
+/// scrolls) and kept the same inset inside the work area.
 ///
 /// ```
 /// use tokenmon_app::placement::{PlacementInput, place_panel};
@@ -187,7 +210,15 @@ pub fn place_panel(input: &PlacementInput) -> Placement {
         dpi,
         logical_size,
     } = *input;
-    let size = (scale_px(logical_size.0, dpi), scale_px(logical_size.1, dpi));
+    let max_height = scale_px(max_panel_height_dip(work.height, dpi), dpi).min(work.height);
+    let full_height = scale_px(logical_size.1, dpi);
+    let clamped = full_height > max_height;
+    let size = (scale_px(logical_size.0, dpi), full_height.min(max_height));
+    let inset = if clamped {
+        scale_px(PANEL_EDGE_INSET_DIP, dpi)
+    } else {
+        0
+    };
     let gap = scale_px(PANEL_GAP_DIP as f32, dpi);
     let edge = taskbar_edge(monitor, work, icon);
     let (cx, cy) = (icon.x + icon.width / 2, icon.y + icon.height / 2);
@@ -203,8 +234,9 @@ pub fn place_panel(input: &PlacementInput) -> Placement {
         gap,
         origin: (
             clamp_axis(x, size.0, work.x, work.width),
-            clamp_axis(y, size.1, work.y, work.height),
+            clamp_axis(y, size.1, work.y + inset, work.height - 2 * inset),
         ),
+        clamped,
     }
 }
 
