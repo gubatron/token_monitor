@@ -47,6 +47,10 @@ struct GrokbotPanelView: View {
                     )
                 }
 
+                if let breakdown = poller.breakdown, breakdown.isShown(at: Date()) {
+                    GrokbotUsageBreakdownCard(breakdown: breakdown)
+                }
+
                 if let err = poller.lastError {
                     StaleDataCaption(message: err, lastRefreshedAt: poller.lastRefreshedAt)
                         .padding(.top, 8)

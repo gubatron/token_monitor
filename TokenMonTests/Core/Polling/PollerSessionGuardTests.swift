@@ -449,6 +449,108 @@ final class PollerSessionGuardTests: XCTestCase {
         XCTAssertFalse(auth.isSignedIn)
     }
 
+    // MARK: - Grokbot usage breakdown
+
+    private func grokbotSnapshot() -> GrokbotSnapshot {
+        GrokbotSnapshot(fetchedAt: Date(), usedPercent: 40, resetsAt: Date().addingTimeInterval(3 * 86400))
+    }
+
+    private func breakdown(_ user: Double) -> GrokbotUsageBreakdown {
+        GrokbotUsageBreakdown(unit: .weeklyLimitPercent, slices: [.init(source: .user, value: user)])
+    }
+
+    func testGrokbotPublishesBreakdownAfterSnapshot() async {
+        let auth = CursorAuthSession(directory: dir)
+        auth.save(cookieHeader: "WorkosCursorSessionToken=live")
+        let poller = GrokbotUsagePoller(
+            settings: settings(.grokbot),
+            auth: auth,
+            hourly: hourlyStore("grokbot"),
+            daily: dailyStore("grokbot"),
+            fetchSnapshot: { _, _ in self.grokbotSnapshot() },
+            fetchBreakdown: { _ in self.breakdown(25) }
+        )
+        await poller.refreshNow()
+        XCTAssertEqual(poller.breakdown, breakdown(25))
+    }
+
+    /// The breakdown only adds detail: its failure keeps the last one, shows
+    /// no error, and never counts against the shared Cursor session.
+    func testGrokbotBreakdownFailureKeepsLastAndSession() async {
+        let auth = CursorAuthSession(directory: dir)
+        auth.save(cookieHeader: "WorkosCursorSessionToken=live")
+        var fails = false
+        let poller = GrokbotUsagePoller(
+            settings: settings(.grokbot),
+            auth: auth,
+            hourly: hourlyStore("grokbot"),
+            daily: dailyStore("grokbot"),
+            fetchSnapshot: { _, _ in self.grokbotSnapshot() },
+            fetchBreakdown: { _ in
+                if fails { throw ProviderError.unauthorized(.grokbot) }
+                return self.breakdown(25)
+            }
+        )
+        await poller.refreshNow()
+        fails = true
+        for _ in 1...ProviderAuthSession.authFailureThreshold {
+            await poller.refreshNow()
+        }
+        XCTAssertEqual(poller.breakdown, breakdown(25))
+        XCTAssertNil(poller.lastError)
+        XCTAssertTrue(auth.isSignedIn)
+        XCTAssertFalse(auth.needsSignIn)
+    }
+
+    func testGrokbotBreakdownSkippedWhenSnapshotFails() async {
+        let auth = CursorAuthSession(directory: dir)
+        auth.save(cookieHeader: "WorkosCursorSessionToken=live")
+        var breakdownCalls = 0
+        let poller = GrokbotUsagePoller(
+            settings: settings(.grokbot),
+            auth: auth,
+            hourly: hourlyStore("grokbot"),
+            daily: dailyStore("grokbot"),
+            fetchSnapshot: { _, _ in throw ProviderError.network(.grokbot, "offline") },
+            fetchBreakdown: { _ in
+                breakdownCalls += 1
+                return self.breakdown(25)
+            }
+        )
+        await poller.refreshNow()
+        XCTAssertEqual(breakdownCalls, 0)
+        XCTAssertNil(poller.breakdown)
+    }
+
+    func testGrokbotStaleBreakdownIsDroppedAndSignOutClearsIt() async {
+        let auth = CursorAuthSession(directory: dir)
+        auth.save(cookieHeader: "WorkosCursorSessionToken=old")
+        var switchAccount = false
+        let poller = GrokbotUsagePoller(
+            settings: settings(.grokbot),
+            auth: auth,
+            hourly: hourlyStore("grokbot"),
+            daily: dailyStore("grokbot"),
+            fetchSnapshot: { _, _ in self.grokbotSnapshot() },
+            fetchBreakdown: { _ in
+                if switchAccount {
+                    auth.signOut()
+                    auth.save(cookieHeader: "WorkosCursorSessionToken=new")
+                }
+                return self.breakdown(25)
+            }
+        )
+        await poller.refreshNow()
+        XCTAssertNotNil(poller.breakdown)
+        auth.signOut()
+        XCTAssertNil(poller.breakdown)
+
+        auth.save(cookieHeader: "WorkosCursorSessionToken=old")
+        switchAccount = true
+        await poller.refreshNow()
+        XCTAssertNil(poller.breakdown)
+    }
+
     // MARK: - OpenCode
 
     func testOpenCodeStaleSuccessIsDropped() async {

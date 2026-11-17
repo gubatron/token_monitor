@@ -20,6 +20,9 @@ import Foundation
 /// One endpoint covers both purchase channels: when the allowance is bundled
 /// with a SuperGrok subscription, the SuperGrok plan fields are populated and
 /// the rest of the payload is identical.
+///
+/// The usage breakdown by source comes from a second call; see
+/// ``fetchBreakdown()``.
 struct GrokbotUsageClient: Sendable {
     static let baseURL = URL(staticString: "https://cursor.com")
     static let usageStatusPath = "/api/dashboard/get-sand-usage-status"
@@ -36,6 +39,44 @@ struct GrokbotUsageClient: Sendable {
     func fetchSnapshot(now: Date = Date()) async throws -> GrokbotSnapshot {
         let data = try await post(path: Self.usageStatusPath, json: [:])
         return try Self.parseUsageStatus(data: data, accountEmail: accountEmail, fetchedAt: now)
+    }
+
+    /// Connect RPC host for the usage breakdown, which the dashboard's REST
+    /// wrapper does not expose.
+    static let rpcBaseURL = URL(staticString: "https://api2.cursor.sh")
+    static let usageBreakdownPath = "/aiserver.v1.DashboardService/GetGrokBotUsageBreakdown"
+
+    /// This period's usage by source (You, Routines, Bot to Bot, …), or nil
+    /// when the session cookie holds no access token or the account has no
+    /// breakdown.
+    ///
+    /// The RPC host authenticates with a bearer token rather than the cookie;
+    /// the token is the one inside the session cookie.
+    func fetchBreakdown() async throws -> GrokbotUsageBreakdown? {
+        guard let token = Self.accessToken(fromCookieHeader: cookieHeader) else { return nil }
+        let data = try await ProviderHTTP.post(
+            Self.usageBreakdownPath,
+            baseURL: Self.rpcBaseURL,
+            context: .grokbot,
+            json: [:],
+            bearerToken: token,
+            headers: ["Connect-Protocol-Version": "1"]
+        )
+        return GrokbotUsageBreakdown.parse(try ProviderHTTP.jsonObject(data, context: .grokbot))
+    }
+
+    /// The access token inside `WorkosCursorSessionToken`, whose value is
+    /// `<user id>::<JWT>` (percent-encoded); nil when the cookie is missing or
+    /// holds no JWT.
+    static func accessToken(fromCookieHeader header: String) -> String? {
+        let value = header
+            .split(separator: ";")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .first { $0.lowercased().hasPrefix("workoscursorsessiontoken=") }
+            .map { String($0.dropFirst("workoscursorsessiontoken=".count)) }
+        guard let decoded = value?.removingPercentEncoding else { return nil }
+        let token = decoded.components(separatedBy: "::").last ?? decoded
+        return token.split(separator: ".", omittingEmptySubsequences: false).count == 3 ? token : nil
     }
 
     // MARK: - Parsing

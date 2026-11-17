@@ -14,6 +14,9 @@ final class GrokbotUsagePoller: ProviderUsagePoller {
     /// Daily bars for the current allowance period, anchored to the provider's
     /// own `next_reset_timestamp_utc`: % of the pool burned per calendar day.
     private(set) var dailyBudgetDays: [DailyBudgetDay]?
+    /// This period's usage by source; the last one fetched, kept when a later
+    /// fetch fails.
+    private(set) var breakdown: GrokbotUsageBreakdown?
     var menuIsOpen = false {
         didSet { if menuIsOpen != oldValue { pollingLoop.wake() } }
     }
@@ -26,6 +29,7 @@ final class GrokbotUsagePoller: ProviderUsagePoller {
     private let daily: DailyQuotaDeltaStore
     /// Injected fetch seam (tests supply a fake); defaults to the live client.
     private let fetchSnapshot: (String, String?) async throws -> GrokbotSnapshot
+    private let fetchBreakdown: (String) async throws -> GrokbotUsageBreakdown?
     private let logger = Logger(category: "Grokbot")
     @ObservationIgnored private var cancellables = Set<AnyCancellable>()
 
@@ -46,7 +50,8 @@ final class GrokbotUsagePoller: ProviderUsagePoller {
         auth: CursorAuthSession,
         hourly: HourlyDeltaActivityStore,
         daily: DailyQuotaDeltaStore,
-        fetchSnapshot: ((String, String?) async throws -> GrokbotSnapshot)? = nil
+        fetchSnapshot: ((String, String?) async throws -> GrokbotSnapshot)? = nil,
+        fetchBreakdown: ((String) async throws -> GrokbotUsageBreakdown?)? = nil
     ) {
         self.settings = settings
         self.auth = auth
@@ -55,6 +60,11 @@ final class GrokbotUsagePoller: ProviderUsagePoller {
         self.fetchSnapshot = fetchSnapshot ?? { cookieHeader, accountEmail in
             try await GrokbotUsageClient(cookieHeader: cookieHeader, accountEmail: accountEmail).fetchSnapshot()
         }
+        // A test that fakes the snapshot gets no breakdown unless it supplies
+        // one, so it never reaches the live endpoint.
+        self.fetchBreakdown = fetchBreakdown ?? (fetchSnapshot != nil ? { _ in nil } : { cookieHeader in
+            try await GrokbotUsageClient(cookieHeader: cookieHeader).fetchBreakdown()
+        })
         // The session is shared with Cursor. Signing out from either surface
         // drops this snapshot; its history is kept for the same account and
         // cleared when a different account signs in.
@@ -84,6 +94,7 @@ final class GrokbotUsagePoller: ProviderUsagePoller {
     func clearSnapshot() {
         snapshot = nil
         dailyBudgetDays = nil
+        breakdown = nil
         weeklyResetsAt = nil
         budgetReferenceNow = nil
         lastError = nil
@@ -111,7 +122,7 @@ final class GrokbotUsagePoller: ProviderUsagePoller {
             return .skipped
         }
 
-        return await ProviderRefresh.run(
+        let outcome = await ProviderRefresh.run(
             auth: auth,
             logger: logger,
             label: "Grokbot",
@@ -154,6 +165,29 @@ final class GrokbotUsagePoller: ProviderUsagePoller {
             },
             reportError: { lastError = $0 }
         )
+        if outcome == .success {
+            await refreshBreakdown(cookieHeader: cookieHeader)
+        }
+        return outcome
+    }
+
+    /// Fetches the usage breakdown after a successful snapshot.
+    ///
+    /// The breakdown only adds detail to the panel, so a failure keeps the
+    /// last one, is logged, and neither reports an error nor counts against
+    /// the shared Cursor session. A result that arrives after a sign-out or
+    /// account switch is dropped.
+    private func refreshBreakdown(cookieHeader: String) async {
+        let generation = auth.sessionGeneration
+        do {
+            let fresh = try await fetchBreakdown(cookieHeader)
+            guard !Task.isCancelled, auth.isCurrent(generation) else { return }
+            if let fresh {
+                breakdown = fresh
+            }
+        } catch {
+            logger.info("Grokbot usage breakdown unavailable: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     private func pollInterval() -> TimeInterval? {
