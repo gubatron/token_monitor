@@ -24,7 +24,7 @@ enum DailyBudgetHover {
     /// The label's one-line budget summary for `day`.
     static func usageLine(_ day: DailyBudgetDay, allowanceNoun: String) -> String {
         if day.isPriorWindow {
-            return String(format: "%.1f%% of the %@ pool before the provider reset it early", day.spentUSD, allowanceNoun)
+            return String(format: "%.1f%% of the previous %@ pool", day.spentUSD, allowanceNoun)
         }
         if day.budgetUSD <= 0 { return "No budget" }
         if day.spentUSD <= 0.001 { return String(format: "0%% of the %.1f%% daily allowance", day.budgetUSD) }

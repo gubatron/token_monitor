@@ -91,9 +91,9 @@ final class DailyBudgetWeekOffsetTests: XCTestCase {
         XCTAssertFalse(days[1].isPriorWindow)
     }
 
-    /// The current Monday week does not pick up pre-period history. That map is
-    /// only for weeks the arrows have moved off of today.
-    func testMondayWeekOffsetZeroIgnoresHistoryBeforePeriod() {
+    /// The current Monday week shows pre-period history as the previous
+    /// period: dimmed and outside pace, not 0%.
+    func testMondayWeekOffsetZeroShowsHistoryBeforePeriodAsPriorWindow() {
         let days = DailyBudget.buildMondayWeekDays(
             periodStart: date(2026, 10, 2, hour: 18),
             periodEnd: date(2026, 11, 2, hour: 18),
@@ -104,8 +104,8 @@ final class DailyBudgetWeekOffsetTests: XCTestCase {
             calendar: calendar
         )
         let sep30 = days.first { calendar.isDate($0.date, inSameDayAs: date(2026, 9, 30)) }
-        XCTAssertEqual(sep30?.spentUSD ?? -1, 0)
-        XCTAssertEqual(sep30?.isPriorWindow, false)
+        XCTAssertEqual(sep30?.spentUSD ?? -1, 9)
+        XCTAssertEqual(sep30?.isPriorWindow, true)
     }
 
     func testMondayWeekOffsetUsesHistoryBeforePeriod() {

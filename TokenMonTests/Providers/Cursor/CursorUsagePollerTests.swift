@@ -190,8 +190,8 @@ final class CursorUsagePollerTests: XCTestCase {
     }
 
     /// With no early reset, days of the displayed week before the cycle start
-    /// read 0 and nothing is flagged.
-    func testWithoutEarlyResetOldDaysStayHidden() throws {
+    /// show the previous cycle's observed use, flagged as the prior window.
+    func testWithoutEarlyResetOldDaysShowAsPreviousCycle() throws {
         let days = try XCTUnwrap(CursorUsagePoller.buildDailyBudgetDays(
             observedByDay: [day(2026, 10, 1): 5, day(2026, 10, 3): 4],
             estimatedWeightByDay: [:],
@@ -201,8 +201,8 @@ final class CursorUsagePollerTests: XCTestCase {
             now: date(2026, 10, 4, hour: 12),
             calendar: calendar
         ))
-        XCTAssertFalse(days.contains(where: \.isPriorWindow))
-        XCTAssertEqual(days[3].spentUSD, 0)
+        XCTAssertEqual(days.map(\.isPriorWindow), [true, true, true, true, false, false, false])
+        XCTAssertEqual(days[3].spentUSD, 5, accuracy: 0.001)
     }
 
     /// Chevron-left shows the previous Monday week. A day before the cycle start

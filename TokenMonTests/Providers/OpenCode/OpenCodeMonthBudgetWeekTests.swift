@@ -123,6 +123,32 @@ final class OpenCodeMonthBudgetWeekTests: XCTestCase {
         XCTAssertEqual(spent(19), 5.0 / 3, accuracy: 0.001)
     }
 
+    /// Days of the current week before the billing period show the previous
+    /// period's spend, flagged as the prior window, instead of 0%.
+    func testMonthDailyBudgetShowsPreviousPeriodDaysOnTheCurrentWeek() throws {
+        let calendar = utc
+        func at(_ day: Int, _ hour: Int = 12) -> Date {
+            calendar.date(from: DateComponents(year: 2026, month: 11, day: day, hour: hour))!
+        }
+        goSpend(3, at: at(16))
+        goSpend(2, at: at(19))
+
+        let budget = try XCTUnwrap(OpenCodeLocalStats.monthDailyBudgetDays(
+            limitUSD: 60,
+            usedPercent: 10.0 / 3,
+            periodResetsAt: calendar.date(from: DateComponents(year: 2026, month: 12, day: 18, hour: 0)),
+            now: at(19),
+            dbURL: dbURL,
+            calendar: calendar
+        ))
+        let monday = try XCTUnwrap(budget.days.first { calendar.isDate($0.date, inSameDayAs: at(16)) })
+        XCTAssertEqual(monday.spentUSD, 5, accuracy: 0.001) // $3 of $60
+        XCTAssertTrue(monday.isPriorWindow)
+        let thursday = try XCTUnwrap(budget.days.first { calendar.isDate($0.date, inSameDayAs: at(19)) })
+        XCTAssertEqual(thursday.spentUSD, 10.0 / 3, accuracy: 0.001)
+        XCTAssertFalse(thursday.isPriorWindow)
+    }
+
     /// Spend before the console window leaves the current week's scale undiluted,
     /// and chevron-left still paints that earlier week from local history.
     func testMonthDailyBudgetWeekOffsetKeepsHistoryOutOfHeadlineScale() throws {

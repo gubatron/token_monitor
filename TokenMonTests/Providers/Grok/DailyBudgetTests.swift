@@ -918,8 +918,10 @@ final class DailyBudgetTests: XCTestCase {
             calendar: calendar
         )
         XCTAssertEqual(days.count, 7)
-        // Week of Mon Sep 28: Sep 28, 29 (no prior data), Sep 30, Oct 1 prior, Oct 2+ live.
-        XCTAssertEqual(days.map(\.isPriorWindow), [false, false, true, true, false, false, false])
+        // Week of Mon Sep 28: Sep 28 – Oct 1 belong to the prior window (Sep 28
+        // and 29 with no recorded spend), Oct 2+ live.
+        XCTAssertEqual(days.map(\.isPriorWindow), [true, true, true, true, false, false, false])
+        XCTAssertEqual(days[0].spentUSD, 0)
         XCTAssertEqual(days[2].spentUSD, 4)
         XCTAssertEqual(days[3].spentUSD, 6)
         XCTAssertEqual(days[5].spentUSD, 1.5)

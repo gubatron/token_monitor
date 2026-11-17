@@ -55,5 +55,16 @@ final class DailyBudgetHoverTests: XCTestCase {
             DailyBudgetHover.usageLine(DailyBudgetDay(date: date, spentUSD: 0, budgetUSD: 100.0 / 7), allowanceNoun: "weekly"),
             "0% of the 14.3% daily allowance"
         )
+        XCTAssertEqual(
+            DailyBudgetHover.usageLine(
+                DailyBudgetDay(date: date, spentUSD: 5, budgetUSD: 100.0 / 30, isPriorWindow: true),
+                allowanceNoun: "monthly"
+            ),
+            "5.0% of the previous monthly pool"
+        )
+        XCTAssertEqual(
+            DailyBudgetHover.usageLine(DailyBudgetDay(date: date, spentUSD: 5, budgetUSD: 0), allowanceNoun: "weekly"),
+            "No budget"
+        )
     }
 }
