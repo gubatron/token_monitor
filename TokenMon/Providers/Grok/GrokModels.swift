@@ -80,17 +80,34 @@ enum ProductCatalog {
         }
     }
 
-    /// Products for a panel's bar and category rows: the snapshot's own products
-    /// in canonical display order, limited to the user's visible set, keeping any
-    /// non-zero contribution (the menu bar applies a 0.05 floor). A breakdown-less
+    /// Rank of each product ID in `displayOrder`, for tie-breaking sorts.
+    private static let displayRank: [String: Int] = Dictionary(
+        uniqueKeysWithValues: displayOrder.enumerated().map { ($1, $0) }
+    )
+
+    /// `products` ordered most used first, ties kept in canonical display order.
+    static func sortedByUsage(_ products: [ProductUsage]) -> [ProductUsage] {
+        products.sorted { lhs, rhs in
+            if lhs.percentOfPool != rhs.percentOfPool {
+                return lhs.percentOfPool > rhs.percentOfPool
+            }
+            let lhsRank = displayRank[lhs.id.lowercased()] ?? displayOrder.count
+            let rhsRank = displayRank[rhs.id.lowercased()] ?? displayOrder.count
+            return lhsRank < rhsRank
+        }
+    }
+
+    /// Products for a panel's usage bar: the snapshot's own products, most used
+    /// first, limited to the user's visible set, keeping any non-zero
+    /// contribution (the menu bar applies a 0.05 floor). A breakdown-less
     /// snapshot carries a synthesized `"other"` slice, which this returns so the
     /// bar reflects the headline used%.
     static func panelProducts(_ products: [ProductUsage], visible: Set<String>) -> [ProductUsage] {
-        filtered(products, visible: visible, threshold: 0)
+        sortedByUsage(filtered(products, visible: visible, threshold: 0))
     }
 
-    /// One row per canonical category (Chat, Build, Imagine, Voice) in display
-    /// order, using the snapshot's value when present and a 0% placeholder when
+    /// One row per canonical category (Chat, Build, Imagine, Voice), most used
+    /// first, using the snapshot's value when present and a 0% placeholder when
     /// the product is absent or unused, limited to the user's visible set.
     static func categoryProducts(
         _ products: [ProductUsage],
@@ -100,11 +117,11 @@ enum ProductCatalog {
             products.map { ($0.id.lowercased(), $0) },
             uniquingKeysWith: { _, last in last }
         )
-        return categoryIDs.compactMap { id in
+        return sortedByUsage(categoryIDs.compactMap { id in
             guard visible.contains(id) else { return nil }
             return byID[id]
                 ?? ProductUsage(id: id, displayName: displayName(for: id), percentOfPool: 0)
-        }
+        })
     }
     /// Products that are both user-visible and contribute at least `threshold` to
     /// the pool, in canonical display order. Used by the menu bar renderer and panels.

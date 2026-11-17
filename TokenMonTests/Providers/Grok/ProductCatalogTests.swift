@@ -75,6 +75,33 @@ final class ProductCatalogTests: XCTestCase {
         XCTAssertEqual(result.map(\.percentOfPool), [40, 0, 0, 0])
     }
 
+    /// The usage bar runs from the most used product on the left to the least
+    /// used on the right.
+    func testPanelProductsOrdersMostUsedFirst() {
+        let products = [
+            product("chat", 5),
+            product("build", 40),
+            product("api", 12),
+            product("imagine", 20)
+        ]
+        let result = ProductCatalog.panelProducts(products, visible: Set(ProductCatalog.knownIDs))
+        XCTAssertEqual(result.map(\.id), ["build", "imagine", "api", "chat"])
+    }
+
+    /// The category chips run from most used to least used, with unused
+    /// categories last in display order.
+    func testCategoryProductsOrdersMostUsedFirst() {
+        let products = [product("chat", 3), product("voice", 9), product("build", 30)]
+        let result = ProductCatalog.categoryProducts(products, visible: Set(ProductCatalog.knownIDs))
+        XCTAssertEqual(result.map(\.id), ["build", "voice", "chat", "imagine"])
+    }
+
+    /// Equal usage keeps the canonical display order.
+    func testSortedByUsageBreaksTiesByDisplayOrder() {
+        let products = [product("voice", 10), product("build", 10), product("chat", 10)]
+        XCTAssertEqual(ProductCatalog.sortedByUsage(products).map(\.id), ["chat", "build", "voice"])
+    }
+
     /// Hidden categories stay hidden, even the 0% placeholders.
     func testCategoryProductsRespectsVisibility() {
         let result = ProductCatalog.categoryProducts(
