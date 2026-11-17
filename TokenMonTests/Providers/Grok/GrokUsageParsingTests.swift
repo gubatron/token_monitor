@@ -581,6 +581,82 @@ final class GrokUsageParsingTests: XCTestCase {
         XCTAssertTrue(todayDay?.segments.contains { $0.productID == "voice" } ?? false)
     }
 
+    /// A day's bar (and its hover line) is the growth in the headline used%,
+    /// even when the product breakdown does not add up to it: here yesterday
+    /// had no breakdown (a synthesized "other" slice) and today has one, so the
+    /// per-product increases (25) overstate the day's real use (5).
+    func testDailyUsageTotalFollowsHeadlineWhenBreakdownChanges() throws {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(secondsFromGMT: 0)!
+        let now = ISO8601DateFormatter().date(from: "2026-07-15T12:00:00Z")!
+        let today = cal.startOfDay(for: now)
+        let yesterday = try XCTUnwrap(cal.date(byAdding: .day, value: -1, to: today))
+        let resetsAt = ISO8601DateFormatter().date(from: "2026-07-16T18:57:00Z")!
+        let history = [
+            WeeklyUsageSnapshot(
+                fetchedAt: yesterday.addingTimeInterval(3600 * 12),
+                usedPercent: 20,
+                resetsAt: resetsAt,
+                products: GrokUsageClient.synthesizeProducts(usedPercent: 20)
+            ),
+            WeeklyUsageSnapshot(
+                fetchedAt: today.addingTimeInterval(3600 * 10),
+                usedPercent: 25,
+                resetsAt: resetsAt,
+                products: [
+                    ProductUsage(id: "chat", displayName: "Chat", percentOfPool: 15),
+                    ProductUsage(id: "build", displayName: "Grok Build", percentOfPool: 10)
+                ]
+            )
+        ]
+        let week = try XCTUnwrap(GrokDailyUsageBuilder.week(
+            history: history,
+            current: history.last,
+            resetsAt: resetsAt,
+            calendar: cal,
+            now: now
+        ))
+        let todayDay = try XCTUnwrap(week.days.first { cal.isDate($0.dayStart, inSameDayAs: today) })
+        XCTAssertEqual(todayDay.totalPercent, 5, accuracy: 0.01)
+        // The split still follows the products that grew.
+        XCTAssertEqual(todayDay.segments.map(\.productID), ["chat", "build"])
+        XCTAssertEqual(todayDay.segments.first?.percentOfWeekly ?? 0, 3, accuracy: 0.01)
+    }
+
+    /// Product percentages that are rounded below the headline used% still
+    /// give a day bar equal to the headline's growth.
+    func testDailyUsageTotalFollowsHeadlineWhenProductsUndercount() throws {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(secondsFromGMT: 0)!
+        let now = ISO8601DateFormatter().date(from: "2026-07-15T12:00:00Z")!
+        let today = cal.startOfDay(for: now)
+        let yesterday = try XCTUnwrap(cal.date(byAdding: .day, value: -1, to: today))
+        let resetsAt = ISO8601DateFormatter().date(from: "2026-07-16T18:57:00Z")!
+        let history = [
+            WeeklyUsageSnapshot(
+                fetchedAt: yesterday.addingTimeInterval(3600 * 12),
+                usedPercent: 10.4,
+                resetsAt: resetsAt,
+                products: [ProductUsage(id: "chat", displayName: "Chat", percentOfPool: 10)]
+            ),
+            WeeklyUsageSnapshot(
+                fetchedAt: today.addingTimeInterval(3600 * 10),
+                usedPercent: 16.8,
+                resetsAt: resetsAt,
+                products: [ProductUsage(id: "chat", displayName: "Chat", percentOfPool: 16)]
+            )
+        ]
+        let week = try XCTUnwrap(GrokDailyUsageBuilder.week(
+            history: history,
+            current: history.last,
+            resetsAt: resetsAt,
+            calendar: cal,
+            now: now
+        ))
+        let todayDay = try XCTUnwrap(week.days.first { cal.isDate($0.dayStart, inSameDayAs: today) })
+        XCTAssertEqual(todayDay.totalPercent, 6.4, accuracy: 0.01)
+    }
+
     /// Mid-period server recalibration: used% drops but `resetsAt` stays the same.
     /// Invalidates pre-rebase samples so prior days do not keep inflated bars while
     /// the rebased week-to-date is painted on the recalibration day.

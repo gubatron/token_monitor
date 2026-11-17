@@ -237,7 +237,7 @@ enum GrokDailyUsageBuilder {
                 // Mid-period rebase drop: restart tracking with absolute week-to-date.
                 isAfterReset = true
                 if dayCumulative > 0.05 {
-                    segments.append(contentsOf: segmentsFromProducts(products, fallbackTotal: dayCumulative))
+                    segments.append(contentsOf: distribute(total: dayCumulative, products: products))
                 }
             } else {
                 // Day-over-day growth. If cumulative is flat or lower without a rebase,
@@ -260,7 +260,7 @@ enum GrokDailyUsageBuilder {
                isBillingPeriodAdvanced(from: endOfDay[priorAny]?.resetsAt, to: dayResets) {
                 isAfterReset = true
             }
-            segments.append(contentsOf: segmentsFromProducts(products, fallbackTotal: dayCumulative))
+            segments.append(contentsOf: distribute(total: dayCumulative, products: products))
         } else if dayCumulative > 0.05,
                   let priorAny = samples.sortedDays.last(where: { $0 < dayStart && $0 >= samples.weekStart }),
                   let priorSnap = endOfDay[priorAny],
@@ -268,7 +268,7 @@ enum GrokDailyUsageBuilder {
             // Rollover observed between two days already in this period window:
             // paint post-reset week-to-date only, excluding prior-period usage.
             isAfterReset = true
-            segments.append(contentsOf: segmentsFromProducts(products, fallbackTotal: dayCumulative))
+            segments.append(contentsOf: distribute(total: dayCumulative, products: products))
         }
         // First sample mid-period: the bar stays empty until a second day.
         return (segments, isAfterReset)
@@ -404,33 +404,6 @@ enum GrokDailyUsageBuilder {
         )
     }
 
-    /// Absolute product slices — only products with usage above zero.
-    private static func segmentsFromProducts(
-        _ products: [ProductUsage],
-        fallbackTotal: Double? = nil
-    ) -> [DailyUsageSegment] {
-        let visible = products.filter { $0.percentOfPool > 0.05 }
-        if !visible.isEmpty {
-            return ProductCatalog.sortForDisplay(visible).map { product in
-                DailyUsageSegment(
-                    productID: product.id,
-                    displayName: product.displayName,
-                    percentOfWeekly: product.percentOfPool,
-                    colorToken: product.colorToken
-                )
-            }
-        }
-        guard let total = fallbackTotal, total > 0.05 else { return [] }
-        return [
-            DailyUsageSegment(
-                productID: "other",
-                displayName: "Other",
-                percentOfWeekly: total,
-                colorToken: .other
-            )
-        ]
-    }
-
     /// True when `resetsAt` moved forward enough to indicate a SuperGrok period rollover.
     private static func isBillingPeriodAdvanced(from previous: Date?, to current: Date?) -> Bool {
         guard let previous, let current else { return false }
@@ -468,30 +441,29 @@ enum GrokDailyUsageBuilder {
         return latest
     }
 
-    /// Day-over-day growth: prefer per-product increases; fall back to total delta weighted by mix.
+    /// Day-over-day growth in the headline used%, split by the per-product
+    /// increases, or by the day's product mix when no product grew.
+    ///
+    /// The headline is the total so the bars add up to the pool's used% even
+    /// when the breakdown does not (rounded product values, or a day without a
+    /// breakdown before a day with one).
     private static func growthSegments(
         previousUsed: Double,
         dayUsed: Double,
         previousProducts: [ProductUsage],
         products: [ProductUsage]
     ) -> [DailyUsageSegment] {
-        let productSegments = productDeltaSegments(from: previousProducts, to: products)
-        let productSum = productSegments.reduce(0.0) { $0 + $1.percentOfWeekly }
         let totalDelta = max(0, dayUsed - previousUsed)
-        if !productSegments.isEmpty, productSum > 0.05 {
-            return productSegments
-        }
-        if totalDelta > 0.05 {
-            return distribute(total: totalDelta, products: products)
-        }
-        return []
+        let grown = productDeltas(from: previousProducts, to: products)
+        let grownSum = grown.reduce(0.0) { $0 + $1.percentOfPool }
+        return distribute(total: totalDelta, products: grownSum > 0.05 ? grown : products)
     }
 
     /// Day-over-day growth per product, for the products that increased.
-    private static func productDeltaSegments(
+    private static func productDeltas(
         from previous: [ProductUsage],
         to current: [ProductUsage]
-    ) -> [DailyUsageSegment] {
+    ) -> [ProductUsage] {
         var previousByID: [String: Double] = [:]
         for product in previous {
             previousByID[product.id.lowercased()] = product.percentOfPool
@@ -511,20 +483,12 @@ enum GrokDailyUsageBuilder {
                 )
             )
         }
-        return ProductCatalog.sortForDisplay(deltas).map { product in
-            DailyUsageSegment(
-                productID: product.id,
-                displayName: product.displayName,
-                percentOfWeekly: product.percentOfPool,
-                colorToken: product.colorToken
-            )
-        }
+        return deltas
     }
 
-    /// Proportional split of a total when product-level deltas are unavailable.
-    ///
-    /// Uses the current product mix as weights for the *delta* only. When no
-    /// products exist, labels the delta "other".
+    /// Splits `total` across `products` in proportion to their values, so the
+    /// segments always add up to `total`. With no usable weights, the whole
+    /// total is labeled "other".
     private static func distribute(total: Double, products: [ProductUsage]) -> [DailyUsageSegment] {
         let visible = products.filter { $0.percentOfPool > 0.05 }
         let sum = visible.reduce(0.0) { $0 + $1.percentOfPool }
@@ -541,14 +505,11 @@ enum GrokDailyUsageBuilder {
             ]
         }
 
-        return ProductCatalog.sortForDisplay(visible).compactMap { product in
-            let share = product.percentOfPool / sum
-            let percent = total * share
-            guard percent > 0.05 else { return nil }
-            return DailyUsageSegment(
+        return ProductCatalog.sortForDisplay(visible).map { product in
+            DailyUsageSegment(
                 productID: product.id,
                 displayName: product.displayName,
-                percentOfWeekly: percent,
+                percentOfWeekly: total * product.percentOfPool / sum,
                 colorToken: product.colorToken
             )
         }
