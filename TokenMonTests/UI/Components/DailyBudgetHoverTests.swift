@@ -12,6 +12,20 @@ final class DailyBudgetHoverTests: XCTestCase {
         XCTAssertNil(DailyBudgetHover.columnIndex(x: 10, columnWidth: 0, columns: 0))
     }
 
+    /// Only the stem (plus a little slack) shows the label; the gaps between
+    /// stems hide it.
+    func testStemIndexCoversOnlyTheStem() {
+        let slop = DailyBudgetHover.stemHitSlop
+        // Column 1 spans 40..<80 with its 12-wide stem centered on 60.
+        XCTAssertEqual(DailyBudgetHover.stemIndex(x: 60, columnWidth: 40, columns: 7, stemWidth: 12), 1)
+        XCTAssertEqual(DailyBudgetHover.stemIndex(x: 54 - slop, columnWidth: 40, columns: 7, stemWidth: 12), 1)
+        XCTAssertEqual(DailyBudgetHover.stemIndex(x: 66 + slop, columnWidth: 40, columns: 7, stemWidth: 12), 1)
+        XCTAssertNil(DailyBudgetHover.stemIndex(x: 53 - slop, columnWidth: 40, columns: 7, stemWidth: 12))
+        XCTAssertNil(DailyBudgetHover.stemIndex(x: 67 + slop, columnWidth: 40, columns: 7, stemWidth: 12))
+        XCTAssertNil(DailyBudgetHover.stemIndex(x: 41, columnWidth: 40, columns: 7, stemWidth: 12))
+        XCTAssertNil(DailyBudgetHover.stemIndex(x: 300, columnWidth: 40, columns: 7, stemWidth: 12))
+    }
+
     /// The label floats left of the pointer, flips right when there is no
     /// room on the left, and stays inside the chart when neither side fits.
     func testLabelFloatsBesideThePointer() {

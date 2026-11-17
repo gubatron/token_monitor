@@ -15,12 +15,7 @@ struct DailyUsageChartView: View {
     /// Pool reset instant — paces the remainder against time left until reset.
     var resetsAt: Date?
 
-    /// Index into `week.displayDays` of the bar under the pointer, if any.
-    @State private var hoveredIndex: Int?
-
     private let trackHeight: CGFloat = PanelChartStem.height
-    private static let stemWidth: CGFloat = PanelChartStem.width
-    private static let barCornerRadius: CGFloat = PanelChartStem.cornerRadius
 
     /// The week's days as daily-budget days, for pacing and the hover label.
     private var budgetDays: [DailyBudgetDay] {
@@ -76,15 +71,7 @@ struct DailyUsageChartView: View {
                 canGoNext: canGoNext
             )
 
-            HStack(alignment: .bottom, spacing: 0) {
-                ForEach(Array(week.displayDays.enumerated()), id: \.element.id) { index, day in
-                    dayColumn(day, isHovered: hoveredIndex == index)
-                }
-            }
-            .dailyBarsHover(days: budgetDays, allowanceNoun: "weekly", hoveredIndex: $hoveredIndex)
-            .frame(maxWidth: .infinity)
-            .frame(height: trackHeight + 42)
-            .zIndex(1)
+            barsRow
 
             if let footerCaption {
                 Text(footerCaption)
@@ -94,39 +81,46 @@ struct DailyUsageChartView: View {
         }
     }
 
-    private func dayColumn(_ day: DailyUsageDay, isHovered: Bool) -> some View {
+    /// The stems, with a floating detail label beside the pointer.
+    private var barsRow: some View {
+        let days = week.displayDays
+        return DailyBarsRow(days: budgetDays, allowanceNoun: "weekly") { index in
+            stem(days[index])
+        } caption: { index in
+            caption(days[index])
+        }
+    }
+
+    private func isFuture(_ day: DailyUsageDay) -> Bool {
+        day.dayStart > Calendar.current.startOfDay(for: Date())
+    }
+
+    private func stem(_ day: DailyUsageDay) -> some View {
         let fraction = Self.fillFraction(forDayUsage: day.totalPercent)
         let fillHeight = max(6, trackHeight * CGFloat(fraction))
-        let isFuture = day.dayStart > Calendar.current.startOfDay(for: Date())
 
-        return VStack(spacing: 4) {
-            ZStack(alignment: .bottom) {
-                Color.primary.opacity(0.12)
+        return ZStack(alignment: .bottom) {
+            Color.primary.opacity(0.12)
 
-                if fraction > 0 && !isFuture {
-                    MonitorProvider.grok.accentColor
-                        .frame(height: min(trackHeight, fillHeight))
-                }
+            if fraction > 0 && !isFuture(day) {
+                MonitorProvider.grok.accentColor
+                    .frame(height: min(trackHeight, fillHeight))
             }
-            .frame(width: Self.stemWidth, height: trackHeight)
-            .clipShape(RoundedRectangle(cornerRadius: Self.barCornerRadius, style: .continuous))
-            .hoverOutline(isHovered)
-            .frame(maxWidth: .infinity)
-
-            VStack(spacing: 1) {
-                Text("\(max(0, Int(day.totalPercent.rounded())))%")
-                    .font(PanelTypography.microDigit)
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.65)
-                Text(String(day.weekdaySymbol.prefix(2)))
-                    .font(PanelTypography.microDigit)
-                    .foregroundStyle(.secondary)
-            }
-            .frame(height: 32)
-            .opacity(isFuture ? 0.5 : 1)
         }
-        .frame(maxWidth: .infinity)
+    }
+
+    private func caption(_ day: DailyUsageDay) -> some View {
+        VStack(spacing: 1) {
+            Text("\(max(0, Int(day.totalPercent.rounded())))%")
+                .font(PanelTypography.microDigit)
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.65)
+            Text(String(day.weekdaySymbol.prefix(2)))
+                .font(PanelTypography.microDigit)
+                .foregroundStyle(.secondary)
+        }
+        .opacity(isFuture(day) ? 0.5 : 1)
     }
 
     /// Maps weekly-pool percent into track height using the equal daily cap (`100/7`).

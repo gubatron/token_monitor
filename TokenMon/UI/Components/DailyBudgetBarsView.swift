@@ -102,12 +102,7 @@ struct DailyBudgetBarsView: View {
     /// Past weeks omit pace and the "no usage yet" fallback.
     var showsLiveFooter: Bool = true
 
-    /// Index into `days` of the bar under the pointer, if any.
-    @State private var hoveredIndex: Int?
-
     private let trackHeight: CGFloat = PanelChartStem.height
-    private static let stemWidth: CGFloat = PanelChartStem.width
-    private static let barCornerRadius: CGFloat = PanelChartStem.cornerRadius
 
     /// Weekday label formatters, cached per calendar so a render allocates none.
     private static let formatterCacheLock = NSLock()
@@ -203,57 +198,49 @@ struct DailyBudgetBarsView: View {
 
     /// The stems, with a floating detail label beside the pointer.
     private var barsRow: some View {
-        HStack(alignment: .bottom, spacing: 0) {
-            ForEach(Array(days.enumerated()), id: \.element.id) { index, day in
-                dayColumn(day, isHovered: hoveredIndex == index)
-            }
+        DailyBarsRow(days: days, allowanceNoun: allowanceNoun) { index in
+            stem(days[index])
+        } caption: { index in
+            caption(days[index])
         }
-        .dailyBarsHover(days: days, allowanceNoun: allowanceNoun, hoveredIndex: $hoveredIndex)
-        .frame(maxWidth: .infinity)
-        .frame(height: trackHeight + 42)
-        .zIndex(1)
     }
 
-    private func dayColumn(_ day: DailyBudgetDay, isHovered: Bool) -> some View {
+    private func isFuture(_ day: DailyBudgetDay) -> Bool {
+        day.date > Calendar.current.startOfDay(for: Date())
+    }
+
+    private func stem(_ day: DailyBudgetDay) -> some View {
         // Full stem height = the day's allowance; fill = usage vs that allowance.
         let fraction = day.percentOfBudget / 100
         let fillHeight = max(6, trackHeight * CGFloat(fraction))
-        let isFuture = day.date > Calendar.current.startOfDay(for: Date())
-        let weekday = Self.weekdayFormatter()
 
-        return VStack(spacing: 4) {
-            ZStack(alignment: .bottom) {
-                // Track stays at full strength on every day; only the fill
-                // fades on future days.
-                Color.primary.opacity(0.12)
+        return ZStack(alignment: .bottom) {
+            // Track stays at full strength on every day; only the fill
+            // fades on future days.
+            Color.primary.opacity(0.12)
 
-                if fraction > 0.005 && !isFuture {
-                    // Prior-window history is dimmed: it belongs to the pool an
-                    // early provider reset ended.
-                    accent
-                        .opacity(day.isPriorWindow ? 0.45 : 1)
-                        .frame(height: min(trackHeight, fillHeight))
-                }
+            if fraction > 0.005 && !isFuture(day) {
+                // Prior-window history is dimmed: it belongs to the pool an
+                // early provider reset ended.
+                accent
+                    .opacity(day.isPriorWindow ? 0.45 : 1)
+                    .frame(height: min(trackHeight, fillHeight))
             }
-            .frame(width: Self.stemWidth, height: trackHeight)
-            .clipShape(RoundedRectangle(cornerRadius: Self.barCornerRadius, style: .continuous))
-            .hoverOutline(isHovered)
-            .frame(maxWidth: .infinity)
-
-            VStack(spacing: 1) {
-                Text("\(max(0, Int(day.spentUSD.rounded())))%")
-                    .font(PanelTypography.microDigit)
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.65)
-                Text(String(weekday.string(from: day.date).prefix(2)))
-                    .font(PanelTypography.microDigit)
-                    .foregroundStyle(.secondary)
-            }
-            .frame(height: 32)
-            .opacity(isFuture ? 0.5 : 1)
         }
-        .frame(maxWidth: .infinity)
+    }
+
+    private func caption(_ day: DailyBudgetDay) -> some View {
+        VStack(spacing: 1) {
+            Text("\(max(0, Int(day.spentUSD.rounded())))%")
+                .font(PanelTypography.microDigit)
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.65)
+            Text(String(Self.weekdayFormatter().string(from: day.date).prefix(2)))
+                .font(PanelTypography.microDigit)
+                .foregroundStyle(.secondary)
+        }
+        .opacity(isFuture(day) ? 0.5 : 1)
     }
 
     private static func weekdayFormatter() -> DateFormatter {
