@@ -37,8 +37,8 @@ The source tree is layered. `Core` builds without any UI framework (a SwiftLint 
 | `Core/Utilities/` | `Format`, `JSON`, `ISO8601`, `AppLog`, `ObservationLoop` |
 | `Platform/Auth/` | `ProviderAuthSession`, `KeychainVault` / credential stores, WebKit cookie bridge and capture |
 | `Platform/` | `SystemWakeGate`, `ThresholdNotifier` |
-| `UI/Components/` | Panel cards, typography, colour palette and provider accents, usage track, Daily Budget bars |
-| `UI/MenuBar/` | `MenuBarController` (`NSStatusItem` + `MenuBarPanel`), status-image renderer, panel, segmented bar, category rows |
+| `UI/Components/` | Panel cards, typography, colour palette and provider accents, usage track, Usage Breakdown card, flow layout, Daily Budget bars |
+| `UI/MenuBar/` | `MenuBarController` (`NSStatusItem` + `MenuBarPanel`), status-image renderer, panel, segmented bar |
 | `UI/SignIn/` | The shared sign-in sheet, embedded browser and sign-in / sign-out buttons |
 | `Providers/<Name>/` | One folder per provider: session and sign-in config, usage client and parsers, poller, models, panel. Grokbot owns no session: it is a Cursor-backed product (`com.anysphere.sand`) and signs in with `CursorAuthSession` |
 | `Providers/Registry/` | `MonitorProvider` (identity, menu-bar graph support, sign-in session), `ProviderRegistry`, logos, the switcher |
