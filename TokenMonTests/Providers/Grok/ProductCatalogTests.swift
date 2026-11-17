@@ -62,19 +62,6 @@ final class ProductCatalogTests: XCTestCase {
         XCTAssertEqual(result.map(\.id), ["chat"])
     }
 
-    /// The Categories card always shows Chat, Build, Imagine, and Voice — absent
-    /// or unused products fall back to a 0% placeholder; API and Other never show.
-    func testCategoryProductsAlwaysIncludesTheFourCategories() {
-        let products = [
-            product("chat", 40),
-            product("api", 8),
-            product("other", 7)
-        ]
-        let result = ProductCatalog.categoryProducts(products, visible: Set(ProductCatalog.knownIDs))
-        XCTAssertEqual(result.map(\.id), ["chat", "build", "imagine", "voice"])
-        XCTAssertEqual(result.map(\.percentOfPool), [40, 0, 0, 0])
-    }
-
     /// The usage bar runs from the most used product on the left to the least
     /// used on the right.
     func testPanelProductsOrdersMostUsedFirst() {
@@ -88,26 +75,30 @@ final class ProductCatalogTests: XCTestCase {
         XCTAssertEqual(result.map(\.id), ["build", "imagine", "api", "chat"])
     }
 
-    /// The category chips run from most used to least used, with unused
-    /// categories last in display order.
-    func testCategoryProductsOrdersMostUsedFirst() {
-        let products = [product("chat", 3), product("voice", 9), product("build", 30)]
-        let result = ProductCatalog.categoryProducts(products, visible: Set(ProductCatalog.knownIDs))
-        XCTAssertEqual(result.map(\.id), ["build", "voice", "chat", "imagine"])
-    }
-
     /// Equal usage keeps the canonical display order.
     func testSortedByUsageBreaksTiesByDisplayOrder() {
         let products = [product("voice", 10), product("build", 10), product("chat", 10)]
         XCTAssertEqual(ProductCatalog.sortedByUsage(products).map(\.id), ["chat", "build", "voice"])
     }
 
-    /// Hidden categories stay hidden, even the 0% placeholders.
-    func testCategoryProductsRespectsVisibility() {
-        let result = ProductCatalog.categoryProducts(
-            [product("chat", 40)],
-            visible: ["chat", "voice"]
-        )
-        XCTAssertEqual(result.map(\.id), ["chat", "voice"])
+    /// The Usage Breakdown card lists the bar's products, most used first,
+    /// API and Other included, and unused products left out.
+    func testBreakdownProductsMatchTheBar() {
+        let products = [product("chat", 30), product("api", 8), product("other", 12), product("voice", 0)]
+        let result = ProductCatalog.breakdownProducts(products, visible: Set(ProductCatalog.knownIDs))
+        XCTAssertEqual(result.map(\.id), ["chat", "other", "api"])
+    }
+
+    /// A breakdown-less snapshot's synthesized "other" slice gets no card:
+    /// the weekly bar already shows that total.
+    func testBreakdownProductsSkipASynthesizedOtherSlice() {
+        let synthesized = GrokUsageClient.synthesizeProducts(usedPercent: 64)
+        XCTAssertTrue(ProductCatalog.breakdownProducts(synthesized, visible: Set(ProductCatalog.knownIDs)).isEmpty)
+    }
+
+    /// Hidden products stay out of the breakdown.
+    func testBreakdownProductsRespectVisibility() {
+        let products = [product("chat", 30), product("build", 20)]
+        XCTAssertEqual(ProductCatalog.breakdownProducts(products, visible: ["build"]).map(\.id), ["build"])
     }
 }

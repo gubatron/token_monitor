@@ -24,21 +24,6 @@ struct SegmentedUsageBar: View {
     private let segmentGap: CGFloat = 2
     private let minSegmentWidth: CGFloat = 3
 
-    init(segments: [Segment], height: CGFloat = 8) {
-        self.segments = segments
-        self.height = height
-    }
-
-    /// SuperGrok products, each in its product color.
-    init(products: [ProductUsage], height: CGFloat = 8) {
-        self.init(
-            segments: products.map {
-                Segment(id: $0.id, percent: $0.percentOfPool, color: .product($0.colorToken))
-            },
-            height: height
-        )
-    }
-
     var body: some View {
         GeometryReader { geo in
             let visible = segments.filter { $0.percent > 0.05 }

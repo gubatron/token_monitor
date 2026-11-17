@@ -1,46 +1,37 @@
 import SwiftUI
 
-/// Grokbot "Usage Breakdown" card: one bar split by who spent the allowance
-/// (You, Routines, Bot to Bot, …), most used first, with a legend underneath.
+/// Grokbot "Usage Breakdown" card: who spent the allowance (You, Routines,
+/// Bot to Bot, …), most used first.
 struct GrokbotUsageBreakdownCard: View {
     let breakdown: GrokbotUsageBreakdown
 
     var body: some View {
-        PanelCard {
-            PanelSectionHeader(title: "Usage Breakdown")
-            SegmentedUsageBar(segments: segments, height: 8)
-            // Chips keep their natural width and wrap, so no name is cut off.
-            FlowLayout {
-                ForEach(breakdown.slices) { slice in
-                    UsageLegendChip(
-                        color: slice.source.sRGB.color,
-                        label: slice.source.displayName,
-                        value: valueText(slice.value)
-                    )
-                }
-            }
-        }
+        UsageBreakdownCard(items: items)
     }
 
     /// Percent units draw against the whole allowance, leaving the unused part
     /// as track. Dollars have no allowance to draw against, so each source
     /// takes its share of the total.
-    private var segments: [SegmentedUsageBar.Segment] {
+    private var items: [UsageBreakdownCard.Item] {
         let total = breakdown.total
         return breakdown.slices.map { slice in
             let percent: Double
+            let value: String
             switch breakdown.unit {
-            case .weeklyLimitPercent, .billingCyclePercent: percent = slice.value
-            case .usd: percent = total > 0 ? slice.value / total * 100 : 0
+            case .weeklyLimitPercent, .billingCyclePercent:
+                percent = slice.value
+                value = "\(Int(slice.value.rounded()))%"
+            case .usd:
+                percent = total > 0 ? slice.value / total * 100 : 0
+                value = Format.usd(slice.value)
             }
-            return SegmentedUsageBar.Segment(id: slice.source.rawValue, percent: percent, color: slice.source.sRGB.color)
-        }
-    }
-
-    private func valueText(_ value: Double) -> String {
-        switch breakdown.unit {
-        case .weeklyLimitPercent, .billingCyclePercent: return "\(Int(value.rounded()))%"
-        case .usd: return Format.usd(value)
+            return UsageBreakdownCard.Item(
+                id: slice.source.rawValue,
+                label: slice.source.displayName,
+                color: slice.source.sRGB.color,
+                percent: percent,
+                value: value
+            )
         }
     }
 }

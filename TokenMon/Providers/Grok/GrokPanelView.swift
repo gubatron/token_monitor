@@ -48,15 +48,10 @@ struct GrokPanelView: View {
 
     @ViewBuilder
     private func usageHeader(_ snapshot: WeeklyUsageSnapshot) -> some View {
-        // Render the products the snapshot actually carries (including a
-        // synthesized "other" slice when the server omits the breakdown), limited
-        // to the user's visible set, so the bar always matches the headline used%.
-        let products = ProductCatalog.panelProducts(
+        // The breakdown splits the products the snapshot carries, limited to the
+        // user's visible set; the weekly bar shows the headline used% as one fill.
+        let breakdownProducts = ProductCatalog.breakdownProducts(
             snapshot.products,
-            visible: settings.visibleProductIDs
-        )
-        let categoryProducts = ProductCatalog.categoryProducts(
-            products,
             visible: settings.visibleProductIDs
         )
         let week = poller.week(weekOffset: weekOffset)
@@ -68,25 +63,17 @@ struct GrokPanelView: View {
                     title: snapshot.usagePool.sectionTitle,
                     trailing: "\(Int(snapshot.usedPercent.rounded()))% Used"
                 )
-
-                SegmentedUsageBar(products: products, height: 8)
-
-                if let resetsAt = snapshot.resetsAt {
-                    Text(Format.resetCaption(resetsAt))
-                        .resetCaption()
-                }
+                SlimUsageTrack(
+                    label: "Weekly",
+                    percent: snapshot.usedPercent,
+                    color: MonitorProvider.grok.accentColor,
+                    caption: snapshot.resetsAt.map { Format.resetCaption($0) },
+                    showsLabel: false
+                )
             }
 
-            if !categoryProducts.isEmpty {
-                PanelCard {
-                    PanelSectionHeader(title: "Categories")
-                    // Chips keep their natural width and wrap, so no name is cut off.
-                    FlowLayout {
-                        ForEach(categoryProducts) { product in
-                            CategoryRow(product: product)
-                        }
-                    }
-                }
+            if !breakdownProducts.isEmpty {
+                GrokUsageBreakdownCard(products: breakdownProducts)
             }
 
             if let credits = snapshot.extraCreditsBalance, credits > 0 {
