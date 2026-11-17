@@ -95,6 +95,7 @@
 		6F061248DE2EAD913DDD81DF /* GrokbotUsageBreakdownCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0539AEEA8B8FA035190BB0AD /* GrokbotUsageBreakdownCard.swift */; };
 		6F60C79FA0A704C2E4662003 /* OpenCodeLocalStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5FA109A5FFAFAD7AE90662C /* OpenCodeLocalStats.swift */; };
 		70BAEB5A4675D210F58A3333 /* StaleDataCaption.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2FA51F495C72B4BB25886FB /* StaleDataCaption.swift */; };
+		75A05879484445E300236BD7 /* FlowLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54B8FBB66829DE1680196FBA /* FlowLayout.swift */; };
 		79245FADBD6A716A6295D5A4 /* AuthenticatedRequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EC4E051E4FF734757565848 /* AuthenticatedRequestTests.swift */; };
 		794664BDA04B15365D88BF49 /* OverviewHourlyHistoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1A3C12CF7CE4ACA1F91372F /* OverviewHourlyHistoryTests.swift */; };
 		7A415C8C064FAA3A2976086E /* NeverRespondingURLProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99D2E036E380B0DDABA98D7A /* NeverRespondingURLProtocol.swift */; };
@@ -159,6 +160,7 @@
 		AEB2BD1A4D75B8024C81944E /* GrokUsagePoller.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8502E35D3775327BCBC1EDE /* GrokUsagePoller.swift */; };
 		B02C357FF0A3CAC55F2A0C42 /* GrokbotUsagePollerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98AF438463764D00181B1BDF /* GrokbotUsagePollerTests.swift */; };
 		B0437E0B395D657C5079CF2C /* HourlyDeltaActivityStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3402B921DA57B768509C6CFE /* HourlyDeltaActivityStore.swift */; };
+		B07C011D3AD2C6B26FD3853B /* FlowLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3449727664B975097B6A218E /* FlowLayoutTests.swift */; };
 		B2E9B25B7438B1DE4C56072E /* WebKitCookieStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37BE9D059C85140B51B56C27 /* WebKitCookieStore.swift */; };
 		B42707A922BD34D79C29F249 /* JSON.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70517261CA02FC002C729296 /* JSON.swift */; };
 		B4436859CF0A1331C7634FF4 /* CursorUsageClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18C58EB16225901A8C9B6350 /* CursorUsageClientTests.swift */; };
@@ -282,6 +284,7 @@
 		28872C006636ABC29F513E90 /* GrokbotUsagePoller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokbotUsagePoller.swift; sourceTree = "<group>"; };
 		29A70ECCF9E72CB23C94ADBF /* ProviderHourlyUsageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderHourlyUsageTests.swift; sourceTree = "<group>"; };
 		3402B921DA57B768509C6CFE /* HourlyDeltaActivityStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HourlyDeltaActivityStore.swift; sourceTree = "<group>"; };
+		3449727664B975097B6A218E /* FlowLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowLayoutTests.swift; sourceTree = "<group>"; };
 		34CEC1CB335D2F1AEEF0C1A6 /* WebKitCookieCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebKitCookieCapture.swift; sourceTree = "<group>"; };
 		364C4AE8CDE842335336133C /* OpenCodeUsagePoller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeUsagePoller.swift; sourceTree = "<group>"; };
 		37BE9D059C85140B51B56C27 /* WebKitCookieStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebKitCookieStore.swift; sourceTree = "<group>"; };
@@ -308,6 +311,7 @@
 		528508A5C024A0F7ACF1ABEB /* CursorEventCacheTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorEventCacheTests.swift; sourceTree = "<group>"; };
 		5375F025FD64E1086E59BBD7 /* PollingLoopTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PollingLoopTests.swift; sourceTree = "<group>"; };
 		5404678F894BE67E948C598B /* ClaudeUsagePollerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeUsagePollerTests.swift; sourceTree = "<group>"; };
+		54B8FBB66829DE1680196FBA /* FlowLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowLayout.swift; sourceTree = "<group>"; };
 		55564038BBB5A4CFF17E17CA /* DailyBudgetResetBoundaryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyBudgetResetBoundaryTests.swift; sourceTree = "<group>"; };
 		56FF237C2579B9A0ED8E85DF /* ProviderHTTP.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderHTTP.swift; sourceTree = "<group>"; };
 		5725BEE57AB0A0E64713B2C2 /* GrokbotUsageBreakdown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokbotUsageBreakdown.swift; sourceTree = "<group>"; };
@@ -491,6 +495,7 @@
 				0A45C7CA17EAD20109ECFE5E /* DailyBudgetBarsView.swift */,
 				03A2479978DF223C5A3FB032 /* DailyBudgetHoverLabel.swift */,
 				3DC994521013CA12D10ED872 /* FloatingHoverLabel.swift */,
+				54B8FBB66829DE1680196FBA /* FlowLayout.swift */,
 				6F8AA7E3A902B75B6E21EC21 /* HoverLabel.swift */,
 				951B842C4CF5D532CA0C9799 /* MetricStat.swift */,
 				1225C6D7B43E225CC6DB88C0 /* ModelCompanyLogo.swift */,
@@ -836,6 +841,7 @@
 			children = (
 				E9B25E3A1F565258F2287527 /* ColorPaletteTests.swift */,
 				C99FBA1A90AF70D29D9E8CEA /* DailyBudgetHoverTests.swift */,
+				3449727664B975097B6A218E /* FlowLayoutTests.swift */,
 				C52A459C23CAD781C683EEBC /* HoverLabelTests.swift */,
 				421E4A8A1FF8BCCB113A2B28 /* MonthlyDailyBudgetBarsViewTests.swift */,
 			);
@@ -1257,6 +1263,7 @@
 				2CF14F3F7EDE7A31413484BC /* DailyQuotaDeltaStoreTests.swift in Sources */,
 				153980E568520A501C80A8F6 /* DailyTokenUsageTests.swift in Sources */,
 				7A8B6C6D83133E7D71903FF0 /* DayKeyTests.swift in Sources */,
+				B07C011D3AD2C6B26FD3853B /* FlowLayoutTests.swift in Sources */,
 				0343F0863B6CA22D49109EE0 /* FormatTests.swift in Sources */,
 				34D45993280F40BA41CC9BA5 /* GrokHistoryStoreTests.swift in Sources */,
 				7D5566079E7F4FA19A25DB2F /* GrokPollerGatingTests.swift in Sources */,
@@ -1358,6 +1365,7 @@
 				453118CA173530F3D8E442DF /* Domain.swift in Sources */,
 				7CF60BE7BF5FB3CAA57532B9 /* FileBackedStringStore.swift in Sources */,
 				87B4DFE0864A285C816291A0 /* FloatingHoverLabel.swift in Sources */,
+				75A05879484445E300236BD7 /* FlowLayout.swift in Sources */,
 				835435B7AD49BC044D4C22FA /* Format.swift in Sources */,
 				056EE3C301AA3C6719A2ACD6 /* GRPCWebParser.swift in Sources */,
 				936837B8ED636C576DB25583 /* GrokAuthSession.swift in Sources */,

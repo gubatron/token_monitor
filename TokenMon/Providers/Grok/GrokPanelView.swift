@@ -80,10 +80,10 @@ struct GrokPanelView: View {
             if !categoryProducts.isEmpty {
                 PanelCard {
                     PanelSectionHeader(title: "Categories")
-                    HStack(spacing: 12) {
+                    // Chips keep their natural width and wrap, so no name is cut off.
+                    FlowLayout {
                         ForEach(categoryProducts) { product in
                             CategoryRow(product: product)
-                                .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
                 }

@@ -5,32 +5,21 @@ import SwiftUI
 struct GrokbotUsageBreakdownCard: View {
     let breakdown: GrokbotUsageBreakdown
 
-    /// Legend chips per row; more sources wrap onto a second row.
-    private static let maxColumns = 3
-
     var body: some View {
         PanelCard {
             PanelSectionHeader(title: "Usage Breakdown")
             SegmentedUsageBar(segments: segments, height: 8)
-            LazyVGrid(columns: columns, alignment: .leading, spacing: 6) {
+            // Chips keep their natural width and wrap, so no name is cut off.
+            FlowLayout {
                 ForEach(breakdown.slices) { slice in
                     UsageLegendChip(
                         color: slice.source.sRGB.color,
                         label: slice.source.displayName,
-                        value: valueText(slice.value),
-                        layout: .stacked
+                        value: valueText(slice.value)
                     )
-                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         }
-    }
-
-    private var columns: [GridItem] {
-        Array(
-            repeating: GridItem(.flexible(), spacing: 12, alignment: .leading),
-            count: max(1, min(Self.maxColumns, breakdown.slices.count))
-        )
     }
 
     /// Percent units draw against the whole allowance, leaving the unused part
