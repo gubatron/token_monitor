@@ -153,12 +153,6 @@ final class GrokbotUsagePollerTests: XCTestCase {
         XCTAssertNil(GrokbotSnapshot(fetchedAt: date(2026, 8, 25), usedPercent: 10).reportedSpanDays(calendar: calendar))
     }
 
-    func testEntitlementCaptions() {
-        XCTAssertEqual(GrokbotEntitlement.cursor.captionText, "via Cursor")
-        XCTAssertEqual(GrokbotEntitlement.superGrok(planLabel: "SuperGrok Heavy").captionText, "via SuperGrok Heavy")
-        XCTAssertEqual(GrokbotEntitlement.superGrok(planLabel: "").captionText, "via SuperGrok")
-    }
-
     /// Grokbot is a real, pollable provider and appears in the switcher.
     func testGrokbotIsARegisteredUsageProvider() {
         XCTAssertTrue(MonitorProvider.usageProviders.contains(.grokbot))

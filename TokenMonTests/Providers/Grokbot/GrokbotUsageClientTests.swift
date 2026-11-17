@@ -47,7 +47,6 @@ final class GrokbotUsageClientTests: XCTestCase {
         }
         """)
         XCTAssertEqual(snapshot.entitlement, .superGrok(planLabel: "SuperGrok Heavy"))
-        XCTAssertEqual(snapshot.entitlement.captionText, "via SuperGrok Heavy")
     }
 
     /// Falls back to the raw plan id when no display label ships with it.

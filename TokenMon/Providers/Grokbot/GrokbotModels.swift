@@ -8,14 +8,6 @@ import Foundation
 enum GrokbotEntitlement: Codable, Hashable, Sendable {
     case cursor
     case superGrok(planLabel: String)
-
-    var captionText: String {
-        switch self {
-        case .cursor: return "via Cursor"
-        case let .superGrok(planLabel):
-            return planLabel.isEmpty ? "via SuperGrok" : "via \(planLabel)"
-        }
-    }
 }
 
 /// Snapshot of the weekly Grok Bot allowance at a point in time.
