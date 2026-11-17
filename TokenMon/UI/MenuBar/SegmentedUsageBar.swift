@@ -8,33 +8,56 @@ extension Color {
     static let usageRemainingTrack = Color.primary.opacity(0.12)
 }
 
-/// Weekly pool bar: label row above, gapped rounded segments, muted remainder track.
+/// Pool bar: gapped rounded segments, then a muted track for what is left.
 struct SegmentedUsageBar: View {
-    let products: [ProductUsage]
+    /// One colored slice of the bar.
+    struct Segment: Identifiable {
+        var id: String
+        /// Percent of the pool (0…100).
+        var percent: Double
+        var color: Color
+    }
+
+    let segments: [Segment]
     var height: CGFloat = 8
 
     private let segmentGap: CGFloat = 2
     private let minSegmentWidth: CGFloat = 3
 
+    init(segments: [Segment], height: CGFloat = 8) {
+        self.segments = segments
+        self.height = height
+    }
+
+    /// SuperGrok products, each in its product color.
+    init(products: [ProductUsage], height: CGFloat = 8) {
+        self.init(
+            segments: products.map {
+                Segment(id: $0.id, percent: $0.percentOfPool, color: .product($0.colorToken))
+            },
+            height: height
+        )
+    }
+
     var body: some View {
         GeometryReader { geo in
-            let visible = products.filter { $0.percentOfPool > 0.05 }
-            let used = min(100, visible.reduce(0.0) { $0 + max(0, $1.percentOfPool) })
+            let visible = segments.filter { $0.percent > 0.05 }
+            let used = min(100, visible.reduce(0.0) { $0 + max(0, $1.percent) })
             let remainder = max(0, 100 - used)
             let slotCount = visible.count + (remainder > 0.5 ? 1 : 0)
             let gapTotal = segmentGap * CGFloat(max(0, slotCount - 1))
             let usable = max(0, geo.size.width - gapTotal)
 
             let widths = Self.segmentWidths(
-                percents: visible.map(\.percentOfPool) + (remainder > 0.5 ? [remainder] : []),
+                percents: visible.map(\.percent) + (remainder > 0.5 ? [remainder] : []),
                 usable: usable,
                 minWidth: minSegmentWidth
             )
 
             HStack(spacing: segmentGap) {
-                ForEach(Array(visible.enumerated()), id: \.element.id) { index, product in
+                ForEach(Array(visible.enumerated()), id: \.element.id) { index, segment in
                     RoundedRectangle(cornerRadius: 2, style: .continuous)
-                        .fill(Color.product(product.colorToken))
+                        .fill(segment.color)
                         .frame(width: widths[index], height: height)
                 }
                 if remainder > 0.5, let remainderWidth = widths.last {
