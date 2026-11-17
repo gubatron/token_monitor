@@ -8,7 +8,7 @@ import Foundation
 /// 1.25× for the 5-minute cache and 2× for the 1-hour cache.
 enum ClaudeAPIPricing {
     /// Date the rates were checked against Anthropic's published prices.
-    static let ratesVerifiedOn = "2026-10-06"
+    static let ratesVerifiedOn = "2026-11-17"
 
     /// USD per 1M tokens.
     struct Rates: Hashable, Sendable {
@@ -27,6 +27,7 @@ enum ClaudeAPIPricing {
     /// Claude Haiku 5.5 uses its rate for prompts up to 100K tokens for every
     /// prompt length.
     private static let rates: [String: Rates] = [
+        "claude-fable-5-2": Rates(input: 8, output: 40, cacheRead: 0.20),
         "claude-fable-5-1": Rates(input: 10, output: 50, cacheRead: 0.25),
         "claude-fable-5": Rates(input: 10, output: 50, cacheRead: 1),
         "claude-opus-5-5": Rates(input: 4, output: 20, cacheRead: 0.20),
@@ -34,7 +35,7 @@ enum ClaudeAPIPricing {
         "claude-opus-4-8": Rates(input: 5, output: 25, cacheRead: 0.50),
         "claude-opus-4-7": Rates(input: 5, output: 25, cacheRead: 0.50),
         "claude-opus-4-6": Rates(input: 5, output: 25, cacheRead: 0.50),
-        "claude-sonnet-5-5": Rates(input: 2, output: 10, cacheRead: 0.20),
+        "claude-sonnet-5-5": Rates(input: 2, output: 10, cacheRead: 0.10),
         "claude-sonnet-5": Rates(input: 2, output: 10, cacheRead: 0.20),
         "claude-sonnet-4-6": Rates(input: 3, output: 15, cacheRead: 0.30),
         "claude-haiku-5-5": Rates(input: 0.10, output: 0.50, cacheRead: 0.01),

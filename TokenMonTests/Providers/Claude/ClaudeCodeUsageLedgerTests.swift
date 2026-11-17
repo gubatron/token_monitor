@@ -43,6 +43,30 @@ final class ClaudeCodeUsageLedgerTests: XCTestCase {
         XCTAssertEqual(cost, 37.20, accuracy: 0.0001)
     }
 
+    /// Each model's rates as published on Anthropic's pricing page on
+    /// ``ClaudeAPIPricing/ratesVerifiedOn``; a price change must update both.
+    func testRatesMatchPublishedPrices() {
+        let published: [String: ClaudeAPIPricing.Rates] = [
+            "claude-fable-5-2": .init(input: 8, output: 40, cacheRead: 0.20),
+            "claude-fable-5-1": .init(input: 10, output: 50, cacheRead: 0.25),
+            "claude-fable-5": .init(input: 10, output: 50, cacheRead: 1),
+            "claude-opus-5-5": .init(input: 4, output: 20, cacheRead: 0.20),
+            "claude-opus-5": .init(input: 5, output: 25, cacheRead: 0.50),
+            "claude-opus-4-8": .init(input: 5, output: 25, cacheRead: 0.50),
+            "claude-opus-4-7": .init(input: 5, output: 25, cacheRead: 0.50),
+            "claude-opus-4-6": .init(input: 5, output: 25, cacheRead: 0.50),
+            "claude-sonnet-5-5": .init(input: 2, output: 10, cacheRead: 0.10),
+            "claude-sonnet-5": .init(input: 2, output: 10, cacheRead: 0.20),
+            "claude-sonnet-4-6": .init(input: 3, output: 15, cacheRead: 0.30),
+            "claude-haiku-5-5": .init(input: 0.10, output: 0.50, cacheRead: 0.01),
+            "claude-haiku-4-5": .init(input: 1, output: 5, cacheRead: 0.10)
+        ]
+        XCTAssertEqual(ClaudeAPIPricing.ratesVerifiedOn, "2026-11-17")
+        for (model, rates) in published {
+            XCTAssertEqual(ClaudeAPIPricing.rates(for: model), rates, model)
+        }
+    }
+
     func testPricingIgnoresSnapshotDateSuffix() {
         XCTAssertEqual(ClaudeAPIPricing.baseModelID("claude-haiku-4-5-20251001"), "claude-haiku-4-5")
         XCTAssertEqual(ClaudeAPIPricing.baseModelID("claude-opus-5-5"), "claude-opus-5-5")
