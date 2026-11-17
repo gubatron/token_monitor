@@ -5,7 +5,7 @@ TokenMon reads usage from seven providers. None of them publishes a stable consu
 | Provider | Credential | Sent as | Endpoints |
 |----------|------------|---------|-----------|
 | Grok (SuperGrok) | grok.com session cookies | `Cookie` | `grok.com` gRPC-web billing, then REST probes |
-| Grokbot | Cursor session cookie (shared with Cursor) | `Cookie` | `cursor.com/api/dashboard/get-sand-usage-status` |
+| Grokbot | Cursor session cookie (shared with Cursor) | `Cookie`; the breakdown sends the cookie's JWT as `Authorization: Bearer` | `cursor.com/api/dashboard/get-sand-usage-status`, `api2.cursor.sh/aiserver.v1.DashboardService/GetGrokBotUsageBreakdown` |
 | Cursor | Cursor session cookie | `Cookie` | `cursor.com/api/usage-summary`, `/api/auth/me`, `/api/dashboard/get-filtered-usage-events` |
 | OpenCode | OpenCode console cookies | `Cookie` + `x-org-id` | `opencode.ai/console/...`; plus the local `opencode.db` |
 | Claude | claude.ai session cookies | `Cookie` | `claude.ai/api/organizations/{org}/usage` |
@@ -171,6 +171,30 @@ accepts the proto names):
 | `current_period_start` | Period start; with the reset it yields the real period length |
 | `included_limit_zero`, `has_non_zero_included_limit` | Whether the plan includes an allowance at all |
 | `included_usage_super_grok_plan`, `grok_plan_label` | Which subscription funds the allowance |
+
+### Usage breakdown
+
+| Method | URL | Notes |
+|--------|-----|-------|
+| POST | `https://api2.cursor.sh/aiserver.v1.DashboardService/GetGrokBotUsageBreakdown` | Connect RPC, body `{}`, `Connect-Protocol-Version: 1`, `Authorization: Bearer <JWT>` |
+
+The dashboard's REST wrapper does not expose this method, so it is called on the
+RPC host, which takes a bearer token instead of the cookie. The token is the JWT
+inside the stored `WorkosCursorSessionToken` (value `<user id>::<JWT>`,
+percent-encoded); nothing new is stored.
+
+The response's `breakdown` oneof holds one unit: `weeklyLimitPpm` (parts per
+million of the weekly allowance), `billingCyclePpm` (of the billing cycle's), or
+`billedCents` (on-demand accounts). Each holds `periodStartMs` / `periodEndMs` and
+`bySource` rows `{dayMs, source, ppm | cents}`, one per UTC day and source, where
+`source` is `GROK_BOT_USAGE_SOURCE_{USER, AUTOMATION, AGENT, GROUP, OTHER}`
+(shown as You, Routines, Bot to Bot, Group chats, Other, the Grok Bot app's
+labels). `byBot` rows split the same usage by bot id; bot names are not included
+and are not used.
+
+The breakdown is fetched only after a successful usage-status call, and only adds
+detail: a failure keeps the last breakdown, shows no error, and does not count
+toward the Cursor session's strikes.
 
 **One endpoint covers both purchase channels.** Grokbot is sold through Cursor
 *and* through SuperGrok; when a SuperGrok plan pays for it, the plan fields are
