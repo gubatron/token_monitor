@@ -38,13 +38,16 @@ extension OpenCodeLocalStats {
 
     /// Assistant messages created at or after `startMS`. Assistant messages carry
     /// the real per-turn model and cost (a session stores only one model), and
-    /// SQLite extracts just the needed JSON fields.
+    /// SQLite extracts just the needed JSON fields. OpenCode records reasoning
+    /// tokens apart from the visible output and bills them at the output rate,
+    /// so they are read into the output count.
     static func readAssistantMessageRows(from db: OpaquePointer, startMS: Int64) throws -> [SessionRow] {
         let sql = """
         SELECT time_created, session_id, \
           json_extract(data, '$.providerID'), json_extract(data, '$.modelID'), \
           json_extract(data, '$.cost'), \
-          json_extract(data, '$.tokens.input'), json_extract(data, '$.tokens.output'), \
+          json_extract(data, '$.tokens.input'), \
+          COALESCE(json_extract(data, '$.tokens.output'), 0) + COALESCE(json_extract(data, '$.tokens.reasoning'), 0), \
           json_extract(data, '$.tokens.cache.read'), json_extract(data, '$.tokens.cache.write') \
         FROM message \
         WHERE time_created >= ? \

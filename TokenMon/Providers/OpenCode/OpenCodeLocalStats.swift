@@ -107,6 +107,7 @@ enum OpenCodeLocalStats {
         var timeCreatedMS: Int64
         var costUSD: Double
         var inputTokens: Int64
+        /// Visible output plus reasoning tokens, both billed at the output rate.
         var outputTokens: Int64
         var cacheReadTokens: Int64
         var cacheWriteTokens: Int64

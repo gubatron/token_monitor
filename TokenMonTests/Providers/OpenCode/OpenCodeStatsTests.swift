@@ -109,6 +109,7 @@ final class OpenCodeStatsTests: XCTestCase {
         output: Int64 = 0,
         cacheRead: Int64 = 0,
         cacheWrite: Int64 = 0,
+        reasoning: Int64 = 0,
         providerID: String,
         modelID: String
     ) {
@@ -118,7 +119,8 @@ final class OpenCodeStatsTests: XCTestCase {
 
         let data = """
         {"role":"assistant","cost":\(cost),"providerID":"\(providerID)","modelID":"\(modelID)",\
-        "tokens":{"input":\(input),"output":\(output),"cache":{"read":\(cacheRead),"write":\(cacheWrite)}}}
+        "tokens":{"input":\(input),"output":\(output),"reasoning":\(reasoning),\
+        "cache":{"read":\(cacheRead),"write":\(cacheWrite)}}}
         """
         let sql = """
         INSERT INTO message (id, session_id, time_created, time_updated, data) \
@@ -210,6 +212,27 @@ final class OpenCodeStatsTests: XCTestCase {
 
         // Zen activity still appears in the model list when used.
         XCTAssertNotNil(snap.models.first { $0.providerID == "opencode" && $0.modelID == "deepseek-v4-flash-free" })
+    }
+
+    /// OpenCode records reasoning apart from visible output; it is output
+    /// billed at the output rate, so it counts toward the output tokens.
+    func testReasoningTokensCountAsOutput() throws {
+        let now = Date(timeIntervalSince1970: 1_785_592_600)
+        insertAssistantMessage(
+            sessionID: "ses_reasoning",
+            timeCreated: now.addingTimeInterval(-600),
+            cost: 1,
+            input: 500,
+            output: 1000,
+            reasoning: 3000,
+            providerID: "opencode-go",
+            modelID: "minimax-m3"
+        )
+
+        let snap = try OpenCodeLocalStats.fetchSnapshot(dbURL: dbURL, now: now)
+        let model = try XCTUnwrap(snap.models.first { $0.modelID == "minimax-m3" })
+        XCTAssertEqual(model.outputTokens, 4000)
+        XCTAssertEqual(model.inputTokens, 500)
     }
 
     func testZenDoesNotCountTowardGoLimits() throws {
