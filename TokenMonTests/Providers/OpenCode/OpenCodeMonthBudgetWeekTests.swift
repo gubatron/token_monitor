@@ -82,6 +82,47 @@ final class OpenCodeMonthBudgetWeekTests: XCTestCase {
         XCTAssertEqual(sqlite3_step(stmt), SQLITE_DONE)
     }
 
+    private var utc: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC") ?? .gmt
+        return calendar
+    }
+
+    private func goSpend(_ cost: Double, at date: Date) {
+        insertAssistantMessage(
+            sessionID: "ses_go",
+            timeCreated: date,
+            cost: cost,
+            input: 1_000,
+            providerID: "opencode-go",
+            modelID: "m"
+        )
+    }
+
+    /// Spend from the morning before a mid-day reset belongs to the old
+    /// month: it must not shape the new month's first bar.
+    func testMonthDailyBudgetSplitsTheResetDayAtTheResetInstant() throws {
+        let calendar = utc
+        func at(_ day: Int, _ hour: Int) -> Date {
+            calendar.date(from: DateComponents(year: 2026, month: 11, day: day, hour: hour))!
+        }
+        goSpend(5, at: at(18, 9))
+        goSpend(1, at: at(18, 15))
+        goSpend(1, at: at(19, 10))
+
+        let budget = try XCTUnwrap(OpenCodeLocalStats.monthDailyBudgetDays(
+            limitUSD: 60,
+            usedPercent: 10.0 / 3,
+            periodResetsAt: calendar.date(from: DateComponents(year: 2026, month: 12, day: 18, hour: 14)),
+            now: at(19, 12),
+            dbURL: dbURL,
+            calendar: calendar
+        ))
+        let spent = { (day: Int) in budget.days.first { calendar.isDate($0.date, inSameDayAs: at(day, 12)) }?.spentUSD ?? -1 }
+        XCTAssertEqual(spent(18), 5.0 / 3, accuracy: 0.001)
+        XCTAssertEqual(spent(19), 5.0 / 3, accuracy: 0.001)
+    }
+
     /// Spend before the console window leaves the current week's scale undiluted,
     /// and chevron-left still paints that earlier week from local history.
     func testMonthDailyBudgetWeekOffsetKeepsHistoryOutOfHeadlineScale() throws {

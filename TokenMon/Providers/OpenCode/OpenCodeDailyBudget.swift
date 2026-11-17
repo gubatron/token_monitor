@@ -212,7 +212,9 @@ extension OpenCodeLocalStats {
     private static let priorWeekHistoryDays = 28
 
     /// Period spends stay inside the billing window so the headline percent
-    /// covers only that window. Earlier days are returned separately for week browsing.
+    /// covers only that window. Earlier spend is returned separately for week
+    /// browsing. Rows are split at the exact reset instant before they are
+    /// bucketed by day, so the morning before a mid-day reset stays in history.
     private static func spendHistory(
         periodStart: Date,
         periodEnd: Date,
@@ -221,9 +223,16 @@ extension OpenCodeLocalStats {
     ) -> (period: [Date: Double], history: [Date: Double]) {
         let startDay = calendar.startOfDay(for: periodStart)
         let lookback = calendar.date(byAdding: .day, value: -priorWeekHistoryDays, to: startDay) ?? startDay
-        let all = fetchDailySpends(from: lookback, to: periodEnd, dbURL: dbURL, calendar: calendar)
-        let period = all.filter { $0.key >= startDay && $0.key < periodEnd }
-        let history = all.filter { $0.key < startDay }
+        guard let scan = try? loadScan(dbURL: dbURL, since: lookback) else { return ([:], [:]) }
+        let goRows = scan.rows.filter { goEligibleProvider($0.providerID) }
+        let period = dailySpendsByDay(
+            rows: goRows.filter { inWindow($0, start: periodStart, end: periodEnd) },
+            calendar: calendar
+        )
+        let history = dailySpendsByDay(
+            rows: goRows.filter { inWindow($0, start: lookback, end: periodStart) },
+            calendar: calendar
+        )
         return (period, history)
     }
 
