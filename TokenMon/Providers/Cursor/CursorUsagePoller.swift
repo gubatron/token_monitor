@@ -152,7 +152,7 @@ final class CursorUsagePoller: ProviderUsagePoller {
                 snapshot = snap
                 dayHourlyUsage = hourly
                 // The daily bars prefer the real day-over-day growth of the reported
-                // pool %, falling back to a list-price estimate for unobserved
+                // pool %, falling back to a cost-weighted estimate for unobserved
                 // days (see `buildDailyBudgetDays`).
                 if let cycleEnd = snap.billingCycleEnd {
                     billingCycleEnd = cycleEnd

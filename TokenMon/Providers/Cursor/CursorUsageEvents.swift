@@ -158,19 +158,29 @@ extension CursorUsageClient {
         return tally.days
     }
 
-    /// Per-day token weight for the pool-estimate back-fill, within the
-    /// half-open billing cycle when its bounds are known.
+    /// Per-day weight for the pool-estimate back-fill, within the half-open
+    /// billing cycle when its bounds are known.
+    ///
+    /// The pool drains by cost, so days are weighted by charged cents when any
+    /// event in the cycle has a cost. Only when none does are they weighted by
+    /// tokens, which overweight cheap cache reads.
     static func dailyEstimateWeightByDay(
         events: [CursorUsageEvent],
         cycleStart: Date? = nil,
         cycleEnd: Date? = nil,
         calendar: Calendar = .current
     ) -> [Date: Double] {
+        let inCycle = events.filter { event in
+            if let cycleStart, event.date < cycleStart { return false }
+            if let cycleEnd, event.date >= cycleEnd { return false }
+            return true
+        }
+        let weighsByCost = inCycle.contains { $0.chargedCents > 0 }
         var byDay: [Date: Double] = [:]
-        for event in events where event.totalTokens > 0 {
-            if let cycleStart, event.date < cycleStart { continue }
-            if let cycleEnd, event.date >= cycleEnd { continue }
-            byDay[calendar.startOfDay(for: event.date), default: 0] += Double(event.totalTokens)
+        for event in inCycle {
+            let weight = weighsByCost ? event.chargedCents : Double(event.totalTokens)
+            guard weight > 0 else { continue }
+            byDay[calendar.startOfDay(for: event.date), default: 0] += weight
         }
         return byDay
     }

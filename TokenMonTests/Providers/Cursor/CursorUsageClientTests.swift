@@ -296,7 +296,7 @@ final class CursorUsageClientTests: XCTestCase {
         XCTAssertFalse(CursorAuthSession.isCursorDomain("grok.com"))
     }
 
-    /// The pool-estimate back-fill is token-weighted, clips to the half-open
+    /// Without costs, the pool-estimate back-fill is token-weighted; it clips to the half-open
     /// billing cycle, and ignores Cursor Bot (`grok-bot-*`) usage — which has its
     /// own allowance and is not part of the Cursor plan pool.
     func testDailyEstimateWeightByDayExcludesBotAndClipsToCycle() {
@@ -331,6 +331,36 @@ final class CursorUsageClientTests: XCTestCase {
         XCTAssertEqual(byDay[calendar.startOfDay(for: cycleStart)] ?? -1, 300, accuracy: 0.001)
         XCTAssertEqual(byDay[calendar.startOfDay(for: date(23, hour: 12))] ?? -1, 1220, accuracy: 0.001)
         XCTAssertEqual(byDay.values.reduce(0, +), 1520, accuracy: 0.001)
+    }
+
+    /// With costs present, the back-fill weighs days by cost: a day of cheap
+    /// cache reads does not outweigh a day of expensive output.
+    func testDailyEstimateWeightByDayWeighsByCostWhenPresent() {
+        var gregorian = Calendar(identifier: .gregorian)
+        gregorian.timeZone = TimeZone(identifier: "UTC") ?? .gmt
+        let calendar = gregorian
+        func date(_ day: Int) -> Date {
+            calendar.date(from: DateComponents(year: 2026, month: 8, day: day, hour: 12))!
+        }
+        let byDay = CursorUsageClient.dailyEstimateWeightByDay(
+            events: typed([
+                [
+                    "timestamp": String(Int64(date(10).timeIntervalSince1970 * 1000)),
+                    "model": "default",
+                    "chargedCents": 50,
+                    "tokenUsage": ["cacheReadTokens": 10_000_000]
+                ],
+                [
+                    "timestamp": String(Int64(date(11).timeIntervalSince1970 * 1000)),
+                    "model": "default",
+                    "chargedCents": 1500,
+                    "tokenUsage": ["outputTokens": 1_000_000]
+                ]
+            ]),
+            calendar: calendar
+        )
+        XCTAssertEqual(byDay[calendar.startOfDay(for: date(10))] ?? -1, 50, accuracy: 0.001)
+        XCTAssertEqual(byDay[calendar.startOfDay(for: date(11))] ?? -1, 1500, accuracy: 0.001)
     }
 
     /// An expired session can 200 with an HTML sign-in page instead of JSON; that
