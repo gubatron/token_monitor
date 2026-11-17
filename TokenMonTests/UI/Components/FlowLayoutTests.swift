@@ -20,6 +20,26 @@ final class FlowLayoutTests: XCTestCase {
         XCTAssertEqual(FlowLayout.rows(sizes: sizes([400, 50]), maxWidth: 300, spacing: 14), [[0], [1]])
     }
 
+    /// A spread row fills the width with equal gaps: 300 − (60 + 80 + 100) = 60
+    /// free, so two gaps of 30.
+    func testSpreadRowHasEqualGapsAndFillsTheWidth() {
+        let xs = FlowLayout.xPositions(widths: [60, 80, 100], maxWidth: 300, spacing: 14, spreads: true)
+        XCTAssertEqual(xs, [0, 90, 200])
+        XCTAssertEqual(xs[2] + 100, 300)
+    }
+
+    /// A row that is not spread keeps the minimum gap from the leading edge.
+    func testUnspreadRowKeepsTheMinimumGap() {
+        XCTAssertEqual(FlowLayout.xPositions(widths: [60, 80], maxWidth: 300, spacing: 14, spreads: false), [0, 74])
+    }
+
+    /// One subview, or a row too full to spread, stays at the minimum gap.
+    func testSpreadNeverGoesBelowTheMinimumGap() {
+        XCTAssertEqual(FlowLayout.xPositions(widths: [60], maxWidth: 300, spacing: 14, spreads: true), [0])
+        XCTAssertEqual(FlowLayout.xPositions(widths: [150, 150], maxWidth: 300, spacing: 14, spreads: true), [0, 164])
+        XCTAssertEqual(FlowLayout.xPositions(widths: [60, 80], maxWidth: .infinity, spacing: 14, spreads: true), [0, 74])
+    }
+
     func testNoItemsMeansNoRows() {
         XCTAssertEqual(FlowLayout.rows(sizes: [], maxWidth: 300, spacing: 14), [])
     }

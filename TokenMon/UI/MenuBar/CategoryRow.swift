@@ -14,8 +14,8 @@ struct CategoryRow: View {
 }
 
 /// Legend chip for a segmented usage bar: color mark, name, and value on one
-/// line, in the type under the daily budget bars (10pt semibold): the name
-/// grey and the value primary, so the numbers stand out.
+/// line at the same size (12pt semibold), the name grey and the value primary
+/// so the numbers stand out, as under the daily budget bars.
 struct UsageLegendChip: View {
     let color: Color
     let label: String
@@ -25,13 +25,13 @@ struct UsageLegendChip: View {
         HStack(spacing: 5) {
             Circle()
                 .fill(color)
-                .frame(width: 6, height: 6)
+                .frame(width: 7, height: 7)
             Text(label)
-                .font(PanelTypography.microDigit)
+                .font(PanelTypography.bodySemibold)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
             Text(value)
-                .font(PanelTypography.microDigit)
+                .font(PanelTypography.bodyDigit)
                 .foregroundStyle(.primary)
                 .fixedSize()
         }
