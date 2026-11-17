@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// SuperGrok "Usage Breakdown" card: the weekly pool split by product (Chat,
-/// Build, Imagine, …), most used first.
+/// SuperGrok "Usage Breakdown" card: the week's usage split by product (Chat,
+/// Build, Imagine, …), most used first, each as its share of the usage.
 struct GrokUsageBreakdownCard: View {
     /// Products from ``ProductCatalog/breakdownProducts(_:visible:)``.
     let products: [ProductUsage]
@@ -12,8 +12,7 @@ struct GrokUsageBreakdownCard: View {
                 id: product.id,
                 label: ProductCatalog.shortName(for: product.id),
                 color: .product(product.colorToken),
-                percent: product.percentOfPool,
-                value: "\(Int(product.percentOfPool.rounded()))%"
+                amount: product.percentOfPool
             )
         })
     }

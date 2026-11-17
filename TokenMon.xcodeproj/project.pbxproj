@@ -176,6 +176,7 @@
 		C052870AE90C53110217FB35 /* GrokbotUsagePoller.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28872C006636ABC29F513E90 /* GrokbotUsagePoller.swift */; };
 		C134D4F29FDE0D5A0946463A /* ClaudeUsageClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 785C7B006125B70D5F857E1D /* ClaudeUsageClient.swift */; };
 		C21BF0DA80CBF820F64E1738 /* OpenCodeLocalDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = C750D8162E547B0BEF211F12 /* OpenCodeLocalDatabase.swift */; };
+		C48A23F8D6E2A585F9685ED0 /* UsageBreakdownCardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7763D7F7D60BD912EDB9AEC2 /* UsageBreakdownCardTests.swift */; };
 		C56D215B0E039B1EC9647FB7 /* ObservationLoopTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1A920451DAC4B9DB75153AA /* ObservationLoopTests.swift */; };
 		C5A96B314BAECC6AE259AC3F /* ProviderRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4BDA550A83633C5A4301FF7 /* ProviderRegistry.swift */; };
 		C81E410C4F005938F065CCBD /* MenuBarPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9C7E6A362DA6C66B9FC8A67 /* MenuBarPanel.swift */; };
@@ -340,6 +341,7 @@
 		7265D1C2FC9BF60197606191 /* SignInBrowserNavigationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInBrowserNavigationTests.swift; sourceTree = "<group>"; };
 		72E61C3E4D69105F655DCB85 /* Percent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Percent.swift; sourceTree = "<group>"; };
 		766215037C3630BB8DEC6764 /* DailyQuotaDeltaStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyQuotaDeltaStoreTests.swift; sourceTree = "<group>"; };
+		7763D7F7D60BD912EDB9AEC2 /* UsageBreakdownCardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageBreakdownCardTests.swift; sourceTree = "<group>"; };
 		782349AA9FC5243305136053 /* OpenCodeStatsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeStatsTests.swift; sourceTree = "<group>"; };
 		785C7B006125B70D5F857E1D /* ClaudeUsageClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeUsageClient.swift; sourceTree = "<group>"; };
 		79A2E60147414792A12FB1BD /* ClaudeCodeUsageLedgerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeCodeUsageLedgerTests.swift; sourceTree = "<group>"; };
@@ -848,6 +850,7 @@
 				3449727664B975097B6A218E /* FlowLayoutTests.swift */,
 				C52A459C23CAD781C683EEBC /* HoverLabelTests.swift */,
 				421E4A8A1FF8BCCB113A2B28 /* MonthlyDailyBudgetBarsViewTests.swift */,
+				7763D7F7D60BD912EDB9AEC2 /* UsageBreakdownCardTests.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -1310,6 +1313,7 @@
 				A7B20EAE780B59211A64BD75 /* SystemWakeGateTests.swift in Sources */,
 				FC09C3592BD99FAFACBCBDA9 /* ThresholdNotifierTests.swift in Sources */,
 				298C863AB7E62E9D5CB3CC99 /* UpdateCheckerTests.swift in Sources */,
+				C48A23F8D6E2A585F9685ED0 /* UsageBreakdownCardTests.swift in Sources */,
 				0EE338537755EF3BDDCA6291 /* UsageErrorTests.swift in Sources */,
 				1987DC214314F8B93CBE24A8 /* UsagePoolTests.swift in Sources */,
 				A0CA70731D8293825C8C112F /* WebKitCookieCaptureTests.swift in Sources */,

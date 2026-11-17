@@ -1,38 +1,21 @@
 import SwiftUI
 
 /// Grokbot "Usage Breakdown" card: who spent the allowance (You, Routines,
-/// Bot to Bot, …), most used first.
+/// Bot to Bot, …), most used first, each as its share of the usage.
 struct GrokbotUsageBreakdownCard: View {
     let breakdown: GrokbotUsageBreakdown
 
     var body: some View {
-        UsageBreakdownCard(items: items)
-    }
-
-    /// Percent units draw against the whole allowance, leaving the unused part
-    /// as track. Dollars have no allowance to draw against, so each source
-    /// takes its share of the total.
-    private var items: [UsageBreakdownCard.Item] {
-        let total = breakdown.total
-        return breakdown.slices.map { slice in
-            let percent: Double
-            let value: String
-            switch breakdown.unit {
-            case .weeklyLimitPercent, .billingCyclePercent:
-                percent = slice.value
-                value = "\(Int(slice.value.rounded()))%"
-            case .usd:
-                percent = total > 0 ? slice.value / total * 100 : 0
-                value = Format.usd(slice.value)
-            }
-            return UsageBreakdownCard.Item(
+        UsageBreakdownCard(items: breakdown.slices.map { slice in
+            UsageBreakdownCard.Item(
                 id: slice.source.rawValue,
                 label: slice.source.displayName,
                 color: slice.source.sRGB.color,
-                percent: percent,
-                value: value
+                amount: slice.value,
+                // On-demand accounts read better in dollars than as shares.
+                valueText: breakdown.unit == .usd ? Format.usd(slice.value) : nil
             )
-        }
+        })
     }
 }
 
