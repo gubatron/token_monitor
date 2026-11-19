@@ -84,7 +84,13 @@ struct ChatGPTSnapshot: Identifiable, Hashable, Sendable {
     var primary: ChatGPTUsageWindow?
     var secondary: ChatGPTUsageWindow?
 
-    var resetsAt: Date? { primary?.resetsAt ?? secondary?.resetsAt }
+    var resetsAt: Date? { (primary ?? secondary)?.resetsAt }
+
+    /// The account-wide flag doesn't identify a window. Only a full window
+    /// can use its own reset clock as the time when that limit will be lifted.
+    var hasUnattributedLimit: Bool {
+        limitReached && (primary?.usedPercent ?? 0) < 100 && (secondary?.usedPercent ?? 0) < 100
+    }
 
     var headlineUsedPercent: Double {
         (primary ?? secondary)?.usedPercent ?? 0

@@ -21,13 +21,13 @@ struct ClaudePanelView: View {
                         label: "5-Hour Window",
                         percent: snapshot.fiveHour?.usedPercent ?? 0,
                         color: MonitorProvider.claude.accentColor,
-                        caption: snapshot.fiveHour?.resetsAt.map { Format.resetCaption($0) }
+                        resetsAt: snapshot.fiveHour?.resetsAt
                     )
                     SlimUsageTrack(
                         label: snapshot.weeklyLabel,
                         percent: snapshot.sevenDay?.usedPercent ?? 0,
                         color: MonitorProvider.claude.accentColor,
-                        caption: poller.weeklyResetsAt().map { Format.resetCaption($0) }
+                        resetsAt: poller.weeklyResetsAt()
                     )
                 }
 

@@ -23,7 +23,7 @@ struct CursorPanelView: View {
                             label: pool.kind.trackLabel,
                             percent: pool.usedPercent,
                             color: MonitorProvider.cursor.accentColor,
-                            caption: (pool.resetsAt ?? snapshot.resetsAt).map { Format.resetCaption($0) }
+                            resetsAt: pool.resetsAt ?? snapshot.resetsAt
                         )
                     }
                 }

@@ -104,6 +104,8 @@ struct OpenRouterSnapshot: Identifiable, Hashable, Sendable {
     /// Spend measured against `budgetSource`.
     var usedUSD: Double
     var remainingUSD: Double?
+    /// API-key reset, if OpenRouter reports a recurring spending cap.
+    var resetsAt: Date?
 
     /// Percent of credits consumed; `nil` when there is no budget to divide by.
     var usedPercent: Double? {
@@ -155,6 +157,7 @@ struct OpenRouterSnapshot: Identifiable, Hashable, Sendable {
         } else if let limit = key.limit, limit > 0 {
             snapshot.budgetSource = .keyLimit
             snapshot.budgetUSD = limit
+            snapshot.resetsAt = Self.nextKeyReset(key.limitReset, after: fetchedAt)
             // Window selection follows the provider's `limit_reset`: inside a reset
             // window the bar shows spend against the current window; without one,
             // `/key` usage is all-time.
@@ -173,6 +176,20 @@ struct OpenRouterSnapshot: Identifiable, Hashable, Sendable {
         // Negative usage (overdraft) clamps to zero.
         snapshot.usedUSD = max(0, snapshot.usedUSD)
         return snapshot
+    }
+
+    /// OpenRouter key limits reset at midnight UTC; weeks start Monday.
+    private static func nextKeyReset(_ reset: String?, after date: Date) -> Date? {
+        var calendar = Calendar(identifier: .iso8601)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? calendar.timeZone
+        let component: Calendar.Component
+        switch reset?.lowercased() {
+        case "daily": component = .day
+        case "weekly": component = .weekOfYear
+        case "monthly": component = .month
+        default: return nil
+        }
+        return calendar.dateInterval(of: component, for: date)?.end
     }
 
     /// `/key` usage field matching the provider-declared `limit_reset` window.

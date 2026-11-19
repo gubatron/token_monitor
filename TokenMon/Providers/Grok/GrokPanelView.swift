@@ -67,7 +67,7 @@ struct GrokPanelView: View {
                     label: "Weekly",
                     percent: snapshot.usedPercent,
                     color: MonitorProvider.grok.accentColor,
-                    caption: snapshot.resetsAt.map { Format.resetCaption($0) },
+                    resetsAt: snapshot.resetsAt,
                     showsLabel: false
                 )
             }

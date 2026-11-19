@@ -116,10 +116,9 @@ struct OverviewPanelView: View {
                 }
             }
             .frame(height: 8)
-            if let resetsAt {
-                Text(Format.resetCaption(resetsAt))
-                    .resetCaption()
-            } else if grokPoller.snapshot == nil {
+            if grokPoller.snapshot != nil {
+                UsageLimitCaption(resetsAt: resetsAt, percent: percent)
+            } else {
                 Text("No Grok data yet")
                     .font(PanelTypography.caption)
                     .foregroundStyle(.tertiary)
@@ -163,10 +162,9 @@ struct OverviewPanelView: View {
                 }
             }
             .frame(height: 8)
-            if let resetsAt {
-                Text(Format.resetCaption(resetsAt))
-                    .resetCaption()
-            } else if openCodePoller.snapshot == nil {
+            if openCodePoller.snapshot != nil {
+                UsageLimitCaption(resetsAt: resetsAt, percent: percent)
+            } else {
                 Text("No OpenCode data yet")
                     .font(PanelTypography.caption)
                     .foregroundStyle(.tertiary)
@@ -209,10 +207,9 @@ struct OverviewPanelView: View {
                 }
             }
             .frame(height: 8)
-            if let resetsAt {
-                Text(Format.resetCaption(resetsAt))
-                    .resetCaption()
-            } else if cursorPoller.snapshot == nil {
+            if cursorPoller.snapshot != nil {
+                UsageLimitCaption(resetsAt: resetsAt, percent: percent)
+            } else {
                 Text("No Cursor data yet")
                     .font(PanelTypography.caption)
                     .foregroundStyle(.tertiary)
@@ -255,10 +252,9 @@ struct OverviewPanelView: View {
                 }
             }
             .frame(height: 8)
-            if let resetsAt {
-                Text(Format.resetCaption(resetsAt))
-                    .resetCaption()
-            } else if claudePoller.snapshot == nil {
+            if claudePoller.snapshot != nil {
+                UsageLimitCaption(resetsAt: resetsAt, percent: percent)
+            } else {
                 Text("No Claude data yet")
                     .font(PanelTypography.caption)
                     .foregroundStyle(.tertiary)
@@ -301,10 +297,9 @@ struct OverviewPanelView: View {
                 }
             }
             .frame(height: 8)
-            if let resetsAt {
-                Text(Format.resetCaption(resetsAt))
-                    .resetCaption()
-            } else if chatGPTPoller.snapshot == nil {
+            if chatGPTPoller.snapshot != nil {
+                UsageLimitCaption(resetsAt: resetsAt, percent: percent)
+            } else {
                 Text("No ChatGPT data yet")
                     .font(PanelTypography.caption)
                     .foregroundStyle(.tertiary)
@@ -347,10 +342,9 @@ struct OverviewPanelView: View {
                 }
             }
             .frame(height: 8)
-            if let resetsAt {
-                Text(Format.resetCaption(resetsAt))
-                    .resetCaption()
-            } else if grokbotPoller.snapshot == nil {
+            if grokbotPoller.snapshot != nil {
+                UsageLimitCaption(resetsAt: resetsAt, percent: percent)
+            } else {
                 Text("No Grokbot data yet")
                     .font(PanelTypography.caption)
                     .foregroundStyle(.tertiary)
@@ -400,9 +394,11 @@ struct OverviewPanelView: View {
                     .font(PanelTypography.caption)
                     .foregroundStyle(.tertiary)
             } else if let remaining {
-                Text("\(Format.usd(remaining)) of credits left")
-                    .font(PanelTypography.caption)
-                    .foregroundStyle(.tertiary)
+                UsageLimitCaption(
+                    resetsAt: openRouterPoller.snapshot?.resetsAt,
+                    percent: percent,
+                    normalCaption: "\(Format.usd(remaining)) of credits left"
+                )
             } else if openRouterPoller.snapshot == nil {
                 Text("No OpenRouter data yet")
                     .font(PanelTypography.caption)

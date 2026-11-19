@@ -16,6 +16,7 @@ struct OpenCodeLimitBar: View {
             label: window.kind.label,
             percent: window.usedPercent,
             color: fill,
+            resetsAt: window.resetsAt,
             caption: caption
         )
     }

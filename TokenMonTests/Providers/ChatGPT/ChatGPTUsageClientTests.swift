@@ -1,6 +1,23 @@
 @testable import TokenMon
 import XCTest
 
+final class ChatGPTLimitTests: XCTestCase {
+    func testAccountWideLimitDoesNotMislabelThePrimaryWindow() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        var snapshot = ChatGPTSnapshot(
+            fetchedAt: now,
+            allowed: false,
+            limitReached: true,
+            primary: .init(usedPercent: 40),
+            secondary: .init(usedPercent: 100, resetsAt: now.addingTimeInterval(86_400))
+        )
+        XCTAssertFalse(snapshot.hasUnattributedLimit)
+        XCTAssertNil(snapshot.resetsAt, "The overview shows primary usage, so it must not use the weekly clock.")
+        snapshot.secondary?.usedPercent = 90
+        XCTAssertTrue(snapshot.hasUnattributedLimit)
+    }
+}
+
 final class ChatGPTUsageClientTests: XCTestCase {
     private let fixture = Data("""
     {

@@ -22,16 +22,17 @@ struct ChatGPTPanelView: View {
                         label: snapshot.primary?.label(fallback: "5-Hour Window") ?? "5-Hour Window",
                         percent: snapshot.primary?.usedPercent ?? 0,
                         color: MonitorProvider.chatgpt.accentColor,
-                        caption: snapshot.limitReached
-                            ? "Limit reached"
-                            : snapshot.primary?.resetsAt.map { Format.resetCaption($0) }
+                        resetsAt: snapshot.primary?.resetsAt
                     )
                     SlimUsageTrack(
                         label: snapshot.secondary?.label(fallback: "Weekly") ?? "Weekly",
                         percent: snapshot.secondary?.usedPercent ?? 0,
                         color: MonitorProvider.chatgpt.accentColor,
-                        caption: snapshot.secondary?.resetsAt.map { Format.resetCaption($0) }
+                        resetsAt: snapshot.secondary?.resetsAt
                     )
+                    if snapshot.hasUnattributedLimit {
+                        Text("Limit reached · Window not reported").resetCaption()
+                    }
                     if !snapshot.allowed {
                         Text("Codex access is currently blocked for this account.")
                             .font(PanelTypography.caption)
