@@ -553,9 +553,11 @@ Snapshot: `{fetchedAt, planName, allowed, limitReached, primary, secondary}`;
   `Sign in to chatgpt.com to load your 5-hour and weekly Codex usage.`; button `Sign In to ChatGPT…`.
 - Main: header `ChatGPT` with trailing meta label `displayPlanName`; card: `Usage Pool …`; track
   label `primary.label(fallback: "5-Hour Window")` (or `5-Hour Window` if no primary), percent
-  `primary.usedPercent ?? 0`, caption `Limit reached` when `limitReached` else reset caption of
-  `primary.resetsAt`; track `secondary.label(fallback: "Weekly")`, caption reset of
-  `secondary.resetsAt`; if `!allowed` caption text `Codex access is currently blocked for this account.`.
+  `primary.usedPercent ?? 0`; track `secondary.label(fallback: "Weekly")` uses the secondary percent.
+  Each track uses only its own reset clock: absolute date below the cap, and a countdown at full usage.
+  Missing or elapsed reset times are labeled explicitly. If the account-wide `limitReached` flag is
+  set but no track is full, show `Limit reached · Window not reported` without assigning it to either
+  window. If `!allowed`, show `Codex access is currently blocked for this account.`.
   Then stale-error caption, `Sign In Again…` if needsSignIn, sign-out button. No bars, no hover.
 - Else: header + `Refreshing…` / lastError / `No usage data yet.` + sign-in button if needsSignIn.
 

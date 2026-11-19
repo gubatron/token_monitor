@@ -77,6 +77,36 @@ pub fn reset_caption_short(at: DateTime<Utc>, tz: FixedOffset) -> String {
     Format::reset_caption(at, "EEE h:mma", tz)
 }
 
+/// Countdown for an exhausted allowance, with an explicit fallback for missing or stale clocks.
+pub fn exhausted_reset_caption(at: Option<DateTime<Utc>>, now: DateTime<Utc>) -> String {
+    let Some(at) = at else {
+        return "Limit reached · Reset time unavailable".to_owned();
+    };
+    if at <= now {
+        return "Limit reached · Reset time passed".to_owned();
+    }
+    let minutes = (at - now).num_minutes();
+    if minutes == 0 {
+        return "Limit reached · Resets in less than a minute".to_owned();
+    }
+    let days = minutes / 1_440;
+    let hours = minutes / 60 % 24;
+    let part = |n, unit| format!("{n} {unit}{}", if n == 1 { "" } else { "s" });
+    let (first, second, unit) = if days > 0 {
+        (part(days, "day"), hours, "hour")
+    } else if hours > 0 {
+        (part(hours, "hour"), minutes % 60, "minute")
+    } else {
+        (part(minutes, "minute"), 0, "minute")
+    };
+    let mut caption = format!("Limit reached · Resets in {first}");
+    if second > 0 {
+        caption.push(' ');
+        caption.push_str(&part(second, unit));
+    }
+    caption
+}
+
 /// Relative reset wording matching SwiftUI's
 /// `date.formatted(.relative(presentation: .named))`, prefixed with `Resets `.
 ///

@@ -629,6 +629,7 @@ fn render_all_states(last: &Rc<RefCell<Option<Rc<MinimalSoftwareWindow>>>>) {
         used_percent: Some(42.0),
         used_usd: 42.4,
         remaining_usd: Some(57.6),
+        resets_at: None,
         account_used_usd: Some(42.4),
         key_usage_usd: 10.0,
         key_usage_daily_usd: 1.25,

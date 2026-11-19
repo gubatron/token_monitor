@@ -31,6 +31,28 @@ fn approx(a: f64, b: f64) {
     assert!((a - b).abs() < 1e-3, "{a} != {b}");
 }
 
+/// Recurring caps reset on UTC calendar boundaries, not on the host calendar.
+#[test]
+fn test_recurring_key_limits_reset_at_utc_boundaries() {
+    let now = Utc.with_ymd_and_hms(2026, 1, 31, 23, 30, 0).unwrap();
+    let mut key = key(100.0, Some(100.0));
+    for (window, day) in [("daily", 1), ("weekly", 2), ("monthly", 1)] {
+        key.limit_reset = Some(window.into());
+        let snap = OpenRouterSnapshot::build(&key, None, None, now, &NoCostEstimator);
+        assert_eq!(
+            snap.resets_at(),
+            Utc.with_ymd_and_hms(2026, 2, day, 0, 0, 0).single()
+        );
+    }
+    let account = CreditsData {
+        total_credits: 100.0,
+        total_usage: 100.0,
+    };
+    assert_eq!(build(&key, Some(account)).resets_at(), None);
+    key.limit_reset = None;
+    assert_eq!(build(&key, None).resets_at(), None);
+}
+
 /// Verifies the `/key` payload decodes label, usage, daily, limit and flag.
 #[test]
 fn test_parse_key_payload() {

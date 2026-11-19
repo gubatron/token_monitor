@@ -76,6 +76,28 @@ fn test_reset_caption_examples_from_the_spec() {
     );
 }
 
+/// Exhausted limits show remaining time without promising a reset from stale data.
+#[test]
+fn test_exhausted_limit_countdown_and_fallbacks() {
+    let now = Utc.with_ymd_and_hms(2026, 7, 16, 10, 0, 0).unwrap();
+    for (seconds, expected) in [
+        (90_000, "Resets in 1 day 1 hour"),
+        (7_500, "Resets in 2 hours 5 minutes"),
+        (60, "Resets in 1 minute"),
+        (1, "Resets in less than a minute"),
+        (0, "Reset time passed"),
+    ] {
+        assert_eq!(
+            exhausted_reset_caption(Some(now + Duration::seconds(seconds)), now),
+            format!("Limit reached · {expected}")
+        );
+    }
+    assert_eq!(
+        exhausted_reset_caption(None, now),
+        "Limit reached · Reset time unavailable"
+    );
+}
+
 /// Relative captions and ages.
 #[test]
 fn test_relative_and_age_text() {

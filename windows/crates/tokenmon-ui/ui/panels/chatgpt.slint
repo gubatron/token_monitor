@@ -15,6 +15,7 @@ export global ChatGptVm {
     in property <string> pool-title;
     in property <[TrackData]> tracks;
     in property <string> blocked;
+    in property <string> unattributed-limit;
     in property <FooterData> footer;
 }
 
@@ -28,6 +29,7 @@ export component ChatGptBody inherits VerticalLayout {
         clicked => { ChatGptVm.sign-in(); }
     }
     if ChatGptVm.has-usage: PoolCard { title: ChatGptVm.pool-title; tracks: ChatGptVm.tracks; }
+    if ChatGptVm.has-usage && ChatGptVm.unattributed-limit != "": Caption { text: ChatGptVm.unattributed-limit; }
     if ChatGptVm.has-usage && ChatGptVm.blocked != "": Caption { text: ChatGptVm.blocked; warning: true; }
     if ChatGptVm.has-usage: FooterBlock {
         data: ChatGptVm.footer;

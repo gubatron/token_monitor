@@ -175,7 +175,7 @@ pub fn build(input: &GrokInput, ctx: &PanelContext) -> PanelVm<GrokUsage> {
             pool_title: "Usage Pool Weekly".to_owned(),
             pool_used_text: format::percent_used(snap.used_percent),
             segments: pool_segments(&snap.pool_products, geometry::CARD_INNER_WIDTH),
-            reset_caption: snap.resets_at.map(|t| ctx.reset_caption(t)),
+            reset_caption: ctx.limit_reset_caption(snap.resets_at, snap.used_percent),
             categories,
             extra_credits: (snap.extra_credits_balance > 0.0)
                 .then(|| format::usd(snap.extra_credits_balance)),

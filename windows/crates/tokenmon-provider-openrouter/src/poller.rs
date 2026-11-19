@@ -224,7 +224,10 @@ impl ProviderUsagePoller for OpenRouterUsagePoller {
     }
 
     fn headline_resets_at(&self) -> Option<DateTime<Utc>> {
-        None
+        lock(&self.state)
+            .snapshot
+            .as_ref()
+            .and_then(OpenRouterSnapshot::resets_at)
     }
 
     fn alert_account(&self) -> Option<String> {

@@ -226,20 +226,23 @@ pub fn build_claude(input: &ClaudeInput, ctx: &PanelContext) -> ClaudePanelVm {
     let accent = ProviderId::Claude.panel_accent();
     let mut tracks = Vec::with_capacity(2);
     let five = snap.five_hour.as_ref();
+    let five_used = five.and_then(|w| w.used_percent).unwrap_or(0.0);
+    let weekly_used = snap
+        .seven_day
+        .as_ref()
+        .and_then(|w| w.used_percent)
+        .unwrap_or(0.0);
     tracks.push(TrackVm::new(
         "5-Hour Window",
-        five.and_then(|w| w.used_percent).unwrap_or(0.0),
+        five_used,
         accent,
-        five.and_then(|w| w.resets_at).map(|t| ctx.reset_caption(t)),
+        ctx.limit_reset_caption(five.and_then(|w| w.resets_at), five_used),
     ));
     tracks.push(TrackVm::new(
         &snap.weekly_label,
-        snap.seven_day
-            .as_ref()
-            .and_then(|w| w.used_percent)
-            .unwrap_or(0.0),
+        weekly_used,
         accent,
-        snap.weekly_resets_at.map(|t| ctx.reset_caption(t)),
+        ctx.limit_reset_caption(snap.weekly_resets_at, weekly_used),
     ));
     ClaudePanelVm {
         panel: PanelVm::with_usage(
@@ -292,6 +295,8 @@ pub struct ChatGptUsage {
     pub tracks: Vec<TrackVm>,
     /// Blocked-access note.
     pub blocked_text: Option<&'static str>,
+    /// Account-wide limit flag without an identifiable exhausted window.
+    pub unattributed_limit: Option<&'static str>,
     /// Footer.
     pub footer: FooterVm,
 }
@@ -324,26 +329,18 @@ pub fn build_chatgpt(input: &ChatGptInput, ctx: &PanelContext) -> PanelVm<ChatGp
         ),
         None => ("5-Hour Window".to_owned(), 0.0),
     };
-    let pcap = if snap.limit_reached {
-        Some("Limit reached".to_owned())
-    } else {
-        snap.primary
-            .as_ref()
-            .and_then(|w| w.resets_at)
-            .map(|t| ctx.reset_caption(t))
-    };
+    let pcap = ctx.limit_reset_caption(snap.primary.as_ref().and_then(|w| w.resets_at), pused);
     tracks.push(TrackVm::new(&plabel, pused, accent, pcap));
     // The Weekly track is always drawn, "0% Used" when the window is missing.
     let secondary = snap.secondary.as_ref();
+    let sused = secondary.and_then(|w| w.used_percent).unwrap_or(0.0);
     tracks.push(TrackVm::new(
         secondary
             .and_then(|w| w.label.as_deref())
             .unwrap_or("Weekly"),
-        secondary.and_then(|w| w.used_percent).unwrap_or(0.0),
+        sused,
         accent,
-        secondary
-            .and_then(|w| w.resets_at)
-            .map(|t| ctx.reset_caption(t)),
+        ctx.limit_reset_caption(secondary.and_then(|w| w.resets_at), sused),
     ));
     PanelVm::with_usage(
         header.with_meta(Some(snap.plan_name.clone())),
@@ -352,6 +349,8 @@ pub fn build_chatgpt(input: &ChatGptInput, ctx: &PanelContext) -> PanelVm<ChatGp
             tracks,
             blocked_text: (!snap.allowed)
                 .then_some("Codex access is currently blocked for this account."),
+            unattributed_limit: (snap.limit_reached && pused < 100.0 && sused < 100.0)
+                .then_some("Limit reached · Window not reported"),
             footer: FooterVm::standard(s, ctx, ProviderId::ChatGpt, ProviderId::ChatGpt),
         },
     )

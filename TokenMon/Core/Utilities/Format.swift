@@ -123,4 +123,34 @@ enum Format {
     ) -> String {
         "Resets \(resetDate(date, dateFormat: dateFormat, timeZone: timeZone))"
     }
+
+    /// Keeps the normal timestamp below the cap and shows time remaining once exhausted.
+    static func limitResetCaption(
+        _ date: Date?,
+        usedPercent: Double,
+        now: Date = Date(),
+        normalCaption: String? = nil
+    ) -> String? {
+        guard usedPercent >= 100 else { return normalCaption ?? date.map { resetCaption($0) } }
+        guard let date, date.timeIntervalSinceReferenceDate.isFinite else {
+            return "Limit reached · Reset time unavailable"
+        }
+        let seconds = date.timeIntervalSince(now)
+        guard seconds > 0 else { return "Limit reached · Reset time passed" }
+        guard seconds >= 60 else { return "Limit reached · Resets in less than a minute" }
+        guard let minutes = Int(exactly: (seconds / 60).rounded(.down)) else {
+            return "Limit reached · Reset time unavailable"
+        }
+        let days = minutes / 1_440
+        let hours = minutes / 60 % 24
+        let parts = days > 0
+            ? [durationPart(days, "day"), durationPart(hours, "hour")]
+            : [durationPart(hours, "hour"), durationPart(minutes % 60, "minute")]
+        return "Limit reached · Resets in \(parts.compactMap { $0 }.joined(separator: " "))"
+    }
+
+    private static func durationPart(_ value: Int, _ unit: String) -> String? {
+        guard value > 0 else { return nil }
+        return "\(value) \(unit)\(value == 1 ? "" : "s")"
+    }
 }

@@ -143,6 +143,7 @@ fn window_track(w: &OpenCodeWindowInput, ctx: &PanelContext) -> TrackVm {
         PURPLE
     };
     let caption = match (w.kind, w.resets_at) {
+        (_, reset) if w.used_percent >= 100.0 => ctx.limit_reset_caption(reset, w.used_percent),
         (OpenCodeWindowKind::FiveHour, Some(t)) => Some(format::reset_caption_relative(t, ctx.now)),
         (OpenCodeWindowKind::FiveHour, None) if w.used_percent <= 0.0 => {
             Some("No usage in last 5h".to_owned())
@@ -301,6 +302,8 @@ pub struct OpenRouterSnapshotInput {
     pub used_usd: f64,
     /// Remaining USD.
     pub remaining_usd: Option<f64>,
+    /// Recurring key limit reset, if one applies to the displayed budget.
+    pub resets_at: Option<DateTime<Utc>>,
     /// `accountUsedUSD`.
     pub account_used_usd: Option<f64>,
     /// `keyUsageUSD`.
@@ -420,12 +423,16 @@ pub fn build_openrouter(input: &OpenRouterInput, ctx: &PanelContext) -> OpenRout
     };
     let accent = ProviderId::OpenRouter.panel_accent();
     let track = snap.budget_usd.zip(snap.used_percent).map(|(budget, pct)| {
-        let caption = format!(
-            "{} of {} · {} left",
-            format::usd(snap.used_usd),
-            format::usd(budget),
-            format::usd(snap.remaining_usd.unwrap_or(0.0))
-        );
+        let caption = if pct >= 100.0 {
+            format::exhausted_reset_caption(snap.resets_at, ctx.now)
+        } else {
+            format!(
+                "{} of {} · {} left",
+                format::usd(snap.used_usd),
+                format::usd(budget),
+                format::usd(snap.remaining_usd.unwrap_or(0.0))
+            )
+        };
         TrackVm::new("Credits used", pct, accent, Some(caption)).without_label()
     });
     let title = snap

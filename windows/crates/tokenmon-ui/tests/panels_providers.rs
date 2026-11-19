@@ -562,7 +562,10 @@ fn test_chatgpt_limit_reached_and_blocked() {
     assert_eq!(p.header.meta.as_deref(), Some("ChatGPT Plus"));
     let u = p.usage.unwrap();
     assert_eq!(u.tracks[0].label, "5-Hour Window");
-    assert_eq!(u.tracks[0].caption.as_deref(), Some("Limit reached"));
+    assert_eq!(
+        u.tracks[0].caption.as_deref(),
+        Some("Limit reached · Resets in 3 hours")
+    );
     assert_eq!(
         u.tracks[1].caption.as_deref(),
         Some("Resets Mon 20 July 9:30am")
@@ -574,6 +577,7 @@ fn test_chatgpt_limit_reached_and_blocked() {
     let mut s = chatgpt_snap();
     s.limit_reached = false;
     s.allowed = true;
+    s.primary.as_mut().unwrap().used_percent = Some(90.0);
     s.secondary = None;
     let u = build_chatgpt(
         &ChatGptInput {
@@ -596,8 +600,7 @@ fn test_chatgpt_limit_reached_and_blocked() {
     assert!(u.blocked_text.is_none());
 }
 
-/// Issue #61: a ChatGPT snapshot with no primary window still says
-/// "Limit reached" like the Mac, and the Weekly track is still drawn.
+/// The account-wide flag doesn't assign an unknown limit to the primary window.
 #[test]
 fn test_chatgpt_limit_reached_without_primary() {
     let mut s = chatgpt_snap();
@@ -614,8 +617,37 @@ fn test_chatgpt_limit_reached_without_primary() {
     .unwrap();
     assert_eq!(u.tracks.len(), 2);
     assert_eq!(u.tracks[0].used_text, "0% Used");
-    assert_eq!(u.tracks[0].caption.as_deref(), Some("Limit reached"));
+    assert!(u.tracks[0].caption.is_none());
+    assert_eq!(
+        u.unattributed_limit,
+        Some("Limit reached · Window not reported")
+    );
     assert_eq!(u.tracks[1].label, "Weekly");
+}
+
+#[test]
+fn test_chatgpt_weekly_limit_keeps_its_own_countdown() {
+    let mut s = chatgpt_snap();
+    s.primary.as_mut().unwrap().used_percent = Some(40.0);
+    s.secondary.as_mut().unwrap().used_percent = Some(100.0);
+    let u = build_chatgpt(
+        &ChatGptInput {
+            status: status(),
+            snapshot: Some(s),
+        },
+        &ctx(),
+    )
+    .usage
+    .unwrap();
+    assert_eq!(
+        u.tracks[0].caption.as_deref(),
+        Some("Resets Wed 15 July 3:00pm")
+    );
+    assert_eq!(
+        u.tracks[1].caption.as_deref(),
+        Some("Limit reached · Resets in 4 days 21 hours")
+    );
+    assert!(u.unattributed_limit.is_none());
 }
 
 /// Issue #61: Claude's "Models This Month" lists every model with no
@@ -856,6 +888,7 @@ fn or_snap() -> OpenRouterSnapshotInput {
         used_percent: Some(42.4),
         used_usd: 42.4,
         remaining_usd: Some(57.6),
+        resets_at: None,
         account_used_usd: Some(42.4),
         key_usage_usd: 10.0,
         key_usage_daily_usd: 1.25,
@@ -878,6 +911,99 @@ fn or_input(snapshot: Option<OpenRouterSnapshotInput>, status: ProviderStatus) -
         is_replacing: false,
         auth_error: None,
     }
+}
+
+/// Other provider panels use the same exhausted-window countdown as ChatGPT.
+#[test]
+fn test_exhausted_provider_panels_keep_their_own_reset() {
+    let ctx = ctx();
+    let reset = Some(ctx.now + chrono::Duration::minutes(95));
+    let expected = Some("Limit reached · Resets in 1 hour 35 minutes");
+
+    let grok = GrokSnapshotInput {
+        used_percent: 100.0,
+        resets_at: reset,
+        ..grok_snap()
+    };
+    let u = grok::build(&grok_input(Some(grok), status(), true), &ctx)
+        .usage
+        .unwrap();
+    assert_eq!(u.reset_caption.as_deref(), expected);
+
+    let grokbot = GrokbotSnapshotInput {
+        used_percent: 100.0,
+        resets_at: reset,
+        ..grokbot_snap(true)
+    };
+    let u = build_grokbot(
+        &GrokbotInput {
+            status: status(),
+            snapshot: Some(grokbot),
+        },
+        &ctx,
+    )
+    .usage
+    .unwrap();
+    assert_eq!(u.track.unwrap().caption.as_deref(), expected);
+
+    let mut cursor = cursor_snap();
+    cursor.pools[1].used_percent = 100.0;
+    cursor.pools[1].resets_at = reset;
+    let u = build_cursor(
+        &CursorInput {
+            status: status(),
+            snapshot: Some(cursor),
+        },
+        &ctx,
+    )
+    .usage
+    .unwrap();
+    assert_eq!(u.tracks[1].caption.as_deref(), expected);
+
+    let mut claude = claude_snap();
+    claude.five_hour = Some(WindowInput {
+        label: None,
+        used_percent: Some(100.0),
+        resets_at: reset,
+    });
+    let u = build_claude(
+        &ClaudeInput {
+            status: status(),
+            snapshot: Some(claude),
+            code: None,
+        },
+        &ctx,
+    )
+    .panel
+    .usage
+    .unwrap();
+    assert_eq!(u.tracks[0].caption.as_deref(), expected);
+
+    let mut opencode = oc_snap();
+    opencode.windows[1].used_percent = 100.0;
+    opencode.windows[1].resets_at = reset;
+    let u = build_opencode(
+        &OpenCodeInput {
+            status: status(),
+            snapshot: Some(opencode),
+        },
+        &ctx,
+    )
+    .usage
+    .unwrap();
+    assert_eq!(u.tracks[1].caption.as_deref(), expected);
+
+    let openrouter = OpenRouterSnapshotInput {
+        budget_source: Some(BudgetSource::KeyLimit),
+        used_percent: Some(100.0),
+        resets_at: reset,
+        ..or_snap()
+    };
+    let u = build_openrouter(&or_input(Some(openrouter), status()), &ctx)
+        .panel
+        .usage
+        .unwrap();
+    assert_eq!(u.track.unwrap().caption.as_deref(), expected);
 }
 
 /// OpenRouter credit budget, stats and models.

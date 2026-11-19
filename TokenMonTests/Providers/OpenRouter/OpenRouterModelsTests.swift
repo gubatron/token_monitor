@@ -2,6 +2,24 @@
 import XCTest
 
 final class OpenRouterModelsTests: XCTestCase {
+    func testRecurringKeyLimitsResetAtUTCWindowBoundaries() throws {
+        let parser = ISO8601DateFormatter()
+        let now = try XCTUnwrap(parser.date(from: "2026-01-31T23:30:00Z"))
+        var key = Self.key(usage: 100, limit: 100)
+        for (interval, expected) in [
+            ("daily", "2026-02-01T00:00:00Z"),
+            ("weekly", "2026-02-02T00:00:00Z"),
+            ("monthly", "2026-02-01T00:00:00Z")
+        ] {
+            key.limitReset = interval
+            let snapshot = OpenRouterSnapshot.build(key: key, credits: nil, fetchedAt: now)
+            XCTAssertEqual(snapshot.resetsAt, try XCTUnwrap(parser.date(from: expected)))
+        }
+        XCTAssertNil(OpenRouterSnapshot.build(key: key, credits: .init(totalCredits: 100, totalUsage: 100)).resetsAt)
+        key.limitReset = nil
+        XCTAssertNil(OpenRouterSnapshot.build(key: key, credits: nil, fetchedAt: now).resetsAt)
+    }
+
     func testParseKeyPayload() throws {
         let data = Data("""
         {

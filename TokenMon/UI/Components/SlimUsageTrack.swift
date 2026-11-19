@@ -8,6 +8,7 @@ struct SlimUsageTrack: View {
     let label: String
     let percent: Double
     var color: Color
+    var resetsAt: Date?
     var caption: String?
     var showsLabel: Bool = true
 
@@ -36,10 +37,31 @@ struct SlimUsageTrack: View {
             }
             .frame(height: 8)
 
-            if let caption, !caption.isEmpty {
-                Text(caption)
-                    .resetCaption()
+            UsageLimitCaption(resetsAt: resetsAt, percent: percent, normalCaption: caption)
+        }
+    }
+}
+
+/// Refreshes exhausted-window countdowns without needing another provider poll.
+struct UsageLimitCaption: View {
+    let resetsAt: Date?
+    let percent: Double
+    var normalCaption: String?
+
+    var body: some View {
+        if percent >= 100, let resetsAt, resetsAt > Date() {
+            TimelineView(.periodic(from: Date(), by: 60)) { context in
+                caption(now: context.date)
             }
+        } else {
+            caption(now: Date())
+        }
+    }
+
+    @ViewBuilder
+    private func caption(now: Date) -> some View {
+        if let text = Format.limitResetCaption(resetsAt, usedPercent: percent, now: now, normalCaption: normalCaption) {
+            Text(text).resetCaption()
         }
     }
 }

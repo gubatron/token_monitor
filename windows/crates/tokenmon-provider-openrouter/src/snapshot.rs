@@ -1,6 +1,6 @@
 //! [`OpenRouterSnapshot`]: budget selection, reset window and derived values.
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Datelike, Days, Utc};
 
 use crate::activity::{CostEstimator, ModelUsage, models_from_rows};
 use crate::models::{ActivityRow, CreditsData, KeyData};
@@ -146,6 +146,24 @@ fn key_limit_budget(key: &KeyData) -> Option<Budget> {
 }
 
 impl OpenRouterSnapshot {
+    /// Next renewal of the displayed key budget, anchored to the fetched window.
+    /// OpenRouter resets at midnight UTC, with weeks starting on Monday.
+    pub fn resets_at(&self) -> Option<DateTime<Utc>> {
+        if self.budget_source != Some(BudgetSource::KeyLimit) {
+            return None;
+        }
+        let day = self.fetched_at.date_naive();
+        let next = match self.limit_reset? {
+            LimitReset::Daily => day.succ_opt(),
+            LimitReset::Weekly => day.checked_add_days(Days::new(u64::from(
+                7 - day.weekday().num_days_from_monday(),
+            ))),
+            LimitReset::Monthly => day.with_day(1)?.checked_add_months(chrono::Months::new(1)),
+            LimitReset::Other => None,
+        }?;
+        Some(next.and_hms_opt(0, 0, 0)?.and_utc())
+    }
+
     /// Builds the snapshot (`OpenRouterSnapshot.build`).
     ///
     /// Account credits win when positive, then a positive per-key limit

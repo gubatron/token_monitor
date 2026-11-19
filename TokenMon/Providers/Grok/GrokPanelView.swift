@@ -71,10 +71,7 @@ struct GrokPanelView: View {
 
                 SegmentedUsageBar(products: products, height: 8)
 
-                if let resetsAt = snapshot.resetsAt {
-                    Text(Format.resetCaption(resetsAt))
-                        .resetCaption()
-                }
+                UsageLimitCaption(resetsAt: snapshot.resetsAt, percent: snapshot.usedPercent)
             }
 
             if !categoryProducts.isEmpty {

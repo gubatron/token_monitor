@@ -122,7 +122,9 @@ pub fn build_card(c: &OverviewCardInput, ctx: &PanelContext) -> OverviewCardVm {
         ),
     };
     let no_data = format!("No {} data yet", p.display_name());
-    let (caption, tertiary) = if p == ProviderId::OpenRouter {
+    let (caption, tertiary) = if percent >= 100.0 {
+        (ctx.limit_reset_caption(c.reset_at, percent), false)
+    } else if p == ProviderId::OpenRouter {
         let cap = if c.has_snapshot && !c.has_budget_source {
             Some(format!(
                 "No credit limit — {} spent on this key",

@@ -169,12 +169,12 @@ impl ChatGptSnapshot {
         }
     }
 
-    /// `primary.resetsAt ?? secondary.resetsAt`.
+    /// The reset belonging to the headline window, even when its clock is missing.
     pub fn resets_at(&self) -> Option<DateTime<Utc>> {
         self.primary
             .as_ref()
+            .or(self.secondary.as_ref())
             .and_then(|w| w.resets_at)
-            .or_else(|| self.secondary.as_ref().and_then(|w| w.resets_at))
     }
 
     /// `(primary ?? secondary).usedPercent ?? 0`.

@@ -27,6 +27,7 @@ struct OpenRouterPanelView: View {
                             label: "Credits used",
                             percent: percent,
                             color: MonitorProvider.openrouter.accentColor,
+                            resetsAt: snapshot.resetsAt,
                             caption: "\(Format.usd(snapshot.usedUSD)) of \(Format.usd(snapshot.budgetUSD ?? 0))"
                                 + " · \(Format.usd(snapshot.remainingUSD ?? 0)) left",
                             showsLabel: false

@@ -97,6 +97,27 @@ fn test_overview_grok_card() {
     assert!(v.sign_in.is_some());
 }
 
+/// All provider cards keep their countdown when an allowance is exhausted.
+#[test]
+fn test_overview_exhausted_allowances_show_countdown_for_every_provider() {
+    for p in ProviderId::USAGE_PROVIDERS {
+        let mut c = card(p);
+        c.has_snapshot = true;
+        c.has_budget_source = true;
+        c.percent = Some(100.0);
+        c.reset_at = Some(ctx().now + chrono::Duration::minutes(65));
+        assert_eq!(
+            build_card(&c, &ctx()).caption.as_deref(),
+            Some("Limit reached · Resets in 1 hour 5 minutes")
+        );
+        c.reset_at = None;
+        assert_eq!(
+            build_card(&c, &ctx()).caption.as_deref(),
+            Some("Limit reached · Reset time unavailable")
+        );
+    }
+}
+
 /// Metas and accent colors for every provider card.
 #[test]
 fn test_overview_meta_labels_and_colors() {

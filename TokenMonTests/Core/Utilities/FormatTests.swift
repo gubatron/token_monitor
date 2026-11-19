@@ -92,6 +92,28 @@ final class FormatTests: XCTestCase {
 
     // MARK: resetDate
 
+    func testExhaustedLimitShowsCountdownOrHonestFallback() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        for (seconds, expected) in [
+            (90_000.0, "Resets in 1 day 1 hour"),
+            (7_500, "Resets in 2 hours 5 minutes"),
+            (60, "Resets in 1 minute"),
+            (1, "Resets in less than a minute"),
+            (0, "Reset time passed")
+        ] {
+            XCTAssertEqual(
+                Format.limitResetCaption(now.addingTimeInterval(seconds), usedPercent: 100, now: now),
+                "Limit reached · \(expected)"
+            )
+        }
+        XCTAssertEqual(Format.limitResetCaption(nil, usedPercent: 100, now: now), "Limit reached · Reset time unavailable")
+        XCTAssertNil(Format.limitResetCaption(nil, usedPercent: 99, now: now))
+        XCTAssertEqual(
+            Format.limitResetCaption(now, usedPercent: 99, now: now),
+            Format.resetCaption(now)
+        )
+    }
+
     func testResetDateMatchesNaiveFormatterAndLowercasesMeridian() throws {
         let utc = TimeZone(secondsFromGMT: 0)
         let date = try XCTUnwrap(ISO8601DateFormatter().date(from: "2026-07-16T18:57:00Z"))

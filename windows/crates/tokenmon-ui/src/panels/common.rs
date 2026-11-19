@@ -48,6 +48,15 @@ impl PanelContext<'_> {
     pub fn reset_caption(&self, at: DateTime<Utc>) -> String {
         format::reset_caption(at, self.calendar.offset_at(at))
     }
+
+    /// Uses a window's own reset clock, with countdown wording at full usage.
+    pub fn limit_reset_caption(&self, at: Option<DateTime<Utc>>, used: f64) -> Option<String> {
+        if used >= 100.0 {
+            Some(format::exhausted_reset_caption(at, self.now))
+        } else {
+            at.map(|t| self.reset_caption(t))
+        }
+    }
 }
 
 /// Auth and poller state a panel needs (merged from `AuthSession` + poller).

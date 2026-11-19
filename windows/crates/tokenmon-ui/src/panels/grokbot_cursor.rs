@@ -84,7 +84,7 @@ pub fn build_grokbot(input: &GrokbotInput, ctx: &PanelContext) -> PanelVm<Grokbo
             "",
             snap.used_percent,
             ProviderId::Grokbot.panel_accent(),
-            snap.resets_at.map(|t| ctx.reset_caption(t)),
+            ctx.limit_reset_caption(snap.resets_at, snap.used_percent),
         )
         .without_label()
     });
@@ -197,7 +197,7 @@ pub fn build_cursor(input: &CursorInput, ctx: &PanelContext) -> PanelVm<CursorUs
                 &p.label,
                 p.used_percent,
                 accent,
-                p.resets_at.or(snap.resets_at).map(|t| ctx.reset_caption(t)),
+                ctx.limit_reset_caption(p.resets_at.or(snap.resets_at), p.used_percent),
             )
         })
         .collect();

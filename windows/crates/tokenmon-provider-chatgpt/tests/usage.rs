@@ -14,6 +14,20 @@ use tokenmon_core::{ProviderError, ProviderErrorContext as C};
 use tokenmon_provider_chatgpt::jwt::{account_id, expiry_secs};
 use tokenmon_provider_chatgpt::{UsageWindow, parse_session_token, parse_usage};
 
+/// The headline's reset must not fall back to the reset for a different window.
+#[test]
+fn test_headline_reset_belongs_to_headline_window() {
+    let r = parse_usage(
+        br#"{"primary_window":{"used_percent":40},
+        "secondary_window":{"used_percent":100,"reset_at":1787800000}}"#,
+    )
+    .unwrap();
+    let mut snap = tokenmon_provider_chatgpt::ChatGptSnapshot::new(r, chrono::Utc::now());
+    assert!(snap.resets_at().is_none());
+    snap.primary = None;
+    assert!(snap.resets_at().is_some());
+}
+
 /// Spec 03 7.6 `testParseWindows`: plan, allowed, not reached, 12 and 57.5.
 #[test]
 fn test_parse_windows() {

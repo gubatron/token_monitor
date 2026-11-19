@@ -329,6 +329,7 @@ impl OpenRouterSnapshotInput {
             used_percent,
             used_usd: s.used_usd,
             remaining_usd: s.remaining_usd,
+            resets_at: s.resets_at(),
             account_used_usd: s.account_used_usd,
             key_usage_usd: s.key_usage_usd,
             key_usage_daily_usd: s.key_usage_daily_usd,
